@@ -1,0 +1,36 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "astra-manifest",
+          "appId": "1:78503123511:android:3920ad61c110fcb4137db2",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "astra-manifest",
+          "configurations": {
+            "android": "1:78503123511:android:3920ad61c110fcb4137db2",
+            "web": "1:78503123511:web:1f97bbffd4927afd137db2"
+          }
+        }
+      }
+    }
+  }
+}
