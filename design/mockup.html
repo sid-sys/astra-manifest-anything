@@ -1,0 +1,404 @@
+<title>Astra — UI Mockup v1</title>
+<style>
+  :root {
+    --page-bg: #EEF0F6;
+    --page-ink: #171B2E;
+    --page-dim: #5A6078;
+    --page-line: #D6DAE6;
+    --gold: #C99A38;
+    /* phone screen world — committed dark, same in both themes */
+    --scr-bg: #0B0E1F;
+    --scr-bg2: #10142B;
+    --scr-card: #161B36;
+    --scr-card2: #1C2244;
+    --scr-line: #262D52;
+    --scr-text: #F2EFFF;
+    --scr-dim: #9AA0C2;
+    --scr-gold: #E4B454;
+    --scr-gold-deep: #B8892F;
+    --scr-violet: #8F7BF0;
+    --scr-good: #6FCF97;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page-bg: #0E1120;
+      --page-ink: #EDEBF7;
+      --page-dim: #9BA0BC;
+      --page-line: #252A44;
+      --gold: #E4B454;
+    }
+  }
+  :root[data-theme="dark"] {
+    --page-bg: #0E1120; --page-ink: #EDEBF7; --page-dim: #9BA0BC;
+    --page-line: #252A44; --gold: #E4B454;
+  }
+  :root[data-theme="light"] {
+    --page-bg: #EEF0F6; --page-ink: #171B2E; --page-dim: #5A6078;
+    --page-line: #D6DAE6; --gold: #C99A38;
+  }
+
+  body {
+    background: var(--page-bg);
+    color: var(--page-ink);
+    font-family: "Segoe UI", -apple-system, Roboto, sans-serif;
+    line-height: 1.5;
+    margin: 0;
+    padding: 3rem 1.5rem 5rem;
+  }
+  .wrap { max-width: 1240px; margin: 0 auto; }
+
+  .eyebrow {
+    text-transform: uppercase; letter-spacing: .18em; font-size: .7rem;
+    color: var(--gold); font-weight: 600;
+  }
+  h1 {
+    font-family: Didot, "Playfair Display", "Bodoni MT", Georgia, serif;
+    font-weight: 500; font-size: clamp(2.4rem, 5vw, 3.6rem);
+    margin: .2em 0 .1em; letter-spacing: .01em; text-wrap: balance;
+  }
+  .sub { color: var(--page-dim); max-width: 60ch; margin: 0 0 2.5rem; }
+
+  .tokens {
+    display: flex; flex-wrap: wrap; gap: 1rem; align-items: center;
+    border-top: 1px solid var(--page-line); border-bottom: 1px solid var(--page-line);
+    padding: 1rem 0; margin-bottom: 3.5rem; font-size: .78rem; color: var(--page-dim);
+  }
+  .chip { display: inline-flex; align-items: center; gap: .45rem; }
+  .chip i {
+    width: 16px; height: 16px; border-radius: 50%; display: inline-block;
+    border: 1px solid var(--page-line);
+  }
+
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 3rem 2.2rem;
+  }
+  .cell { display: flex; flex-direction: column; gap: .9rem; }
+  .cell h2 {
+    font-family: Didot, "Playfair Display", Georgia, serif;
+    font-size: 1.25rem; font-weight: 500; margin: 0;
+  }
+  .cell .num {
+    text-transform: uppercase; letter-spacing: .16em; font-size: .65rem;
+    color: var(--page-dim);
+  }
+  .notes { margin: 0; padding: 0 0 0 1.1em; font-size: .82rem; color: var(--page-dim); }
+  .notes li { margin-bottom: .3em; }
+  .notes b { color: var(--page-ink); font-weight: 600; }
+
+  /* ---------- phone ---------- */
+  .phone {
+    width: 100%; max-width: 310px; aspect-ratio: 310 / 650;
+    background: var(--scr-bg);
+    border-radius: 34px;
+    border: 6px solid #05060E;
+    box-shadow: 0 18px 45px rgba(5, 8, 25, .35);
+    overflow: hidden; position: relative;
+    color: var(--scr-text);
+    display: flex; flex-direction: column;
+    font-size: 13.5px;
+  }
+  .phone::before { /* notch */
+    content: ""; position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+    width: 84px; height: 8px; border-radius: 5px; background: #05060E; z-index: 5;
+  }
+  .stars {
+    background:
+      radial-gradient(1px 1px at 15% 12%, #fff9, transparent 60%),
+      radial-gradient(1px 1px at 70% 8%, #fff7, transparent 60%),
+      radial-gradient(1.5px 1.5px at 85% 22%, #ffe9b855, transparent 60%),
+      radial-gradient(1px 1px at 40% 18%, #fff6, transparent 60%),
+      radial-gradient(1px 1px at 55% 30%, #fff4, transparent 60%),
+      radial-gradient(140% 60% at 50% 0%, #1A2048 0%, var(--scr-bg) 70%);
+  }
+  .scr { flex: 1; display: flex; flex-direction: column; padding: 34px 16px 14px; gap: 12px; overflow: hidden; }
+  .brand {
+    font-family: Didot, "Playfair Display", Georgia, serif;
+    letter-spacing: .28em; text-transform: uppercase; font-size: .8rem;
+    color: var(--scr-gold); text-align: center;
+  }
+  .s-title {
+    font-family: Didot, "Playfair Display", Georgia, serif;
+    font-size: 1.5rem; font-weight: 500; line-height: 1.2; margin: 0; text-wrap: balance;
+  }
+  .s-dim { color: var(--scr-dim); font-size: .8rem; line-height: 1.45; }
+  .card {
+    background: var(--scr-card); border: 1px solid var(--scr-line);
+    border-radius: 14px; padding: 12px 14px;
+  }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .grow { flex: 1; min-width: 0; }
+  .btn {
+    background: linear-gradient(180deg, var(--scr-gold), var(--scr-gold-deep));
+    color: #14101F; font-weight: 600; text-align: center;
+    border-radius: 999px; padding: 11px; font-size: .85rem;
+  }
+  .btn-ghost {
+    border: 1px solid var(--scr-line); color: var(--scr-dim); text-align: center;
+    border-radius: 999px; padding: 10px; font-size: .8rem;
+  }
+  .tag {
+    display: inline-block; border: 1px solid var(--scr-line); color: var(--scr-dim);
+    border-radius: 999px; padding: 5px 12px; font-size: .72rem;
+  }
+  .tag.on { border-color: var(--scr-gold); color: var(--scr-gold); background: #E4B45414; }
+  .bar { height: 4px; border-radius: 2px; background: var(--scr-line); overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--scr-gold); }
+  .nav {
+    margin-top: auto; display: flex; justify-content: space-around;
+    border-top: 1px solid var(--scr-line); padding-top: 10px;
+    color: var(--scr-dim); font-size: .62rem; text-align: center;
+    text-transform: uppercase; letter-spacing: .08em;
+  }
+  .nav b { color: var(--scr-gold); font-weight: 600; }
+  .dot { width: 34px; height: 34px; border-radius: 50%; background: var(--scr-card2);
+    display: flex; align-items: center; justify-content: center; flex: none;
+    color: var(--scr-gold); font-size: .8rem; border: 1px solid var(--scr-line); }
+  .wave { display: flex; align-items: center; gap: 3px; height: 42px; }
+  .wave i { flex: 1; background: var(--scr-violet); opacity: .5; border-radius: 2px; }
+  .wave i.hot { background: var(--scr-gold); opacity: 1; }
+  .price b { font-size: 1.05rem; }
+  .small { font-size: .7rem; color: var(--scr-dim); }
+  .good { color: var(--scr-good); }
+  .center { text-align: center; }
+  footer { margin-top: 4rem; font-size: .78rem; color: var(--page-dim); border-top: 1px solid var(--page-line); padding-top: 1rem; }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">UI mockup · v1 · reference before Flutter build</div>
+  <h1>Astra — Manifest Anything</h1>
+  <p class="sub">Eight core screens for the Android app. Product decisions under each phone respond directly to what Stella's users praised (personalization, narration, emotion) and punished (hard paywall, misleading pricing, playback bugs, listen limits).</p>
+
+  <div class="tokens">
+    <span class="chip"><i style="background:#0B0E1F"></i>Ink #0B0E1F</span>
+    <span class="chip"><i style="background:#161B36"></i>Card #161B36</span>
+    <span class="chip"><i style="background:#E4B454"></i>Star-gold #E4B454</span>
+    <span class="chip"><i style="background:#8F7BF0"></i>Violet #8F7BF0</span>
+    <span class="chip"><i style="background:#F2EFFF"></i>Moonlight #F2EFFF</span>
+    <span class="chip">Display: Didot/Playfair · UI: system sans</span>
+  </div>
+
+  <div class="grid">
+
+    <!-- 1 ONBOARDING -->
+    <div class="cell">
+      <div class="num">01 · Onboarding</div>
+      <div class="phone stars"><div class="scr">
+        <div class="brand">Astra</div>
+        <div class="bar" style="margin:4px 0"><i style="width:40%"></i></div>
+        <h3 class="s-title">What are you calling in, Sana?</h3>
+        <div class="s-dim">Pick what matters most right now. Your stories are written around it.</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <span class="tag on">✦ Career</span><span class="tag on">✦ Abundance</span>
+          <span class="tag">Love</span><span class="tag">Health</span>
+          <span class="tag">Confidence</span><span class="tag">Peace</span>
+        </div>
+        <div class="card">
+          <div class="small" style="margin-bottom:6px">In your own words</div>
+          <div class="s-dim">“I want to lead my own design studio and feel calm about money…”</div>
+        </div>
+        <div class="small good">✓ Your first story is free — before any payment screen.</div>
+        <div class="btn" style="margin-top:auto">Continue</div>
+      </div></div>
+      <h2>Guided intention setup</h2>
+      <ul class="notes">
+        <li><b>Free-story promise shown up front</b> — Stella's #1 complaint is data collected, then paywall.</li>
+        <li>Progress bar; 4 short steps max, free-text goal powers personalization.</li>
+      </ul>
+    </div>
+
+    <!-- 2 HOME -->
+    <div class="cell">
+      <div class="num">02 · Home</div>
+      <div class="phone stars"><div class="scr">
+        <div class="row"><div class="grow brand" style="text-align:left">Astra</div><span class="tag on">🔥 6-day streak</span></div>
+        <h3 class="s-title">Good evening, Sana</h3>
+        <div class="card" style="background:linear-gradient(160deg,#1C2244,#161B36)">
+          <div class="small" style="color:var(--scr-gold);letter-spacing:.12em;text-transform:uppercase">Tonight's story</div>
+          <div style="font-weight:600;margin:6px 0 2px">Your studio's first client call</div>
+          <div class="small">7 min · written for your career intention</div>
+          <div class="btn" style="margin-top:10px;padding:9px">▶ Listen</div>
+        </div>
+        <div class="card">
+          <div class="small" style="margin-bottom:4px">Affirmation of the day</div>
+          <div style="font-family:Georgia,serif;font-style:italic">“Money moves toward me because I move first.”</div>
+        </div>
+        <div class="row">
+          <div class="card grow center"><div class="small">Stories</div><b>12</b></div>
+          <div class="card grow center"><div class="small">Minutes</div><b>84</b></div>
+          <div class="card grow center"><div class="small">Journal</div><b>9</b></div>
+        </div>
+        <div class="nav"><span><b>Home</b></span><span>Library</span><span>Create</span><span>Journal</span><span>Profile</span></div>
+      </div></div>
+      <h2>Daily ritual hub</h2>
+      <ul class="notes">
+        <li>Daily recommended story + affirmation — Stella's most-used loop, kept front and center.</li>
+        <li>Streak + stats feed the progress-tracking feature users expect.</li>
+      </ul>
+    </div>
+
+    <!-- 3 GENERATE -->
+    <div class="cell">
+      <div class="num">03 · Create story</div>
+      <div class="phone stars"><div class="scr">
+        <div class="brand">New Story</div>
+        <h3 class="s-title">Set the scene</h3>
+        <div class="card">
+          <div class="small" style="margin-bottom:6px">Intention</div>
+          <div class="row" style="flex-wrap:wrap;gap:6px">
+            <span class="tag on">Career</span><span class="tag">Abundance</span><span class="tag">Love</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="small" style="margin-bottom:6px">A moment you want to live</div>
+          <div class="s-dim">“The morning my studio signs its first big client — walking in with my team…”</div>
+        </div>
+        <div class="row">
+          <div class="card grow center"><div class="small">Length</div><b>7 min</b></div>
+          <div class="card grow center"><div class="small">Voice</div><b>Meera</b></div>
+          <div class="card grow center"><div class="small">Mood</div><b>Calm</b></div>
+        </div>
+        <div class="small">Generated with your profile details — the specificity people loved in Stella.</div>
+        <div class="btn" style="margin-top:auto">✦ Weave my story</div>
+      </div></div>
+      <h2>On-demand generation</h2>
+      <ul class="notes">
+        <li>Claude API writes script → TTS narrates → saved to library.</li>
+        <li>Length / voice / mood controls; edit &amp; regenerate from the result screen.</li>
+      </ul>
+    </div>
+
+    <!-- 4 PLAYER -->
+    <div class="cell">
+      <div class="num">04 · Player</div>
+      <div class="phone stars"><div class="scr">
+        <div class="brand">Now Playing</div>
+        <div class="center" style="margin-top:8px">
+          <div style="width:120px;height:120px;border-radius:50%;margin:0 auto 12px;background:radial-gradient(circle at 35% 30%,#2A3160,#10142B);border:1px solid var(--scr-line);display:flex;align-items:center;justify-content:center;color:var(--scr-gold);font-size:1.6rem">✦</div>
+          <div style="font-weight:600">Your studio's first client call</div>
+          <div class="small">Career · Meera · 7 min</div>
+        </div>
+        <div class="wave">
+          <i style="height:30%"></i><i style="height:55%"></i><i style="height:80%" class="hot"></i><i style="height:100%" class="hot"></i><i style="height:65%" class="hot"></i><i style="height:85%"></i><i style="height:45%"></i><i style="height:70%"></i><i style="height:35%"></i><i style="height:60%"></i><i style="height:25%"></i>
+        </div>
+        <div class="bar"><i style="width:38%"></i></div>
+        <div class="row small"><span>2:41</span><span class="grow"></span><span>7:04</span></div>
+        <div class="row" style="justify-content:center;gap:18px">
+          <div class="dot">↻</div><div class="dot">⏮</div>
+          <div class="dot" style="width:52px;height:52px;background:linear-gradient(180deg,var(--scr-gold),var(--scr-gold-deep));color:#14101F;font-size:1.1rem">▶</div>
+          <div class="dot">⏭</div><div class="dot" style="color:var(--scr-good)">∞</div>
+        </div>
+        <div class="row" style="justify-content:center;gap:8px">
+          <span class="tag on">∞ Loop on</span><span class="tag">＋ Queue</span><span class="tag">↓ Offline</span>
+        </div>
+      </div></div>
+      <h2>Player — loop &amp; queue</h2>
+      <ul class="notes">
+        <li><b>Loop + playlist queue</b> — top requested features Stella lacks.</li>
+        <li>Background audio via <code>just_audio</code> + <code>audio_service</code>; download for offline.</li>
+        <li>Reliability is the brand: Stella's 3★ reviews are all playback bugs.</li>
+      </ul>
+    </div>
+
+    <!-- 5 LIBRARY -->
+    <div class="cell">
+      <div class="num">05 · Library</div>
+      <div class="phone stars"><div class="scr">
+        <div class="brand">Library</div>
+        <div class="row" style="gap:6px">
+          <span class="tag on">All</span><span class="tag">Career</span><span class="tag">Abundance</span><span class="tag">Love</span>
+        </div>
+        <div class="card row"><div class="dot">✦</div><div class="grow"><div style="font-weight:600">First client call</div><div class="small">7 min · ↓ offline</div></div><span class="small good">▶</span></div>
+        <div class="card row"><div class="dot">☾</div><div class="grow"><div style="font-weight:600">The apartment with morning light</div><div class="small">9 min · ↓ offline</div></div><span class="small good">▶</span></div>
+        <div class="card row"><div class="dot">✧</div><div class="grow"><div style="font-weight:600">Debt-free day</div><div class="small">6 min</div></div><span class="small">▶</span></div>
+        <div class="card row"><div class="dot">✦</div><div class="grow"><div style="font-weight:600">Speaking on stage, unshaken</div><div class="small">8 min</div></div><span class="small">▶</span></div>
+        <div class="card" style="border-style:dashed;text-align:center;color:var(--scr-dim)">＋ New story</div>
+        <div class="nav"><span>Home</span><span><b>Library</b></span><span>Create</span><span>Journal</span><span>Profile</span></div>
+      </div></div>
+      <h2>Story library</h2>
+      <ul class="notes">
+        <li>Filter by intention; offline badge; unlimited listening of owned stories — <b>no 3-per-day cap</b> (Stella's paid-tier grievance).</li>
+      </ul>
+    </div>
+
+    <!-- 6 JOURNAL -->
+    <div class="cell">
+      <div class="num">06 · Journal</div>
+      <div class="phone stars"><div class="scr">
+        <div class="brand">Journal</div>
+        <h3 class="s-title">Evidence log</h3>
+        <div class="s-dim">Small proofs that it's already working.</div>
+        <div class="card">
+          <div class="small">Today · gratitude</div>
+          <div style="margin-top:4px">“Recruiter reached out about a design lead role — out of nowhere.”</div>
+        </div>
+        <div class="card">
+          <div class="small">Yesterday · aligned action</div>
+          <div style="margin-top:4px">“Registered the studio domain. It felt real.”</div>
+        </div>
+        <div class="card row" style="border-color:var(--scr-gold)">
+          <div class="grow s-dim">Write tonight's entry…</div><span style="color:var(--scr-gold)">✎</span>
+        </div>
+        <div class="nav"><span>Home</span><span>Library</span><span>Create</span><span><b>Journal</b></span><span>Profile</span></div>
+      </div></div>
+      <h2>Gratitude &amp; action journal</h2>
+      <ul class="notes">
+        <li><b>Differentiator</b> — reviewers explicitly flag Stella's missing journaling/action-planning.</li>
+        <li>Entries stored in Firestore under the user; feeds future story context.</li>
+      </ul>
+    </div>
+
+    <!-- 7 PAYWALL -->
+    <div class="cell">
+      <div class="num">07 · Paywall</div>
+      <div class="phone stars"><div class="scr">
+        <div class="brand">Astra Plus</div>
+        <h3 class="s-title">You've heard your first story. Free, as promised.</h3>
+        <div class="card price row"><div class="grow"><b>₹299 / month</b><div class="small">billed monthly · cancel anytime</div></div><span class="tag on">Popular</span></div>
+        <div class="card price row"><div class="grow"><b>₹1,999 / year</b><div class="small">₹167 / month · billed once yearly</div></div><span class="tag">Save 44%</span></div>
+        <div class="small">Unlimited stories &amp; listening · all voices · offline · journal insights</div>
+        <div class="small good">✓ Prices always shown per billing period. No weekly-disguised-as-monthly.</div>
+        <div class="btn" style="margin-top:auto">Start Astra Plus</div>
+        <div class="btn-ghost">Keep the free plan</div>
+      </div></div>
+      <h2>Transparent paywall</h2>
+      <ul class="notes">
+        <li>Shown <b>after</b> the free full story, never before — inverts Stella's flow.</li>
+        <li>Explicit billing period everywhere; visible “keep free plan” exit.</li>
+        <li>Payments stubbed in v1; Play Billing later.</li>
+      </ul>
+    </div>
+
+    <!-- 8 PROFILE -->
+    <div class="cell">
+      <div class="num">08 · Profile</div>
+      <div class="phone stars"><div class="scr">
+        <div class="brand">Profile</div>
+        <div class="center">
+          <div class="dot" style="width:64px;height:64px;margin:0 auto 8px;font-size:1.3rem">S</div>
+          <div style="font-weight:600">Sana</div>
+          <div class="small">Manifesting since July 2026</div>
+        </div>
+        <div class="card row"><div class="grow">Intentions &amp; life details</div><span class="s-dim">›</span></div>
+        <div class="card row"><div class="grow">Voice &amp; narration</div><span class="s-dim">Meera ›</span></div>
+        <div class="card row"><div class="grow">Daily reminder</div><span class="s-dim">9:00 PM ›</span></div>
+        <div class="card row"><div class="grow">Downloads &amp; storage</div><span class="s-dim">42 MB ›</span></div>
+        <div class="card row"><div class="grow">Subscription</div><span class="tag on">Plus</span></div>
+        <div class="card">
+          <div class="small" style="margin-bottom:6px">This month</div>
+          <div class="bar"><i style="width:70%"></i></div>
+          <div class="small" style="margin-top:6px">21 of 30 days practiced</div>
+        </div>
+        <div class="nav"><span>Home</span><span>Library</span><span>Create</span><span>Journal</span><span><b>Profile</b></span></div>
+      </div></div>
+      <h2>Profile &amp; progress</h2>
+      <ul class="notes">
+        <li>Editable life details keep stories specific as life changes.</li>
+        <li>Monthly practice meter = evolving progress tracking.</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <footer>Astra v1 reference mockup · dark cosmic system (ink / star-gold / violet) · final UI to be supplied from Claude Design and built in Flutter (Riverpod, just_audio, Firebase).</footer>
+</div>
