@@ -74,6 +74,17 @@
     gap: 3rem 2.2rem;
   }
   .cell { display: flex; flex-direction: column; gap: .9rem; }
+  @media (min-width: 680px) { .cell.span2 { grid-column: span 2; } }
+  .pair { display: flex; flex-wrap: wrap; gap: 1.6rem; }
+  .pair > div { display: flex; flex-direction: column; gap: .5rem; flex: 1 1 260px; max-width: 310px; }
+  .cap {
+    font-size: .7rem; text-transform: uppercase; letter-spacing: .12em;
+    color: var(--page-dim);
+  }
+  .cap code, .notes code {
+    font-family: Consolas, "SF Mono", monospace; font-size: .95em;
+    color: var(--gold); letter-spacing: 0;
+  }
   .cell h2 {
     font-family: Didot, "Playfair Display", Georgia, serif;
     font-size: 1.25rem; font-weight: 500; margin: 0;
@@ -349,23 +360,42 @@
     </div>
 
     <!-- 7 PAYWALL -->
-    <div class="cell">
-      <div class="num">07 · Paywall</div>
-      <div class="phone stars"><div class="scr">
-        <div class="brand">Astra Plus</div>
-        <h3 class="s-title">You've heard your first story. Free, as promised.</h3>
-        <div class="card price row"><div class="grow"><b>₹299 / month</b><div class="small">billed monthly · cancel anytime</div></div><span class="tag on">Popular</span></div>
-        <div class="card price row"><div class="grow"><b>₹1,999 / year</b><div class="small">₹167 / month · billed once yearly</div></div><span class="tag">Save 44%</span></div>
-        <div class="small">Unlimited stories &amp; listening · all voices · offline · journal insights</div>
-        <div class="small good">✓ Prices always shown per billing period. No weekly-disguised-as-monthly.</div>
-        <div class="btn" style="margin-top:auto">Start Astra Plus</div>
-        <div class="btn-ghost">Keep the free plan</div>
-      </div></div>
-      <h2>Transparent paywall</h2>
+    <div class="cell span2">
+      <div class="num">07 · Paywall · resolves by region</div>
+      <div class="pair">
+        <div>
+          <div class="phone stars"><div class="scr">
+            <div class="brand">Astra Plus</div>
+            <h3 class="s-title">You've heard your first story. Free, as promised.</h3>
+            <div class="card price row"><div class="grow"><b>₹299 / month</b><div class="small">billed monthly · cancel anytime</div></div><span class="tag on">Popular</span></div>
+            <div class="card price row"><div class="grow"><b>₹1,999 / year</b><div class="small">₹167 / month · billed once yearly</div></div><span class="tag">Save 44%</span></div>
+            <div class="small">Unlimited stories &amp; listening · all voices · offline · journal insights</div>
+            <div class="small good">✓ Prices always shown per billing period. No weekly-disguised-as-monthly.</div>
+            <div class="btn" style="margin-top:auto">Start Astra Plus</div>
+            <div class="btn-ghost">Keep the free plan</div>
+          </div></div>
+          <div class="cap">India · country code <code>IN</code> → INR</div>
+        </div>
+        <div>
+          <div class="phone stars"><div class="scr">
+            <div class="brand">Astra Plus</div>
+            <h3 class="s-title">You've heard your first story. Free, as promised.</h3>
+            <div class="card price row"><div class="grow"><b>$6.99 / month</b><div class="small">billed monthly · cancel anytime</div></div><span class="tag on">Popular</span></div>
+            <div class="card price row"><div class="grow"><b>$44.99 / year</b><div class="small">$3.75 / month · billed once yearly</div></div><span class="tag">Save 46%</span></div>
+            <div class="small">Unlimited stories &amp; listening · all voices · offline · journal insights</div>
+            <div class="small good">✓ Prices always shown per billing period. No weekly-disguised-as-monthly.</div>
+            <div class="btn" style="margin-top:auto">Start Astra Plus</div>
+            <div class="btn-ghost">Keep the free plan</div>
+          </div></div>
+          <div class="cap">Everywhere else → USD</div>
+        </div>
+      </div>
+      <h2>Transparent, region-aware paywall</h2>
       <ul class="notes">
+        <li><b>Region pricing:</b> country resolved from SIM/device locale (<code>IN</code> → ₹, everything else → $). Currency symbol, amount and “per month” maths all come from one plan table, so a new region is a data change, not a UI change.</li>
         <li>Shown <b>after</b> the free full story, never before — inverts Stella's flow.</li>
         <li>Explicit billing period everywhere; visible “keep free plan” exit.</li>
-        <li>Payments stubbed in v1; Play Billing later.</li>
+        <li>Payments stubbed in v1; Play Billing later — Play returns its own localized price, which overrides the table when live.</li>
       </ul>
     </div>
 

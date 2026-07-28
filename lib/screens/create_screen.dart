@@ -1,0 +1,244 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../models/intention.dart';
+import '../providers.dart';
+import '../theme/astra_theme.dart';
+import '../widgets/astra_widgets.dart';
+import 'paywall_screen.dart';
+import 'player_screen.dart';
+
+const _voices = ['Meera', 'Arun', 'Sofia', 'Noor'];
+const _moods = ['Calm', 'Cinematic', 'Tender'];
+const _lengths = [5, 7, 10];
+
+/// Where a story gets made. Everything on this screen is a knob the generator
+/// actually reads — intention, the scene in the user's words, length, voice
+/// and mood.
+class CreateScreen extends ConsumerStatefulWidget {
+  const CreateScreen({super.key});
+
+  @override
+  ConsumerState<CreateScreen> createState() => _CreateScreenState();
+}
+
+class _CreateScreenState extends ConsumerState<CreateScreen> {
+  final _sceneController = TextEditingController();
+
+  Intention? _intention;
+  int _lengthMinutes = 7;
+  String _voice = _voices.first;
+  String _mood = _moods.first;
+  bool _weaving = false;
+
+  @override
+  void dispose() {
+    _sceneController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _weave() async {
+    final profile = ref.read(profileProvider);
+
+    if (!profile.canGenerateFreely) {
+      final subscribed = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => const PaywallScreen()),
+      );
+      if (subscribed != true) return;
+    }
+
+    setState(() => _weaving = true);
+
+    final intention = _intention ??
+        (profile.intentions.isEmpty ? Intention.career : profile.intentions.first);
+
+    try {
+      final story = await ref.read(storyGeneratorProvider).generate(
+            profile: profile,
+            intention: intention,
+            scene: _sceneController.text,
+            length: Duration(minutes: _lengthMinutes),
+            voice: _voice,
+          );
+
+      await ref.read(storiesProvider.notifier).add(story);
+      if (!profile.isSubscribed) {
+        await ref.read(profileProvider.notifier).markFreeStoryUsed();
+      }
+
+      if (!mounted) return;
+      _sceneController.clear();
+      ref.read(playbackProvider).play(story);
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const PlayerScreen()),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("That story didn't come through. Try again — $error"),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _weaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = ref.watch(profileProvider);
+    final intentions = profile.intentions.isEmpty
+        ? Intention.values.toSet()
+        : profile.intentions;
+    final active = _intention ?? intentions.first;
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+      children: [
+        const Wordmark('New Story'),
+        const SizedBox(height: AstraSpacing.lg),
+        Text('Set the scene', style: AstraTextStyles.display(28)),
+        const SizedBox(height: AstraSpacing.xl),
+
+        AstraCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Intention', style: AstraTextStyles.small),
+              const SizedBox(height: AstraSpacing.md),
+              Wrap(
+                spacing: AstraSpacing.sm,
+                runSpacing: AstraSpacing.sm,
+                children: [
+                  for (final intention in intentions)
+                    TagChip(
+                      label: intention.label,
+                      selected: intention == active,
+                      accent: intention.accent,
+                      onTap: () => setState(() => _intention = intention),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AstraSpacing.md),
+
+        AstraCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('A moment you want to live', style: AstraTextStyles.small),
+              const SizedBox(height: AstraSpacing.sm),
+              TextField(
+                controller: _sceneController,
+                maxLines: 4,
+                style: AstraTextStyles.body,
+                cursorColor: AstraColors.gold,
+                decoration: InputDecoration(
+                  border: InputBorder.none,
+                  isDense: true,
+                  hintText:
+                      'The morning my studio signs its first big client — '
+                      'walking in with my team…',
+                  hintStyle: AstraTextStyles.bodyDim,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AstraSpacing.md),
+
+        Row(
+          children: [
+            Expanded(
+              child: _Picker<int>(
+                label: 'Length',
+                value: _lengthMinutes,
+                options: _lengths,
+                display: (m) => '$m min',
+                onChanged: (m) => setState(() => _lengthMinutes = m),
+              ),
+            ),
+            const SizedBox(width: AstraSpacing.sm),
+            Expanded(
+              child: _Picker<String>(
+                label: 'Voice',
+                value: _voice,
+                options: _voices,
+                display: (v) => v,
+                onChanged: (v) => setState(() => _voice = v),
+              ),
+            ),
+            const SizedBox(width: AstraSpacing.sm),
+            Expanded(
+              child: _Picker<String>(
+                label: 'Mood',
+                value: _mood,
+                options: _moods,
+                display: (m) => m,
+                onChanged: (m) => setState(() => _mood = m),
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: AstraSpacing.md),
+        Text(
+          profile.canGenerateFreely
+              ? 'Written from your profile details, so it sounds like your '
+                  'life and not a template.'
+              : 'Astra Plus writes as many stories as you want, whenever you want.',
+          style: AstraTextStyles.small,
+        ),
+        const SizedBox(height: AstraSpacing.xl),
+
+        AstraButton(
+          label: _weaving ? 'Weaving…' : 'Weave my story',
+          icon: Icons.auto_awesome,
+          busy: _weaving,
+          onPressed: _weave,
+        ),
+      ],
+    );
+  }
+}
+
+/// Compact tap-to-cycle control. Three of these fit a row where three
+/// dropdowns would not.
+class _Picker<T> extends StatelessWidget {
+  const _Picker({
+    required this.label,
+    required this.value,
+    required this.options,
+    required this.display,
+    required this.onChanged,
+  });
+
+  final String label;
+  final T value;
+  final List<T> options;
+  final String Function(T) display;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) => AstraCard(
+    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+    onTap: () {
+      final next = options[(options.indexOf(value) + 1) % options.length];
+      onChanged(next);
+    },
+    child: Column(
+      children: [
+        Text(label, style: AstraTextStyles.small),
+        const SizedBox(height: 2),
+        Text(
+          display(value),
+          style: AstraTextStyles.label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    ),
+  );
+}
