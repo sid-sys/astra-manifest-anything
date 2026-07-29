@@ -46,3 +46,9 @@ app.*.map.json
 
 # Kotlin compile-daemon scratch, written during Gradle builds
 /android/.kotlin/
+
+# Secrets. API keys live in Google Secret Manager, never in the repo and never
+# in the app bundle — anything shipped in an APK can be extracted from it.
+.env
+.env.*
+!.env.example
