@@ -1,0 +1,17 @@
+rules_version = '2';
+
+// Story audio is private to the user it was written for. The Cloud Function
+// writes it through the Admin SDK, which bypasses these rules — so clients get
+// read-only access and nothing else can be uploaded here at all.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /users/{uid}/stories/{storyId} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
