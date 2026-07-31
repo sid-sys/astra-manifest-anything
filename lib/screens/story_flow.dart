@@ -20,9 +20,6 @@ Future<bool> weaveStory(
   WidgetRef ref, {
   required Intention intention,
   required String scene,
-  String mood = 'Calm',
-  Duration length = const Duration(minutes: 7),
-  String? voice,
 }) async {
   final navigator = Navigator.of(context);
   final messenger = ScaffoldMessenger.of(context);
@@ -40,22 +37,19 @@ Future<bool> weaveStory(
   );
   unawaited(navigator.push(waiting));
 
-  try {
-    final story = await ref
-        .read(storyComposerProvider)
-        .compose(
-          intention: intention,
-          scene: scene,
-          mood: mood,
-          length: length,
-          voice: voice,
-        );
+  final composer = ref.read(storyComposerProvider);
 
+  try {
+    final story = await composer.compose(intention: intention, scene: scene);
+
+    // Straight to the story the moment the words exist. The narration is still
+    // recording; it attaches itself to the open player when it lands.
     navigator.removeRoute(waiting);
-    ref.read(playbackProvider).play(story);
+    ref.read(playbackProvider).load(story);
     unawaited(
       navigator.push(MaterialPageRoute<void>(builder: (_) => const PlayerScreen())),
     );
+    unawaited(composer.narrate(story));
     return true;
   } on StoryQuotaExceeded catch (error) {
     // The server holds the real clock, so its refusal overrides whatever the

@@ -3,18 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/intention.dart';
 import '../providers.dart';
-import '../services/story_service.dart';
+import '../services/wish_prompts.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
 import '../widgets/starfield.dart';
 import 'story_flow.dart';
 
-const _moods = ['Calm', 'Cinematic', 'Tender'];
-const _lengths = [5, 7, 10];
-
-/// Where a story gets made. Everything on this screen is a knob the generator
-/// actually reads — intention, the scene in the user's words, length, voice
-/// and mood.
+/// Where a story gets made.
+///
+/// One field. Length, voice and mood used to sit here as pickers; they were
+/// three taps of friction in front of the only input that changes the story,
+/// and every story is five minutes now.
 class CreateScreen extends ConsumerStatefulWidget {
   const CreateScreen({super.key});
 
@@ -26,9 +25,7 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
   final _sceneController = TextEditingController();
 
   Intention? _intention;
-  int _lengthMinutes = 7;
-  String _voice = astraVoices.first;
-  String _mood = _moods.first;
+  String? _suggestion;
   bool _weaving = false;
 
   @override
@@ -37,20 +34,25 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
     super.dispose();
   }
 
+  Intention get _activeIntention {
+    if (_intention != null) return _intention!;
+    final chosen = ref.read(profileProvider).intentions;
+    return chosen.isEmpty ? Intention.career : chosen.first;
+  }
+
+  void _rotateSuggestion() => setState(() {
+    _suggestion = WishPrompts.next(_activeIntention, previous: _suggestion);
+  });
+
   Future<void> _weave() async {
     if (_weaving) return;
     setState(() => _weaving = true);
 
-    final profile = ref.read(profileProvider);
     final made = await weaveStory(
       context,
       ref,
-      intention: _intention ??
-          (profile.intentions.isEmpty ? Intention.career : profile.intentions.first),
+      intention: _activeIntention,
       scene: _sceneController.text,
-      mood: _mood,
-      length: Duration(minutes: _lengthMinutes),
-      voice: _voice,
     );
 
     if (!mounted) return;
@@ -89,7 +91,11 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
                       label: intention.label,
                       selected: intention == active,
                       accent: intention.accent,
-                      onTap: () => setState(() => _intention = intention),
+                      onTap: () => setState(() {
+                        _intention = intention;
+                        // The old suggestion belonged to the old intention.
+                        _suggestion = null;
+                      }),
                     ),
                 ],
               ),
@@ -102,7 +108,7 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('A moment you want to live', style: AstraTextStyles.small),
+              Text('What do you want?', style: AstraTextStyles.small),
               const SizedBox(height: AstraSpacing.sm),
               TextField(
                 controller: _sceneController,
@@ -112,57 +118,32 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
                 decoration: InputDecoration(
                   border: InputBorder.none,
                   isDense: true,
-                  hintText:
-                      'The morning my studio signs its first big client — '
-                      'walking in with my team…',
+                  hintText: 'In your own words…',
                   hintStyle: AstraTextStyles.bodyDim,
                 ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: AstraSpacing.md),
+        const SizedBox(height: AstraSpacing.sm),
 
-        Row(
-          children: [
-            Expanded(
-              child: _Picker<int>(
-                label: 'Length',
-                value: _lengthMinutes,
-                options: _lengths,
-                display: (m) => '$m min',
-                onChanged: (m) => setState(() => _lengthMinutes = m),
-              ),
-            ),
-            const SizedBox(width: AstraSpacing.sm),
-            Expanded(
-              child: _Picker<String>(
-                label: 'Voice',
-                value: _voice,
-                options: astraVoices,
-                display: voiceLabel,
-                onChanged: (v) => setState(() => _voice = v),
-              ),
-            ),
-            const SizedBox(width: AstraSpacing.sm),
-            Expanded(
-              child: _Picker<String>(
-                label: 'Mood',
-                value: _mood,
-                options: _moods,
-                display: (m) => m,
-                onChanged: (m) => setState(() => _mood = m),
-              ),
-            ),
-          ],
+        WishSuggestion(
+          intention: active,
+          suggestion: _suggestion,
+          onRotate: _rotateSuggestion,
+          onUse: (wish) => setState(() {
+            _sceneController.text = wish;
+            _sceneController.selection = TextSelection.collapsed(
+              offset: wish.length,
+            );
+          }),
         ),
 
         const SizedBox(height: AstraSpacing.md),
         Text(
           profile.canGenerateFreely
-              ? 'Written from your profile details, so it sounds like your '
-                  'life and not a template. Narrated by an AI voice. Writing '
-                  'and recording takes about a minute.'
+              ? 'Five minutes, written from your own details so it sounds like '
+                  'your life and not a template. Narrated by an AI voice.'
               : 'Astra Plus writes 15 stories a month, and your library '
                   'replays without limit.',
           style: AstraTextStyles.small,
@@ -170,10 +151,86 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
         const SizedBox(height: AstraSpacing.xl),
 
         AstraButton(
-          label: _weaving ? 'Writing and recording…' : 'Weave my story',
+          label: _weaving ? 'Writing…' : 'Weave my story',
           icon: Icons.auto_awesome,
           busy: _weaving,
           onPressed: _weave,
+        ),
+      ],
+    );
+  }
+}
+
+/// A starter wish plus the button that swaps it for another.
+///
+/// Shared with Home so both boxes offer the same help. Tapping the wish fills
+/// the field rather than submitting it — it is a starting point to edit, not a
+/// choice to make.
+class WishSuggestion extends StatelessWidget {
+  const WishSuggestion({
+    super.key,
+    required this.intention,
+    required this.suggestion,
+    required this.onRotate,
+    required this.onUse,
+  });
+
+  final Intention intention;
+  final String? suggestion;
+  final VoidCallback onRotate;
+  final ValueChanged<String> onUse;
+
+  @override
+  Widget build(BuildContext context) {
+    final wish = suggestion ?? WishPrompts.next(intention);
+
+    return Row(
+      children: [
+        Expanded(
+          child: AstraCard(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            onTap: () => onUse(wish),
+            child: Row(
+              children: [
+                Text(
+                  intention.glyph,
+                  style: TextStyle(fontSize: 14, color: intention.accent),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    wish,
+                    style: AstraTextStyles.bodyDim.copyWith(fontSize: 13),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: AstraSpacing.sm),
+        Tooltip(
+          message: 'Another idea',
+          child: InkWell(
+            onTap: onRotate,
+            customBorder: const CircleBorder(),
+            child: Container(
+              width: 44,
+              height: 44,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AstraColors.cardRaised,
+                border: Border.all(color: AstraColors.line),
+              ),
+              child: const Icon(
+                Icons.refresh_rounded,
+                size: 19,
+                color: AstraColors.gold,
+              ),
+            ),
+          ),
         ),
       ],
     );
@@ -205,45 +262,6 @@ class CreateRoute extends StatelessWidget {
           ],
         ),
       ),
-    ),
-  );
-}
-
-/// Compact tap-to-cycle control. Three of these fit a row where three
-/// dropdowns would not.
-class _Picker<T> extends StatelessWidget {
-  const _Picker({
-    required this.label,
-    required this.value,
-    required this.options,
-    required this.display,
-    required this.onChanged,
-  });
-
-  final String label;
-  final T value;
-  final List<T> options;
-  final String Function(T) display;
-  final ValueChanged<T> onChanged;
-
-  @override
-  Widget build(BuildContext context) => AstraCard(
-    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-    onTap: () {
-      final next = options[(options.indexOf(value) + 1) % options.length];
-      onChanged(next);
-    },
-    child: Column(
-      children: [
-        Text(label, style: AstraTextStyles.small),
-        const SizedBox(height: 2),
-        Text(
-          display(value),
-          style: AstraTextStyles.label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
     ),
   );
 }

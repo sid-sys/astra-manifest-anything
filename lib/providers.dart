@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -45,29 +46,40 @@ class StoryComposer {
 
   final Ref _ref;
 
+  /// Writes the script and stores it. Returns before any audio exists, so the
+  /// story can be on screen in about twenty seconds instead of a hundred.
   Future<Story> compose({
     required Intention intention,
     required String scene,
-    String mood = 'Calm',
-    Duration length = const Duration(minutes: 7),
-    String? voice,
   }) async {
-    final profile = _ref.read(profileProvider);
-
     final story = await _ref
         .read(storyServiceProvider)
-        .generate(
-          profile: profile,
+        .write(
+          profile: _ref.read(profileProvider),
           intention: intention,
           scene: scene,
-          mood: mood,
-          length: length,
-          voice: voice ?? profile.voice,
         );
 
     await _ref.read(storiesProvider.notifier).add(story);
     await _ref.read(profileProvider.notifier).noteTrialStarted();
     return story;
+  }
+
+  /// Records the narration and attaches it to the stored story.
+  ///
+  /// Runs after [compose] while the user is already reading. A failure here
+  /// leaves a perfectly readable story behind, which is why it is logged
+  /// rather than thrown — there is nothing for the reader to do about it.
+  Future<void> narrate(Story story) async {
+    try {
+      final withAudio = await _ref.read(storyServiceProvider).narrate(story);
+      if (withAudio.audioUrl == null) return;
+
+      await _ref.read(storiesProvider.notifier).update(withAudio);
+      _ref.read(playbackProvider).adoptAudio(withAudio);
+    } catch (error) {
+      debugPrint('Astra: narration failed, story stays readable — $error');
+    }
   }
 }
 

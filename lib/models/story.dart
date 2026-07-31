@@ -34,13 +34,19 @@ class Story {
 
   String get durationLabel => '${duration.inMinutes} min';
 
-  Story copyWith({String? audioUrl, bool? downloaded, bool? favorite}) => Story(
+  Story copyWith({
+    String? audioUrl,
+    bool? downloaded,
+    bool? favorite,
+    Duration? duration,
+    String? voice,
+  }) => Story(
     id: id,
     title: title,
     intention: intention,
     script: script,
-    duration: duration,
-    voice: voice,
+    duration: duration ?? this.duration,
+    voice: voice ?? this.voice,
     createdAt: createdAt,
     audioUrl: audioUrl ?? this.audioUrl,
     downloaded: downloaded ?? this.downloaded,

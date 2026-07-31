@@ -94,6 +94,23 @@ class PlaybackController extends ChangeNotifier {
   PlaybackState _state = const PlaybackState();
   PlaybackState get state => _state;
 
+  /// Puts a story on screen without starting it.
+  ///
+  /// Used for a story whose narration is still recording: the reader gets the
+  /// words immediately, and nothing pretends to play until there is audio.
+  void load(Story story, {List<Story> queue = const []}) {
+    _stopVirtualClock();
+    _usingVirtualClock = false;
+    _state = _state.copyWith(
+      story: story,
+      queue: queue,
+      position: Duration.zero,
+      duration: story.duration,
+      playing: false,
+    );
+    notifyListeners();
+  }
+
   Future<void> play(Story story, {List<Story> queue = const []}) async {
     _stopVirtualClock();
 
@@ -120,6 +137,35 @@ class PlaybackController extends ChangeNotifier {
     }
 
     _startVirtualClock();
+  }
+
+  /// Attaches narration that finished after the story was already open.
+  ///
+  /// The story is written first and recorded second, so the player is usually
+  /// showing the script by the time the audio lands. This swaps the source in
+  /// underneath without disturbing the reader: nothing starts playing that was
+  /// not already playing, and the position is kept.
+  Future<void> adoptAudio(Story story) async {
+    if (_state.story?.id != story.id || !story.hasAudio) return;
+
+    final resumeAt = _state.position;
+    final wasPlaying = _state.playing;
+
+    _stopVirtualClock();
+    _usingVirtualClock = false;
+    _state = _state.copyWith(story: story, duration: story.duration);
+    notifyListeners();
+
+    try {
+      await _player.setUrl(story.audioUrl!);
+      await _player.setLoopMode(_state.looping ? LoopMode.one : LoopMode.off);
+      await _player.setSpeed(_state.speed);
+      if (resumeAt > Duration.zero) await _player.seek(resumeAt);
+      if (wasPlaying) await _player.play();
+    } catch (error) {
+      debugPrint('Astra: could not attach narration — $error');
+      if (wasPlaying) _startVirtualClock();
+    }
   }
 
   Future<void> toggle() async {

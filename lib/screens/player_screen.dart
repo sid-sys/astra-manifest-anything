@@ -7,6 +7,7 @@ import '../providers.dart';
 import '../services/story_service.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
+import '../widgets/script_view.dart';
 import '../widgets/starfield.dart';
 
 /// Full-screen playback: scrub, loop, queue, and — while the narration audio
@@ -147,6 +148,9 @@ class PlayerScreen extends ConsumerWidget {
                         const SizedBox(width: 18),
                         _PlayButton(
                           playing: state.playing,
+                          // Nothing to play until the narration lands. The
+                          // button says so rather than sitting there dead.
+                          recording: !story.hasAudio,
                           onTap: playback.toggle,
                         ),
                         const SizedBox(width: 18),
@@ -158,6 +162,15 @@ class PlayerScreen extends ConsumerWidget {
                         ),
                       ],
                     ),
+                    if (!story.hasAudio) ...[
+                      const SizedBox(height: AstraSpacing.sm),
+                      Text(
+                        'Recording your narration. The words are below to '
+                        'read in the meantime.',
+                        textAlign: TextAlign.center,
+                        style: AstraTextStyles.small,
+                      ),
+                    ],
                     const SizedBox(height: AstraSpacing.lg),
 
                     Wrap(
@@ -200,21 +213,24 @@ class PlayerScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: AstraSpacing.xl),
 
-                    // Always shown, not only when the audio is missing. Some
-                    // people read along, some prefer reading to listening, and
-                    // hiding the words behind a failure state served neither.
+                    // Always shown, not only when the audio is missing. The
+                    // story is written before it is narrated, so this is what
+                    // the reader has for the first minute — and some people
+                    // prefer reading to listening anyway.
                     AstraCard(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            story.hasAudio ? 'READ ALONG' : 'READ IT',
+                            story.hasAudio ? 'READ ALONG' : 'YOUR STORY',
                             style: AstraTextStyles.eyebrow,
                           ),
-                          const SizedBox(height: AstraSpacing.sm),
-                          SelectableText(
-                            story.script.trim(),
-                            style: AstraTextStyles.body.copyWith(height: 1.7),
+                          const SizedBox(height: AstraSpacing.md),
+                          ScriptView(
+                            script: story.script,
+                            position: state.position,
+                            duration: state.duration,
+                            following: state.playing,
                           ),
                         ],
                       ),
@@ -246,30 +262,48 @@ class PlayerScreen extends ConsumerWidget {
 }
 
 class _PlayButton extends StatelessWidget {
-  const _PlayButton({required this.playing, required this.onTap});
+  const _PlayButton({
+    required this.playing,
+    required this.onTap,
+    this.recording = false,
+  });
 
   final bool playing;
+  final bool recording;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) => Semantics(
     button: true,
-    label: playing ? 'Pause' : 'Play',
-    child: InkWell(
-      onTap: onTap,
-      customBorder: const CircleBorder(),
-      child: Container(
-        width: 66,
-        height: 66,
-        alignment: Alignment.center,
-        decoration: const BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: AstraColors.goldGradient,
-        ),
-        child: Icon(
-          playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-          size: 32,
-          color: const Color(0xFF14101F),
+    enabled: !recording,
+    label: recording ? 'Recording narration' : (playing ? 'Pause' : 'Play'),
+    child: Opacity(
+      opacity: recording ? 0.55 : 1,
+      child: InkWell(
+        onTap: recording ? null : onTap,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 66,
+          height: 66,
+          alignment: Alignment.center,
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: AstraColors.goldGradient,
+          ),
+          child: recording
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.4,
+                    color: Color(0xFF14101F),
+                  ),
+                )
+              : Icon(
+                  playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                  size: 32,
+                  color: const Color(0xFF14101F),
+                ),
         ),
       ),
     ),

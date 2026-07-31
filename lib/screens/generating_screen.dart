@@ -37,14 +37,14 @@ class GeneratingScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: AstraSpacing.xl),
                   Text(
-                    'Crafting your story',
+                    'Writing your story',
                     textAlign: TextAlign.center,
                     style: AstraTextStyles.display(26),
                   ),
                   const SizedBox(height: AstraSpacing.sm),
                   Text(
-                    'Writing it, then recording it in your voice.\n'
-                    'This takes about a minute.',
+                    'You can read it in a moment.\n'
+                    'The narration records while you do.',
                     textAlign: TextAlign.center,
                     style: AstraTextStyles.small,
                   ),

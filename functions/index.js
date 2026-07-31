@@ -61,6 +61,14 @@ const ALLOWED_VOICES = new Set(["marin", "coral", "shimmer", "sage"]);
  * find out whether the thing is for them. The cap inside the day exists purely
  * because each story costs real money to produce.
  */
+/**
+ * Every story is the same length now. The picker that set it was three taps of
+ * friction in front of the one field that matters, and 5 minutes is what a
+ * bedtime listen wants — long enough to settle into, short enough to finish.
+ */
+const STORY_MINUTES = 5;
+const DEFAULT_MOOD = "Calm";
+
 const TRIAL_HOURS = 24;
 const TRIAL_STORY_LIMIT = 3;
 const PLUS_MONTHLY_LIMIT = 15;
@@ -420,14 +428,22 @@ async function assertWithinQuota(uid, profile) {
   }
 }
 
-// ----------------------------------------------------------------- endpoint
+// ---------------------------------------------------------------- endpoints
 
-exports.generateStory = onCall(
+/**
+ * Writing and narrating are two calls, not one.
+ *
+ * Together they take around a hundred seconds, and for most of that the user
+ * was staring at a spinner holding text that already existed — the script is
+ * done after twenty. Splitting them puts the story on screen as soon as it is
+ * written and lets the narration arrive behind it, which also means a story
+ * abandoned after reading never costs a narration.
+ */
+exports.writeStory = onCall(
   {
-    secrets: [ANTHROPIC_API_KEY, OPENAI_API_KEY],
-    // Narration of a 10-minute story takes a while; the default 60s is not enough.
-    timeoutSeconds: 540,
-    memory: "1GiB",
+    secrets: [ANTHROPIC_API_KEY],
+    timeoutSeconds: 180,
+    memory: "512MiB",
   },
   async (request) => {
     const uid = request.auth?.uid;
@@ -435,22 +451,7 @@ exports.generateStory = onCall(
       throw new HttpsError("unauthenticated", "Sign in to write a story.");
     }
 
-    const {
-      intention = "career",
-      scene = "",
-      mood = "",
-      lengthMinutes = 7,
-      voice = TTS_VOICE,
-    } = request.data ?? {};
-
-    if (![5, 7, 10].includes(lengthMinutes)) {
-      throw new HttpsError("invalid-argument", "Length must be 5, 7, or 10 minutes.");
-    }
-
-    const requestedVoice = String(voice).toLowerCase();
-    const resolvedVoice = ALLOWED_VOICES.has(requestedVoice)
-      ? requestedVoice
-      : TTS_VOICE;
+    const { intention = "career", scene = "" } = request.data ?? {};
 
     const db = admin.firestore();
     const profileSnap = await db.collection("users").doc(uid).get();
@@ -463,44 +464,104 @@ exports.generateStory = onCall(
       profile,
       intention,
       scene,
-      mood,
-      lengthMinutes,
+      mood: DEFAULT_MOOD,
+      lengthMinutes: STORY_MINUTES,
     });
 
     const storyId = `story_${Date.now()}`;
-    const audio = await narrate(script, resolvedVoice);
+    const story = {
+      title,
+      intention,
+      script,
+      // Provisional: estimated from the word count so the library has a length
+      // to show before any audio exists. narrateStory replaces it with the
+      // duration measured off the finished MP3.
+      durationSeconds: Math.round(
+        (script.split(/\s+/).length / NARRATION_WPM) * 60,
+      ),
+      voice: TTS_VOICE,
+      createdAt: new Date().toISOString(),
+      audioUrl: null,
+      audioPath: null,
+      downloaded: false,
+    };
+
+    await db.collection("users").doc(uid).collection("stories").doc(storyId).set(story);
+
+    logger.info("Story written", { storyId, elapsedMs: Date.now() - started });
+
+    return { id: storyId, ...story };
+  },
+);
+
+/**
+ * Narrates a story that has already been written.
+ *
+ * Idempotent: a story that already has audio returns it rather than paying for
+ * a second recording, so a retry after a dropped connection is free.
+ */
+exports.narrateStory = onCall(
+  {
+    secrets: [OPENAI_API_KEY],
+    timeoutSeconds: 540,
+    memory: "1GiB",
+  },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw new HttpsError("unauthenticated", "Sign in to narrate a story.");
+    }
+
+    const { storyId } = request.data ?? {};
+    if (!storyId) {
+      throw new HttpsError("invalid-argument", "Which story?");
+    }
+
+    // Read through the user's own collection, so a caller can only ever
+    // narrate a story that belongs to them.
+    const storyRef = admin
+      .firestore()
+      .collection("users")
+      .doc(uid)
+      .collection("stories")
+      .doc(storyId);
+
+    const snapshot = await storyRef.get();
+    if (!snapshot.exists) {
+      throw new HttpsError("not-found", "That story no longer exists.");
+    }
+
+    const story = snapshot.data();
+    if (story.audioUrl) {
+      return {
+        audioUrl: story.audioUrl,
+        audioPath: story.audioPath,
+        durationSeconds: story.durationSeconds,
+      };
+    }
+
+    const started = Date.now();
+    const requestedVoice = String(story.voice ?? TTS_VOICE).toLowerCase();
+    const voice = ALLOWED_VOICES.has(requestedVoice) ? requestedVoice : TTS_VOICE;
+
+    const audio = await narrate(story.script, voice);
     const { audioUrl, audioPath } = await storeAudio({ uid, storyId, audio });
 
     // Measured off the finished audio, not estimated from the script — the
     // progress bar has to track the file the player is actually holding.
     const durationSeconds = mp3DurationSeconds(audio);
 
-    const story = {
-      title,
-      intention,
-      script,
-      durationSeconds,
-      // The voice that actually narrated, not the one that was asked for — the
-      // library labels each story with this, and a label that can be wrong is
-      // worse than no label.
-      voice: resolvedVoice,
-      createdAt: new Date().toISOString(),
-      audioUrl,
-      audioPath,
-      downloaded: false,
-    };
+    await storyRef.set({ audioUrl, audioPath, durationSeconds, voice }, { merge: true });
 
-    await db.collection("users").doc(uid).collection("stories").doc(storyId).set(story);
-
-    logger.info("Story delivered", {
+    logger.info("Story narrated", {
       storyId,
       elapsedMs: Date.now() - started,
       durationSeconds,
       // Logged side by side so drift between what was asked for and what the
       // narration actually runs to stays visible without another measurement.
-      requestedSeconds: lengthMinutes * 60,
+      requestedSeconds: STORY_MINUTES * 60,
     });
 
-    return { id: storyId, ...story };
+    return { audioUrl, audioPath, durationSeconds, voice };
   },
 );

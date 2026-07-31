@@ -19,6 +19,10 @@ const astraVoices = <String>['marin', 'coral', 'shimmer', 'sage'];
 String voiceLabel(String id) =>
     id.isEmpty ? id : id[0].toUpperCase() + id.substring(1);
 
+/// Every story runs about this long. Must match `STORY_MINUTES` in the
+/// function, which is what actually sizes the script.
+const storyLength = Duration(minutes: 5);
+
 /// Thrown when the server refuses because the caller is out of stories.
 ///
 /// Distinct from a generic failure because the response is different: this one
@@ -60,21 +64,19 @@ class StoryService {
   final FirebaseFunctions _functions;
   final bool signedIn;
 
-  Future<Story> generate({
+  /// Writes the script. Returns as soon as the words exist — no audio yet.
+  Future<Story> write({
     required UserProfile profile,
     required Intention intention,
     required String scene,
-    required String mood,
-    required Duration length,
-    required String voice,
   }) async {
     if (!signedIn) {
       return _offlineGenerator.generate(
         profile: profile,
         intention: intention,
         scene: scene,
-        length: length,
-        voice: voice,
+        length: storyLength,
+        voice: profile.voice,
       );
     }
 
@@ -84,33 +86,65 @@ class StoryService {
     await repository.saveProfile(profile);
 
     try {
-      final result = await _functions
-          .httpsCallable(
-            'generateStory',
-            // The default is 60 seconds and a story takes about 65 — writing it
-            // and narrating it are both slow. Under the default the client gave
-            // up on work the server had already finished and charged for, and
-            // the story was lost. Sits just under the function's own 540s cap.
-            options: HttpsCallableOptions(timeout: const Duration(seconds: 570)),
-          )
-          .call({
+      final result = await _call('writeStory', const Duration(seconds: 170), {
         'intention': intention.name,
         'scene': scene.trim(),
-        'mood': mood,
-        'lengthMinutes': length.inMinutes,
-        'voice': voice,
       });
 
-      final data = Map<String, dynamic>.from(result.data as Map);
+      final data = Map<String, dynamic>.from(result as Map);
       return Story.fromMap(data['id'] as String, data);
     } on FirebaseFunctionsException catch (error) {
-      if (error.code == 'resource-exhausted') {
-        throw StoryQuotaExceeded(
-          error.message ?? 'Your free day has ended.',
-        );
-      }
-      debugPrint('Astra: story generation failed — ${error.code} ${error.message}');
-      rethrow;
+      throw _translate(error, 'write');
     }
+  }
+
+  /// Records the narration for a story that has already been written.
+  ///
+  /// Returns the same story carrying its audio. Safe to call twice: the
+  /// function hands back existing audio rather than paying to record it again.
+  Future<Story> narrate(Story story) async {
+    if (!signedIn) return story;
+
+    try {
+      // Narration is the slow half — comfortably past the 60s default, so the
+      // timeout has to be raised or the client hangs up on work it has already
+      // been charged for.
+      final result = await _call('narrateStory', const Duration(seconds: 570), {
+        'storyId': story.id,
+      });
+
+      final data = Map<String, dynamic>.from(result as Map);
+      return story.copyWith(
+        audioUrl: data['audioUrl'] as String?,
+        duration: Duration(
+          seconds: (data['durationSeconds'] as num?)?.toInt() ??
+              story.duration.inSeconds,
+        ),
+        voice: data['voice'] as String?,
+      );
+    } on FirebaseFunctionsException catch (error) {
+      throw _translate(error, 'narrate');
+    }
+  }
+
+  Future<Object?> _call(
+    String name,
+    Duration timeout,
+    Map<String, dynamic> payload,
+  ) async {
+    final callable = _functions.httpsCallable(
+      name,
+      options: HttpsCallableOptions(timeout: timeout),
+    );
+    final result = await callable.call(payload);
+    return result.data;
+  }
+
+  Exception _translate(FirebaseFunctionsException error, String stage) {
+    if (error.code == 'resource-exhausted') {
+      return StoryQuotaExceeded(error.message ?? 'Your free day has ended.');
+    }
+    debugPrint('Astra: $stage failed — ${error.code} ${error.message}');
+    return error;
   }
 }

@@ -5,8 +5,10 @@ import '../models/intention.dart';
 import '../models/story.dart';
 import '../providers.dart';
 import '../services/affirmations.dart';
+import '../services/wish_prompts.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
+import 'create_screen.dart';
 import 'player_screen.dart';
 import 'story_flow.dart';
 
@@ -24,12 +26,18 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _wishController = TextEditingController();
+  String? _suggestion;
   bool _weaving = false;
 
   @override
   void dispose() {
     _wishController.dispose();
     super.dispose();
+  }
+
+  Intention get _intention {
+    final chosen = ref.read(profileProvider).intentions;
+    return chosen.isEmpty ? Intention.career : chosen.first;
   }
 
   /// The one-line path: type a wish, get a story. Length, voice and mood keep
@@ -39,14 +47,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (wish.isEmpty || _weaving) return;
 
     setState(() => _weaving = true);
-    final profile = ref.read(profileProvider);
 
     final made = await weaveStory(
       context,
       ref,
-      intention: profile.intentions.isEmpty
-          ? Intention.career
-          : profile.intentions.first,
+      intention: _intention,
       scene: wish,
     );
 
@@ -153,9 +158,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 decoration: InputDecoration(
                   border: InputBorder.none,
                   isDense: true,
-                  hintText: 'I want to travel around the world…',
+                  hintText: 'In your own words…',
                   hintStyle: AstraTextStyles.bodyDim,
                 ),
+              ),
+              const SizedBox(height: AstraSpacing.sm),
+              WishSuggestion(
+                intention: _intention,
+                suggestion: _suggestion,
+                onRotate: () => setState(() {
+                  _suggestion = WishPrompts.next(
+                    _intention,
+                    previous: _suggestion,
+                  );
+                }),
+                onUse: (wish) => setState(() {
+                  _wishController.text = wish;
+                  _wishController.selection = TextSelection.collapsed(
+                    offset: wish.length,
+                  );
+                }),
               ),
               const SizedBox(height: AstraSpacing.md),
               AstraButton(
