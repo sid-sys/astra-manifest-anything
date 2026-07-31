@@ -18,7 +18,18 @@ class PlayerScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final playback = ref.watch(playbackProvider);
     final state = playback.state;
-    final story = state.story;
+    final playing = state.story;
+
+    // PlaybackState holds the story as it was when playback started, so the
+    // favourite and offline flags on it go stale the moment either is toggled.
+    // The library is the live copy — read from there and fall back to the
+    // snapshot only if this story is not in it.
+    final story = playing == null
+        ? null
+        : ref.watch(storiesProvider).firstWhere(
+            (candidate) => candidate.id == playing.id,
+            orElse: () => playing,
+          );
 
     if (story == null) {
       return Scaffold(
