@@ -1,3 +1,4 @@
+import '../models/affirmation_taste.dart';
 import '../models/intention.dart';
 
 /// One card in the affirmation deck: the line and the life area it belongs to.
@@ -8,10 +9,11 @@ class Affirmation {
   final Intention intention;
 }
 
-/// The daily affirmation pool.
+/// The affirmation pool.
 ///
-/// Chosen deterministically from the date so everyone opening the app on the
-/// same day gets the same line, and reopening it doesn't reshuffle.
+/// Eight per intention rather than three: the deck is swiped through one card
+/// at a time now, and a stack that runs out in three swipes teaches the app
+/// nothing about what the user actually wants to hear.
 class Affirmations {
   const Affirmations._();
 
@@ -20,62 +22,135 @@ class Affirmations {
       'Money moves toward me because I move first.',
       'The work I want is looking for someone exactly like me.',
       'I am already the person that role requires.',
+      'I do work I would still do if nobody were watching.',
+      'The room gets better when I am in it.',
+      'I stopped waiting to be picked and started building.',
+      'My name opens doors I have not knocked on yet.',
+      'I am paid properly for what I am actually worth.',
     ],
     Intention.abundance: [
       'There is enough, and some of it is mine.',
       'I hold money calmly, and it stays.',
       'Abundance is a habit before it is an amount.',
+      'I check my balance without holding my breath.',
+      'Money is a tool I use, not a weather I survive.',
+      'I can be generous because there is more coming.',
+      'The bills are paid and the fear has gone quiet.',
+      'I am allowed to want more than enough.',
     ],
     Intention.love: [
       'I am loved plainly, without having to earn tomorrow.',
       'The right people find me easy to stay close to.',
       'I let myself be chosen back.',
+      'I am glad to come home, and someone is glad I did.',
+      'I stopped auditioning for people who were almost right.',
+      'Being known is better than being impressive.',
+      'I give love without keeping score.',
+      'Someone says my name like it is good news.',
     ],
     Intention.health: [
       'My body is on my side and always has been.',
       'I give my body kindness long enough to feel it return.',
       'Rest is part of the work, not a break from it.',
+      'I wake up without bracing for how I will feel.',
+      'I move because it feels good, not as a punishment.',
+      'I sleep through the night and wake up mine again.',
+      'My body carries me. I am not at war with it.',
+      'I eat like someone who intends to stay.',
     ],
     Intention.confidence: [
       'I say the difficult sentence and the ceiling stays up.',
       'I stopped waiting to feel ready and became ready on the way.',
       'My voice carries because I let it.',
+      'I take up the room I am standing in.',
+      'I send it without rewriting it four times.',
+      'I am not for everyone, and that is the point.',
+      'I can be wrong out loud and survive it.',
+      'I walk in like I belong there, because I do.',
     ],
     Intention.peace: [
       'Nothing is urgent enough to take my morning.',
       'The quiet was never somewhere else.',
       'I am allowed to be unreachable.',
+      'I put the phone down and do not reach for it.',
+      'I have stopped bracing for the next thing.',
+      'Slow is a decision, not a failure.',
+      'An ordinary day is not a wasted one.',
+      'I let the silence stay silent.',
     ],
   };
 
-  /// The full deck for a set of intentions, ordered so the swipe moves between
-  /// life areas rather than sitting on one of them for three cards.
-  static List<Affirmation> deck(Set<Intention> intentions) {
+  /// Every line, keyed to the intention it came from.
+  static Map<String, Intention> get lineOwners => {
+    for (final entry in _byIntention.entries)
+      for (final line in entry.value) line: entry.key,
+  };
+
+  /// The next cards to swipe, best first.
+  ///
+  /// Sorted by how much the user has liked each intention so far, so the deck
+  /// leans toward what they keep without ever cutting an area off entirely —
+  /// a stack that only ever shows one life area stops being a discovery tool.
+  /// Lines already decided on are dropped, since re-asking a settled question
+  /// is the fastest way to make swiping feel pointless.
+  static List<Affirmation> deck(
+    Set<Intention> intentions,
+    AffirmationTaste taste,
+  ) {
     final chosen = intentions.isEmpty ? _byIntention.keys.toSet() : intentions;
-    final byIntention = [
+    final owners = lineOwners;
+
+    final remaining = [
       for (final intention in chosen)
-        [
-          for (final line in _byIntention[intention]!)
+        for (final line in _byIntention[intention]!)
+          if (!taste.hasSeen(line))
             Affirmation(line: line, intention: intention),
-        ],
     ];
 
-    // Round-robin across intentions: card 1 from each, then card 2, and so on.
+    // Interleave by affinity: take from the strongest intention most often,
+    // but never exhaust it before the others get a turn.
+    final byIntention = <Intention, List<Affirmation>>{};
+    for (final card in remaining) {
+      byIntention.putIfAbsent(card.intention, () => []).add(card);
+    }
+
+    final order = byIntention.keys.toList()
+      ..sort(
+        (a, b) => taste
+            .affinity(b, owners)
+            .compareTo(taste.affinity(a, owners)),
+      );
+
     final deck = <Affirmation>[];
-    final deepest = byIntention.fold(0, (m, l) => l.length > m ? l.length : m);
-    for (var round = 0; round < deepest; round++) {
-      for (final lines in byIntention) {
-        if (round < lines.length) deck.add(lines[round]);
+    var added = true;
+    while (added) {
+      added = false;
+      for (final intention in order) {
+        final pile = byIntention[intention]!;
+        if (pile.isNotEmpty) {
+          deck.add(pile.removeAt(0));
+          added = true;
+        }
       }
     }
+
     return deck;
   }
 
-  static String forDay(DateTime day, Set<Intention> intentions) {
-    final pool = intentions.isEmpty
-        ? _byIntention.values.expand((lines) => lines).toList()
-        : intentions.expand((i) => _byIntention[i]!).toList()
-      ..sort();
+  /// The line shown on Home. Chosen deterministically from the date so
+  /// everyone opening the app on the same day gets the same one, and reopening
+  /// it doesn't reshuffle. Prefers something the user has already liked.
+  static String forDay(
+    DateTime day,
+    Set<Intention> intentions, [
+    AffirmationTaste taste = const AffirmationTaste(),
+  ]) {
+    final pool = taste.liked.isNotEmpty
+        ? (taste.liked.toList()..sort())
+        : (intentions.isEmpty
+              ? _byIntention.values.expand((lines) => lines).toList()
+              : intentions.expand((i) => _byIntention[i]!).toList())
+          ..sort();
 
     final dayNumber = DateTime(day.year, day.month, day.day)
         .difference(DateTime(2026))

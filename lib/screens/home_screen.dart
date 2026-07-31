@@ -73,7 +73,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final daily = ref.watch(dailyStoryProvider);
     final streak = ref.watch(streakProvider);
     final minutes = ref.watch(minutesListenedProvider);
-    final journalCount = ref.watch(journalProvider).length;
+    final keptCount = ref.watch(tasteProvider).liked.length;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
@@ -144,68 +144,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
         const SizedBox(height: AstraSpacing.md),
 
-        AstraCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'What do you want to manifest today?',
-                style: AstraTextStyles.label.copyWith(fontSize: 15),
-              ),
-              const SizedBox(height: AstraSpacing.sm),
-              TextField(
-                controller: _wishController,
-                minLines: 2,
-                maxLines: 3,
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) => _weaveFromWish(),
-                style: AstraTextStyles.body,
-                cursorColor: AstraColors.gold,
-                decoration: InputDecoration(
-                  border: InputBorder.none,
-                  isDense: true,
-                  hintText: 'In your own words…',
-                  hintStyle: AstraTextStyles.bodyDim,
-                ),
-              ),
-              const SizedBox(height: AstraSpacing.sm),
-              WishSuggestion(
-                intention: _intention,
-                suggestion: _suggestion,
-                onRotate: () => setState(() {
-                  _suggestion = WishPrompts.next(
-                    _intention,
-                    previous: _suggestion,
-                  );
-                }),
-                onUse: (wish) => setState(() {
-                  _wishController.text = wish;
-                  _wishController.selection = TextSelection.collapsed(
-                    offset: wish.length,
-                  );
-                }),
-              ),
-              const SizedBox(height: AstraSpacing.md),
-              AstraButton(
-                label: _weaving ? 'Writing and recording…' : 'Manifest this',
-                icon: Icons.auto_awesome,
-                busy: _weaving,
-                onPressed: _weaveFromWish,
-              ),
-              const SizedBox(height: AstraSpacing.sm),
-              Text(
-                'Narrated by an AI voice, in your own words. Takes about a '
-                'minute.',
-                style: AstraTextStyles.small,
-              ),
-              const SizedBox(height: AstraSpacing.sm),
-              AstraGhostButton(
-                label: 'More options',
-                onPressed: widget.onCreate,
-              ),
-            ],
-          ),
+        WishField(
+          controller: _wishController,
+          label: 'What do you want to manifest today?',
+          suggestion: _suggestion,
+          onRotate: () => setState(() {
+            _suggestion = WishPrompts.next(_intention, previous: _suggestion);
+          }),
         ),
+        const SizedBox(height: AstraSpacing.md),
+        AstraButton(
+          label: _weaving ? 'Writing…' : 'Generate',
+          icon: Icons.auto_awesome,
+          busy: _weaving,
+          onPressed: _weaveFromWish,
+        ),
+        const SizedBox(height: AstraSpacing.sm),
+        Text(
+          'Five minutes, narrated by an AI voice in your own words.',
+          style: AstraTextStyles.small,
+        ),
+        const SizedBox(height: AstraSpacing.sm),
+        AstraGhostButton(label: 'More options', onPressed: widget.onCreate),
 
         if (stories.isNotEmpty) ...[
           const SizedBox(height: AstraSpacing.xl),
@@ -233,7 +193,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               Text('Affirmation of the day', style: AstraTextStyles.small),
               const SizedBox(height: AstraSpacing.sm),
               Text(
-                '“${Affirmations.forDay(DateTime.now(), profile.intentions)}”',
+                '“${Affirmations.forDay(DateTime.now(), profile.intentions, ref.watch(tasteProvider))}”',
                 style: AstraTextStyles.quote,
               ),
             ],
@@ -247,7 +207,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             const SizedBox(width: AstraSpacing.sm),
             Expanded(child: _Stat(label: 'Minutes', value: '$minutes')),
             const SizedBox(width: AstraSpacing.sm),
-            Expanded(child: _Stat(label: 'Journal', value: '$journalCount')),
+            Expanded(child: _Stat(label: 'Kept', value: '$keptCount')),
           ],
         ),
       ],

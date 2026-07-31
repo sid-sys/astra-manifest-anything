@@ -110,39 +110,11 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
         ),
         const SizedBox(height: AstraSpacing.md),
 
-        AstraCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('What do you want?', style: AstraTextStyles.small),
-              const SizedBox(height: AstraSpacing.sm),
-              TextField(
-                controller: _sceneController,
-                maxLines: 4,
-                style: AstraTextStyles.body,
-                cursorColor: AstraColors.gold,
-                decoration: InputDecoration(
-                  border: InputBorder.none,
-                  isDense: true,
-                  hintText: 'In your own words…',
-                  hintStyle: AstraTextStyles.bodyDim,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: AstraSpacing.sm),
-
-        WishSuggestion(
-          intention: active,
+        WishField(
+          controller: _sceneController,
+          label: 'What do you want?',
           suggestion: _suggestion,
           onRotate: _rotateSuggestion,
-          onUse: (wish) => setState(() {
-            _sceneController.text = wish;
-            _sceneController.selection = TextSelection.collapsed(
-              offset: wish.length,
-            );
-          }),
         ),
 
         const SizedBox(height: AstraSpacing.md),
@@ -157,7 +129,7 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
         const SizedBox(height: AstraSpacing.xl),
 
         AstraButton(
-          label: _weaving ? 'Writing…' : 'Weave my story',
+          label: _weaving ? 'Writing…' : 'Generate',
           icon: Icons.auto_awesome,
           busy: _weaving,
           onPressed: _weave,
@@ -167,84 +139,72 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
   }
 }
 
-/// A starter wish plus the button that swaps it for another.
+/// The wish box, with a rotating example as its placeholder.
 ///
-/// Shared with Home so both boxes offer the same help. Tapping the wish fills
-/// the field rather than submitting it — it is a starting point to edit, not a
-/// choice to make.
-class WishSuggestion extends StatelessWidget {
-  const WishSuggestion({
+/// The example lives in the field rather than in a card beneath it: a
+/// suggestion sitting next to the input is one more thing to read and decide
+/// about, while a placeholder answers "what goes here?" at the moment the
+/// question is asked and vanishes the instant it stops being useful.
+class WishField extends StatelessWidget {
+  const WishField({
     super.key,
-    required this.intention,
+    required this.controller,
+    required this.label,
     required this.suggestion,
     required this.onRotate,
-    required this.onUse,
   });
 
-  final Intention intention;
+  final TextEditingController controller;
+  final String label;
 
-  /// The wish on screen. Owned by the caller rather than picked here: a
-  /// fallback chosen inside build is not stored anywhere, so the rotate button
-  /// cannot know what it is rotating away from and lands on the same line.
+  /// The example shown when the field is empty. Owned by the caller rather
+  /// than picked here: a fallback chosen inside build is not stored anywhere,
+  /// so the rotate button cannot know what it is rotating away from.
   final String suggestion;
   final VoidCallback onRotate;
-  final ValueChanged<String> onUse;
 
   @override
-  Widget build(BuildContext context) {
-    final wish = suggestion;
-
-    return Row(
+  Widget build(BuildContext context) => AstraCard(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: AstraCard(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-            onTap: () => onUse(wish),
-            child: Row(
-              children: [
-                Text(
-                  intention.glyph,
-                  style: TextStyle(fontSize: 14, color: intention.accent),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    wish,
-                    style: AstraTextStyles.bodyDim.copyWith(fontSize: 13),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+        Row(
+          children: [
+            Expanded(child: Text(label, style: AstraTextStyles.small)),
+            Tooltip(
+              message: 'Another idea',
+              child: InkWell(
+                onTap: onRotate,
+                customBorder: const CircleBorder(),
+                child: const SizedBox(
+                  width: 34,
+                  height: 34,
+                  child: Icon(
+                    Icons.refresh_rounded,
+                    size: 18,
+                    color: AstraColors.gold,
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
-        const SizedBox(width: AstraSpacing.sm),
-        Tooltip(
-          message: 'Another idea',
-          child: InkWell(
-            onTap: onRotate,
-            customBorder: const CircleBorder(),
-            child: Container(
-              width: 44,
-              height: 44,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AstraColors.cardRaised,
-                border: Border.all(color: AstraColors.line),
-              ),
-              child: const Icon(
-                Icons.refresh_rounded,
-                size: 19,
-                color: AstraColors.gold,
-              ),
-            ),
+        TextField(
+          controller: controller,
+          minLines: 2,
+          maxLines: 4,
+          style: AstraTextStyles.body,
+          cursorColor: AstraColors.gold,
+          decoration: InputDecoration(
+            border: InputBorder.none,
+            isDense: true,
+            hintText: suggestion,
+            hintStyle: AstraTextStyles.bodyDim,
           ),
         ),
       ],
-    );
-  }
+    ),
+  );
 }
 
 /// [CreateScreen] as a pushable route, with its own background and a way back.

@@ -15,7 +15,6 @@ class Story {
     required this.voice,
     required this.createdAt,
     this.audioUrl,
-    this.downloaded = false,
     this.favorite = false,
   });
 
@@ -27,7 +26,6 @@ class Story {
   final String voice;
   final DateTime createdAt;
   final String? audioUrl;
-  final bool downloaded;
   final bool favorite;
 
   bool get hasAudio => audioUrl != null;
@@ -36,7 +34,6 @@ class Story {
 
   Story copyWith({
     String? audioUrl,
-    bool? downloaded,
     bool? favorite,
     Duration? duration,
     String? voice,
@@ -49,7 +46,6 @@ class Story {
     voice: voice ?? this.voice,
     createdAt: createdAt,
     audioUrl: audioUrl ?? this.audioUrl,
-    downloaded: downloaded ?? this.downloaded,
     favorite: favorite ?? this.favorite,
   );
 
@@ -61,7 +57,6 @@ class Story {
     'voice': voice,
     'createdAt': createdAt.toIso8601String(),
     'audioUrl': audioUrl,
-    'downloaded': downloaded,
     'favorite': favorite,
   };
 
@@ -75,7 +70,6 @@ class Story {
     createdAt:
         DateTime.tryParse(map['createdAt'] as String? ?? '') ?? DateTime.now(),
     audioUrl: map['audioUrl'] as String?,
-    downloaded: map['downloaded'] as bool? ?? false,
     favorite: map['favorite'] as bool? ?? false,
   );
 }

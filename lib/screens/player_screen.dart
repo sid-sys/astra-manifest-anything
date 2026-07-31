@@ -57,6 +57,10 @@ class PlayerScreen extends ConsumerWidget {
             children: [
               _Header(
                 story: story,
+                onClose: () {
+                  playback.close();
+                  Navigator.of(context).maybePop();
+                },
                 onFavorite: () =>
                     ref.read(storiesProvider.notifier).toggleFavorite(story),
               ),
@@ -81,27 +85,14 @@ class PlayerScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: AstraSpacing.lg),
 
-                    Wrap(
-                      alignment: WrapAlignment.center,
-                      spacing: AstraSpacing.sm,
-                      runSpacing: AstraSpacing.sm,
-                      children: [
-                        TagChip(
-                          label: state.queue.isEmpty
-                              ? 'Queue empty'
-                              : '${state.queue.length} up next',
-                          selected: state.queue.isNotEmpty,
-                          onTap: state.queue.isEmpty ? null : playback.next,
+                    if (state.queue.isNotEmpty)
+                      Center(
+                        child: TagChip(
+                          label: '${state.queue.length} up next',
+                          selected: true,
+                          onTap: playback.next,
                         ),
-                        TagChip(
-                          label: story.downloaded ? '✓  Offline' : '↓  Offline',
-                          selected: story.downloaded,
-                          onTap: () => ref
-                              .read(storiesProvider.notifier)
-                              .toggleDownloaded(story),
-                        ),
-                      ],
-                    ),
+                      ),
                     const SizedBox(height: AstraSpacing.lg),
 
                     // Always shown, not only when the audio is missing. The
@@ -141,18 +132,25 @@ class PlayerScreen extends ConsumerWidget {
 
 /// Close, wordmark, and the favourite toggle.
 class _Header extends StatelessWidget {
-  const _Header({required this.story, required this.onFavorite});
+  const _Header({
+    required this.story,
+    required this.onClose,
+    required this.onFavorite,
+  });
 
   final Story story;
+  final VoidCallback onClose;
   final VoidCallback onFavorite;
 
   @override
   Widget build(BuildContext context) => Row(
     children: [
       IconButton(
-        icon: const Icon(Icons.keyboard_arrow_down_rounded),
+        // A cross, not a chevron. The chevron promised a minimise, and this
+        // stops playback outright.
+        icon: const Icon(Icons.close_rounded),
         color: AstraColors.dim,
-        onPressed: () => Navigator.of(context).maybePop(),
+        onPressed: onClose,
         tooltip: 'Close player',
       ),
       Expanded(child: Wordmark('Now Playing')),

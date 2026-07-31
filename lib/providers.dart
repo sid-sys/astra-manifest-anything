@@ -4,11 +4,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'models/affirmation_taste.dart';
 import 'models/intention.dart';
-import 'models/journal_entry.dart';
 import 'models/plan.dart';
 import 'models/story.dart';
 import 'models/user_profile.dart';
+import 'services/affirmations.dart';
 import 'services/astra_repository.dart';
 import 'services/playback_controller.dart';
 import 'services/region_service.dart';
@@ -171,9 +172,6 @@ class StoriesNotifier extends StateNotifier<List<Story>> {
     await _repository.deleteStory(storyId);
   }
 
-  Future<void> toggleDownloaded(Story story) =>
-      update(story.copyWith(downloaded: !story.downloaded));
-
   Future<void> toggleFavorite(Story story) =>
       update(story.copyWith(favorite: !story.favorite));
 }
@@ -189,28 +187,45 @@ final dailyStoryProvider = Provider<Story?>((ref) {
   return stories.isEmpty ? null : stories.first;
 });
 
-// ------------------------------------------------------------------ journal
+// -------------------------------------------------------------------- taste
 
-class JournalNotifier extends StateNotifier<List<JournalEntry>> {
-  JournalNotifier(this._repository) : super(_repository.loadJournal());
+/// What the user has kept and thrown away in the affirmation deck.
+class TasteNotifier extends StateNotifier<AffirmationTaste> {
+  TasteNotifier(this._repository) : super(_repository.loadTaste());
 
   final AstraRepository _repository;
 
-  Future<void> add(JournalEntry entry) async {
-    state = [entry, ...state];
-    await _repository.addJournalEntry(entry);
-  }
+  Future<void> like(String line) => _save(state.like(line));
+  Future<void> pass(String line) => _save(state.pass(line));
+  Future<void> unlike(String line) => _save(state.unlike(line));
 
-  Future<void> remove(String entryId) async {
-    state = state.where((e) => e.id != entryId).toList();
-    await _repository.deleteJournalEntry(entryId);
+  /// Puts every passed line back in the deck. The liked ones stay liked —
+  /// starting over should not cost the user the answers they meant.
+  Future<void> reshuffle() =>
+      _save(AffirmationTaste(liked: state.liked, passed: const {}));
+
+  Future<void> _save(AffirmationTaste next) async {
+    state = next;
+    await _repository.saveTaste(next);
   }
 }
 
-final journalProvider =
-    StateNotifierProvider<JournalNotifier, List<JournalEntry>>(
-      (ref) => JournalNotifier(ref.watch(repositoryProvider)),
-    );
+final tasteProvider = StateNotifierProvider<TasteNotifier, AffirmationTaste>(
+  (ref) => TasteNotifier(ref.watch(repositoryProvider)),
+);
+
+/// The cards still waiting to be swiped, best first.
+final affirmationDeckProvider = Provider<List<Affirmation>>((ref) {
+  final intentions = ref.watch(
+    profileProvider.select((profile) => profile.intentions),
+  );
+  return Affirmations.deck(intentions, ref.watch(tasteProvider));
+});
+
+/// Stories the user has hearted.
+final favouriteStoriesProvider = Provider<List<Story>>(
+  (ref) => ref.watch(storiesProvider).where((story) => story.favorite).toList(),
+);
 
 // ------------------------------------------------------------------- region
 
@@ -234,11 +249,10 @@ final playbackProvider = ChangeNotifierProvider<PlaybackController>(
 
 // ------------------------------------------------------------------ streaks
 
-/// Consecutive days ending today that have at least one journal entry or story.
+/// Consecutive days ending today with at least one story made.
 final streakProvider = Provider<int>((ref) {
   final days = <DateTime>{
     for (final story in ref.watch(storiesProvider)) _dayOf(story.createdAt),
-    for (final entry in ref.watch(journalProvider)) _dayOf(entry.createdAt),
   };
   if (days.isEmpty) return 0;
 
@@ -263,7 +277,6 @@ final daysPractisedThisMonthProvider = Provider<int>((ref) {
   final now = DateTime.now();
   final days = <DateTime>{
     for (final story in ref.watch(storiesProvider)) _dayOf(story.createdAt),
-    for (final entry in ref.watch(journalProvider)) _dayOf(entry.createdAt),
   };
   return days
       .where((d) => d.year == now.year && d.month == now.month)

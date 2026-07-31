@@ -133,8 +133,7 @@ class _StoryRow extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                '${story.durationLabel}'
-                '${story.downloaded ? ' · ↓ offline' : ''}',
+                '${story.durationLabel} · ${story.intention.label}',
                 style: AstraTextStyles.small,
               ),
             ],

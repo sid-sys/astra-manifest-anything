@@ -168,6 +168,25 @@ class PlaybackController extends ChangeNotifier {
     }
   }
 
+  /// Stops playback and clears the player.
+  ///
+  /// Closing means closing. The player used to leave the story loaded and a
+  /// mini bar playing on, so the close button read as a minimise — audio kept
+  /// going after the screen that owned it was gone, with no obvious way to
+  /// stop it.
+  Future<void> close() async {
+    _stopVirtualClock();
+    _usingVirtualClock = false;
+    _state = const PlaybackState();
+    notifyListeners();
+
+    try {
+      await _player.stop();
+    } catch (error) {
+      debugPrint('Astra: could not stop the player — $error');
+    }
+  }
+
   Future<void> toggle() async {
     if (!_state.hasStory) return;
 

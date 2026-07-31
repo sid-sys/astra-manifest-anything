@@ -7,8 +7,9 @@ import '../providers.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
 import 'paywall_screen.dart';
+import 'player_screen.dart';
 
-/// Profile, settings and the monthly practice meter.
+/// Profile, settings, the monthly practice meter, and everything kept.
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
@@ -16,10 +17,8 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(profileProvider);
     final region = ref.watch(regionServiceProvider);
-    final downloads = ref
-        .watch(storiesProvider)
-        .where((story) => story.downloaded)
-        .length;
+    final favouriteStories = ref.watch(favouriteStoriesProvider);
+    final keptLines = ref.watch(tasteProvider).liked.toList();
     final practised = ref.watch(daysPractisedThisMonthProvider);
     final daysInMonth = DateUtils.getDaysInMonth(
       DateTime.now().year,
@@ -66,11 +65,6 @@ class ProfileScreen extends ConsumerWidget {
           value: '${region.countryCode} · ${region.currencyCode}',
           onTap: () => _pickRegion(context, ref),
         ),
-        _SettingRow(
-          label: 'Offline downloads',
-          value: '$downloads ${downloads == 1 ? 'story' : 'stories'}',
-        ),
-
         AstraCard(
           onTap: profile.isSubscribed
               ? null
@@ -106,6 +100,95 @@ class ProfileScreen extends ConsumerWidget {
             ],
           ),
         ),
+
+        const SizedBox(height: AstraSpacing.xl),
+        Text('Saved stories', style: AstraTextStyles.label),
+        const SizedBox(height: AstraSpacing.sm),
+        if (favouriteStories.isEmpty)
+          Text(
+            'Nothing saved yet. Tap the heart on a story to keep it here.',
+            style: AstraTextStyles.small,
+          )
+        else
+          for (final story in favouriteStories) ...[
+            AstraCard(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              onTap: () {
+                ref.read(playbackProvider).load(story);
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const PlayerScreen()),
+                );
+              },
+              child: Row(
+                children: [
+                  Text(
+                    story.intention.glyph,
+                    style: TextStyle(fontSize: 16, color: story.intention.accent),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          story.title,
+                          style: AstraTextStyles.body.copyWith(fontSize: 14),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          '${story.durationLabel} · ${story.hasAudio ? 'audio and text' : 'text'}',
+                          style: AstraTextStyles.small,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.play_circle_outline_rounded,
+                    color: AstraColors.gold,
+                    size: 24,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AstraSpacing.sm),
+          ],
+
+        const SizedBox(height: AstraSpacing.lg),
+        Text('Kept affirmations', style: AstraTextStyles.label),
+        const SizedBox(height: AstraSpacing.sm),
+        if (keptLines.isEmpty)
+          Text(
+            'Swipe right on an affirmation and it lands here.',
+            style: AstraTextStyles.small,
+          )
+        else
+          for (final line in keptLines) ...[
+            AstraCard(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '“$line”',
+                      style: AstraTextStyles.quote.copyWith(fontSize: 14),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.favorite,
+                      size: 17,
+                      color: AstraColors.gold,
+                    ),
+                    tooltip: 'Remove',
+                    onPressed: () =>
+                        ref.read(tasteProvider.notifier).unlike(line),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AstraSpacing.sm),
+          ],
       ],
     );
   }

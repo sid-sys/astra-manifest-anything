@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../providers.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/starfield.dart';
 import 'affirmations_screen.dart';
 import 'create_screen.dart';
 import 'home_screen.dart';
-import 'journal_screen.dart';
 import 'library_screen.dart';
-import 'player_screen.dart';
 import 'profile_screen.dart';
 
-/// The tab frame, with a mini player docked above the bar whenever
-/// something is loaded so playback survives navigation.
+/// The four-tab frame.
+///
+/// There is no mini player. Playback lives and dies with the player screen —
+/// closing it stops the audio, rather than tucking it into a bar that keeps
+/// playing after the screen that owned it is gone.
 class ShellScreen extends ConsumerStatefulWidget {
   const ShellScreen({super.key});
 
@@ -34,13 +34,10 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final playback = ref.watch(playbackProvider);
-
     final screens = [
       HomeScreen(onCreate: _openCreate, onLibrary: () => _goTo(1)),
       LibraryScreen(onCreate: _openCreate),
       const AffirmationsScreen(),
-      const JournalScreen(),
       const ProfileScreen(),
     ];
 
@@ -54,7 +51,6 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (playback.state.hasStory) const _MiniPlayer(),
           DecoratedBox(
             decoration: const BoxDecoration(
               color: AstraColors.inkRaised,
@@ -107,11 +103,6 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                     label: 'Affirm',
                   ),
                   NavigationDestination(
-                    icon: Icon(Icons.menu_book_outlined),
-                    selectedIcon: Icon(Icons.menu_book),
-                    label: 'Journal',
-                  ),
-                  NavigationDestination(
                     icon: Icon(Icons.person_outline),
                     selectedIcon: Icon(Icons.person),
                     label: 'Profile',
@@ -126,61 +117,3 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
   }
 }
 
-class _MiniPlayer extends ConsumerWidget {
-  const _MiniPlayer();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final playback = ref.watch(playbackProvider);
-    final story = playback.state.story!;
-
-    return Material(
-      color: AstraColors.card,
-      child: InkWell(
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (_) => const PlayerScreen()),
-        ),
-        child: Column(
-          children: [
-            LinearProgressIndicator(
-              value: playback.state.progress,
-              minHeight: 2,
-              backgroundColor: AstraColors.line,
-              valueColor: const AlwaysStoppedAnimation(AstraColors.gold),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Row(
-                children: [
-                  Text(
-                    story.intention.glyph,
-                    style: TextStyle(color: story.intention.accent),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      story.title,
-                      style: AstraTextStyles.body.copyWith(fontSize: 13),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      playback.state.playing
-                          ? Icons.pause_rounded
-                          : Icons.play_arrow_rounded,
-                      color: AstraColors.gold,
-                    ),
-                    onPressed: playback.toggle,
-                    tooltip: playback.state.playing ? 'Pause' : 'Play',
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

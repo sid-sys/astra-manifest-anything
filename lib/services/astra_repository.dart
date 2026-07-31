@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../models/journal_entry.dart';
+import '../models/affirmation_taste.dart';
 import '../models/story.dart';
 import '../models/user_profile.dart';
 
@@ -20,7 +20,7 @@ class AstraRepository {
 
   static const _profileKey = 'astra.profile';
   static const _storiesKey = 'astra.stories';
-  static const _journalKey = 'astra.journal';
+  static const _tasteKey = 'astra.taste';
 
   final SharedPreferences _prefs;
 
@@ -117,28 +117,24 @@ class AstraRepository {
     await _mirror(() => _userDoc.collection('stories').doc(storyId).delete());
   }
 
-  // ---------------------------------------------------------------- journal
+  // ------------------------------------------------------------------ taste
 
-  List<JournalEntry> loadJournal() =>
-      _loadList(_journalKey, (id, map) => JournalEntry.fromMap(id, map))
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-  Future<void> addJournalEntry(JournalEntry entry) async {
-    final entries = loadJournal()..insert(0, entry);
-    await _saveList(_journalKey, {
-      for (final e in entries) e.id: e.toMap(),
-    });
-    await _mirror(
-      () => _userDoc.collection('journal').doc(entry.id).set(entry.toMap()),
-    );
+  AffirmationTaste loadTaste() {
+    final raw = _prefs.getString(_tasteKey);
+    if (raw == null) return const AffirmationTaste();
+    try {
+      return AffirmationTaste.fromMap(jsonDecode(raw) as Map<String, dynamic>);
+    } catch (error) {
+      debugPrint('Astra: could not decode affirmation taste — $error');
+      return const AffirmationTaste();
+    }
   }
 
-  Future<void> deleteJournalEntry(String entryId) async {
-    final entries = loadJournal()..removeWhere((e) => e.id == entryId);
-    await _saveList(_journalKey, {
-      for (final e in entries) e.id: e.toMap(),
-    });
-    await _mirror(() => _userDoc.collection('journal').doc(entryId).delete());
+  Future<void> saveTaste(AffirmationTaste taste) async {
+    await _prefs.setString(_tasteKey, jsonEncode(taste.toMap()));
+    await _mirror(
+      () => _userDoc.set({'affirmationTaste': taste.toMap()}, SetOptions(merge: true)),
+    );
   }
 
   // ----------------------------------------------------------------- shared
