@@ -69,84 +69,124 @@ class JournalScreen extends ConsumerWidget {
   }
 
   Future<void> _compose(BuildContext context, WidgetRef ref) async {
-    final controller = TextEditingController();
-    var kind = JournalKind.gratitude;
-
-    final saved = await showModalBottomSheet<bool>(
+    final draft = await showModalBottomSheet<_Draft>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AstraColors.inkRaised,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (sheetContext, setSheetState) => Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 20,
-            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('New entry', style: AstraTextStyles.display(20)),
-              const SizedBox(height: AstraSpacing.md),
-              Wrap(
-                spacing: AstraSpacing.sm,
-                children: [
-                  for (final option in JournalKind.values)
-                    TagChip(
-                      label: option.label,
-                      selected: option == kind,
-                      onTap: () => setSheetState(() => kind = option),
-                    ),
-                ],
-              ),
-              const SizedBox(height: AstraSpacing.md),
-              AstraCard(
-                child: TextField(
-                  controller: controller,
-                  maxLines: 4,
-                  autofocus: true,
-                  style: AstraTextStyles.body,
-                  cursorColor: AstraColors.gold,
-                  decoration: InputDecoration(
-                    border: InputBorder.none,
-                    isDense: true,
-                    hintText:
-                        'A recruiter reached out about a design lead role…',
-                    hintStyle: AstraTextStyles.bodyDim,
-                  ),
-                ),
-              ),
-              const SizedBox(height: AstraSpacing.lg),
-              AstraButton(
-                label: 'Save entry',
-                onPressed: () => Navigator.of(sheetContext).pop(true),
-              ),
-              const SizedBox(height: AstraSpacing.sm),
-            ],
-          ),
-        ),
-      ),
+      builder: (_) => const _JournalComposer(),
     );
 
-    final body = controller.text.trim();
-    controller.dispose();
-
-    if (saved != true || body.isEmpty) return;
+    if (draft == null) return;
 
     await ref.read(journalProvider.notifier).add(
           JournalEntry(
             id: 'entry_${DateTime.now().microsecondsSinceEpoch}',
-            body: body,
-            kind: kind,
+            body: draft.body,
+            kind: draft.kind,
             createdAt: DateTime.now(),
           ),
         );
   }
+}
+
+typedef _Draft = ({String body, JournalKind kind});
+
+/// The new-entry sheet.
+///
+/// A widget rather than a `StatefulBuilder` because it has to own the text
+/// controller. Disposing the controller once the sheet's future completed
+/// killed it while the sheet was still animating out and still rebuilding the
+/// field, which threw "A TextEditingController was used after being disposed"
+/// and took the whole screen down with it. Owning it here means it lives
+/// exactly as long as the route does.
+class _JournalComposer extends StatefulWidget {
+  const _JournalComposer();
+
+  @override
+  State<_JournalComposer> createState() => _JournalComposerState();
+}
+
+class _JournalComposerState extends State<_JournalComposer> {
+  final _controller = TextEditingController();
+  JournalKind _kind = JournalKind.gratitude;
+  bool _hasText = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(() {
+      final has = _controller.text.trim().isNotEmpty;
+      if (has != _hasText) setState(() => _hasText = has);
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final body = _controller.text.trim();
+    if (body.isEmpty) return;
+    Navigator.of(context).pop((body: body, kind: _kind));
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.only(
+      left: 20,
+      right: 20,
+      top: 20,
+      bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('New entry', style: AstraTextStyles.display(20)),
+        const SizedBox(height: AstraSpacing.md),
+        Wrap(
+          spacing: AstraSpacing.sm,
+          children: [
+            for (final option in JournalKind.values)
+              TagChip(
+                label: option.label,
+                selected: option == _kind,
+                onTap: () => setState(() => _kind = option),
+              ),
+          ],
+        ),
+        const SizedBox(height: AstraSpacing.md),
+        AstraCard(
+          child: TextField(
+            controller: _controller,
+            maxLines: 4,
+            autofocus: true,
+            style: AstraTextStyles.body,
+            cursorColor: AstraColors.gold,
+            decoration: InputDecoration(
+              border: InputBorder.none,
+              isDense: true,
+              hintText: 'A recruiter reached out about a design lead role…',
+              hintStyle: AstraTextStyles.bodyDim,
+            ),
+          ),
+        ),
+        const SizedBox(height: AstraSpacing.lg),
+        AstraButton(
+          label: 'Save entry',
+          // Disabled while empty, so the sheet cannot close on nothing and
+          // leave the user wondering where their entry went.
+          onPressed: _hasText ? _save : null,
+        ),
+        const SizedBox(height: AstraSpacing.sm),
+      ],
+    ),
+  );
 }
 
 class _EntryCard extends StatelessWidget {
