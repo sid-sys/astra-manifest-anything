@@ -26,8 +26,14 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _wishController = TextEditingController();
-  String? _suggestion;
+  late String _suggestion;
   bool _weaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _suggestion = WishPrompts.next(_intention);
+  }
 
   @override
   void dispose() {

@@ -25,8 +25,14 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
   final _sceneController = TextEditingController();
 
   Intention? _intention;
-  String? _suggestion;
+  late String _suggestion;
   bool _weaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _suggestion = WishPrompts.next(_activeIntention);
+  }
 
   @override
   void dispose() {
@@ -94,7 +100,7 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
                       onTap: () => setState(() {
                         _intention = intention;
                         // The old suggestion belonged to the old intention.
-                        _suggestion = null;
+                        _suggestion = WishPrompts.next(intention);
                       }),
                     ),
                 ],
@@ -176,13 +182,17 @@ class WishSuggestion extends StatelessWidget {
   });
 
   final Intention intention;
-  final String? suggestion;
+
+  /// The wish on screen. Owned by the caller rather than picked here: a
+  /// fallback chosen inside build is not stored anywhere, so the rotate button
+  /// cannot know what it is rotating away from and lands on the same line.
+  final String suggestion;
   final VoidCallback onRotate;
   final ValueChanged<String> onUse;
 
   @override
   Widget build(BuildContext context) {
-    final wish = suggestion ?? WishPrompts.next(intention);
+    final wish = suggestion;
 
     return Row(
       children: [
