@@ -74,6 +74,26 @@ class AstraRepository {
     );
   }
 
+  /// Stories held in Firestore, or an empty list when there is no account,
+  /// no network, or anything else goes wrong.
+  ///
+  /// This is the read half of the mirror. It covers two cases: a fresh install
+  /// signing back in, and — more commonly — a story the function finished and
+  /// stored after the client had already stopped waiting for it. The audio
+  /// exists and has been paid for either way, so it should come back.
+  Future<List<Story>> fetchCloudStories() async {
+    if (uid == null) return const [];
+    try {
+      final snapshot = await _userDoc.collection('stories').get();
+      return snapshot.docs
+          .map((doc) => Story.fromMap(doc.id, doc.data()))
+          .toList();
+    } catch (error) {
+      debugPrint('Astra: could not read cloud stories — $error');
+      return const [];
+    }
+  }
+
   Future<void> updateStory(Story story) async {
     final stories = loadStories();
     final index = stories.indexWhere((s) => s.id == story.id);

@@ -84,7 +84,16 @@ class StoryService {
     await repository.saveProfile(profile);
 
     try {
-      final result = await _functions.httpsCallable('generateStory').call({
+      final result = await _functions
+          .httpsCallable(
+            'generateStory',
+            // The default is 60 seconds and a story takes about 65 — writing it
+            // and narrating it are both slow. Under the default the client gave
+            // up on work the server had already finished and charged for, and
+            // the story was lost. Sits just under the function's own 540s cap.
+            options: HttpsCallableOptions(timeout: const Duration(seconds: 570)),
+          )
+          .call({
         'intention': intention.name,
         'scene': scene.trim(),
         'mood': mood,

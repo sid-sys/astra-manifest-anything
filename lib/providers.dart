@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -58,9 +60,33 @@ final profileProvider = StateNotifierProvider<ProfileNotifier, UserProfile>(
 // ------------------------------------------------------------------ stories
 
 class StoriesNotifier extends StateNotifier<List<Story>> {
-  StoriesNotifier(this._repository) : super(_repository.loadStories());
+  StoriesNotifier(this._repository) : super(_repository.loadStories()) {
+    unawaited(_restoreFromCloud());
+  }
 
   final AstraRepository _repository;
+
+  /// Pulls in any story Firestore has that this device does not.
+  ///
+  /// The device copy stays authoritative — nothing here overwrites a local
+  /// story — so this only ever adds. It runs after the first frame has already
+  /// been built from local state, which is why the library is never blocked on
+  /// the network.
+  Future<void> _restoreFromCloud() async {
+    final cloud = await _repository.fetchCloudStories();
+    if (cloud.isEmpty) return;
+
+    final known = state.map((story) => story.id).toSet();
+    final missing = cloud.where((story) => !known.contains(story.id)).toList();
+    if (missing.isEmpty) return;
+
+    final merged = [...state, ...missing]
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+    if (!mounted) return;
+    state = merged;
+    await _repository.saveStories(merged);
+  }
 
   Future<void> add(Story story) async {
     state = [story, ...state];
