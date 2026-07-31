@@ -41,7 +41,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                 const Wordmark('Astra Plus'),
                 const SizedBox(height: AstraSpacing.xl),
                 Text(
-                  "You've heard your first story. Free, as promised.",
+                  "You've had your free day. No card asked for, as promised.",
                   style: AstraTextStyles.display(26),
                 ),
                 const SizedBox(height: AstraSpacing.xl),
@@ -57,7 +57,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
 
                 const SizedBox(height: AstraSpacing.sm),
                 Text(
-                  'Unlimited stories and listening · all voices · offline '
+                  '15 stories a month · unlimited listening · all voices · offline '
                   'downloads · journal insights',
                   style: AstraTextStyles.small,
                 ),

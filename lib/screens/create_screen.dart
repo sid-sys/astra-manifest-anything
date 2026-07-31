@@ -163,7 +163,8 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
               ? 'Written from your profile details, so it sounds like your '
                   'life and not a template. Narrated by an AI voice. Writing '
                   'and recording takes about a minute.'
-              : 'Astra Plus writes as many stories as you want, whenever you want.',
+              : 'Astra Plus writes 15 stories a month, and your library '
+                  'replays without limit.',
           style: AstraTextStyles.small,
         ),
         const SizedBox(height: AstraSpacing.xl),
