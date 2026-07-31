@@ -6,8 +6,8 @@ import '../providers.dart';
 import '../services/story_service.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
-import 'paywall_screen.dart';
-import 'player_screen.dart';
+import '../widgets/starfield.dart';
+import 'story_flow.dart';
 
 const _moods = ['Calm', 'Cinematic', 'Tender'];
 const _lengths = [5, 7, 10];
@@ -38,63 +38,24 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
   }
 
   Future<void> _weave() async {
-    final profile = ref.read(profileProvider);
-
-    if (!profile.canGenerateFreely) {
-      final subscribed = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(builder: (_) => const PaywallScreen()),
-      );
-      if (subscribed != true) return;
-    }
-
+    if (_weaving) return;
     setState(() => _weaving = true);
 
-    final intention = _intention ??
-        (profile.intentions.isEmpty ? Intention.career : profile.intentions.first);
+    final profile = ref.read(profileProvider);
+    final made = await weaveStory(
+      context,
+      ref,
+      intention: _intention ??
+          (profile.intentions.isEmpty ? Intention.career : profile.intentions.first),
+      scene: _sceneController.text,
+      mood: _mood,
+      length: Duration(minutes: _lengthMinutes),
+      voice: _voice,
+    );
 
-    try {
-      final story = await ref.read(storyServiceProvider).generate(
-            profile: profile,
-            intention: intention,
-            scene: _sceneController.text,
-            mood: _mood,
-            length: Duration(minutes: _lengthMinutes),
-            voice: _voice,
-          );
-
-      await ref.read(storiesProvider.notifier).add(story);
-      if (!profile.isSubscribed) {
-        await ref.read(profileProvider.notifier).markFreeStoryUsed();
-      }
-
-      if (!mounted) return;
-      _sceneController.clear();
-      ref.read(playbackProvider).play(story);
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => const PlayerScreen()),
-      );
-    } on StoryQuotaExceeded catch (error) {
-      // The server is the real gate — the local flag can be stale after a
-      // reinstall or a second device. Send them where the message points.
-      if (!mounted) return;
-      await ref.read(profileProvider.notifier).markFreeStoryUsed();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
-      await Navigator.of(context).push<bool>(
-        MaterialPageRoute(builder: (_) => const PaywallScreen()),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("That story didn't come through. Try again — $error"),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _weaving = false);
-    }
+    if (!mounted) return;
+    if (made) _sceneController.clear();
+    setState(() => _weaving = false);
   }
 
   @override
@@ -216,6 +177,35 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
       ],
     );
   }
+}
+
+/// [CreateScreen] as a pushable route, with its own background and a way back.
+class CreateRoute extends StatelessWidget {
+  const CreateRoute({super.key});
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: Starfield(
+      child: SafeArea(
+        child: Column(
+          children: [
+            Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  color: AstraColors.dim,
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  tooltip: 'Back',
+                ),
+                const Spacer(),
+              ],
+            ),
+            const Expanded(child: CreateScreen()),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 /// Compact tap-to-cycle control. Three of these fit a row where three

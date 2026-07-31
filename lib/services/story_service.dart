@@ -106,7 +106,7 @@ class StoryService {
     } on FirebaseFunctionsException catch (error) {
       if (error.code == 'resource-exhausted') {
         throw StoryQuotaExceeded(
-          error.message ?? 'You have used your free story.',
+          error.message ?? 'Your free day has ended.',
         );
       }
       debugPrint('Astra: story generation failed — ${error.code} ${error.message}');

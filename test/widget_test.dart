@@ -26,13 +26,13 @@ void main() {
     expect(find.text('What should Astra call you?'), findsOneWidget);
   });
 
-  testWidgets('the free-story promise is visible before anything is asked', (
+  testWidgets('the free-day promise is visible before anything is asked', (
     tester,
   ) async {
     await tester.pumpWidget(await _bootstrap());
 
     expect(
-      find.text('Your first story is free — before any payment screen.'),
+      find.text('Your first day is free — before any payment screen.'),
       findsOneWidget,
     );
   });

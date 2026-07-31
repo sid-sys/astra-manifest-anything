@@ -167,6 +167,18 @@ class PlayerScreen extends ConsumerWidget {
                           onTap: state.queue.isEmpty ? null : playback.next,
                         ),
                         TagChip(
+                          label: '${_rate(state.speed)}  Speed',
+                          selected: state.speed != 1.0,
+                          onTap: playback.cycleSpeed,
+                        ),
+                        TagChip(
+                          label: story.favorite ? '♥  Favourite' : '♡  Favourite',
+                          selected: story.favorite,
+                          onTap: () => ref
+                              .read(storiesProvider.notifier)
+                              .toggleFavorite(story),
+                        ),
+                        TagChip(
                           label: story.downloaded ? '✓  Offline' : '↓  Offline',
                           selected: story.downloaded,
                           onTap: () => ref
@@ -177,20 +189,25 @@ class PlayerScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: AstraSpacing.xl),
 
-                    if (!story.hasAudio)
-                      AstraCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('READ ALONG', style: AstraTextStyles.eyebrow),
-                            const SizedBox(height: AstraSpacing.sm),
-                            Text(
-                              story.script.trim(),
-                              style: AstraTextStyles.body.copyWith(height: 1.7),
-                            ),
-                          ],
-                        ),
+                    // Always shown, not only when the audio is missing. Some
+                    // people read along, some prefer reading to listening, and
+                    // hiding the words behind a failure state served neither.
+                    AstraCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            story.hasAudio ? 'READ ALONG' : 'READ IT',
+                            style: AstraTextStyles.eyebrow,
+                          ),
+                          const SizedBox(height: AstraSpacing.sm),
+                          SelectableText(
+                            story.script.trim(),
+                            style: AstraTextStyles.body.copyWith(height: 1.7),
+                          ),
+                        ],
                       ),
+                    ),
                     const SizedBox(height: AstraSpacing.xl),
                   ],
                 ),
@@ -200,6 +217,14 @@ class PlayerScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// `1x`, `1.25x` — trailing zeros dropped so the chip stays narrow.
+  static String _rate(double speed) {
+    final text = speed.toStringAsFixed(2)
+        .replaceFirst(RegExp(r'0+$'), '')
+        .replaceFirst(RegExp(r'\.$'), '');
+    return '${text}x';
   }
 
   static String _clock(Duration value) {

@@ -9,7 +9,7 @@ class UserProfile {
     required this.voice,
     required this.joinedAt,
     this.isSubscribed = false,
-    this.freeStoryUsed = false,
+    this.trialStartedAt,
     this.reminderHour = 21,
     this.reminderMinute = 0,
     this.countryOverride,
@@ -25,8 +25,9 @@ class UserProfile {
   final DateTime joinedAt;
   final bool isSubscribed;
 
-  /// The free tier grants one complete story before the paywall is ever shown.
-  final bool freeStoryUsed;
+  /// When the free day began, stamped by the server on the first generation.
+  /// Null means the trial has not started yet.
+  final DateTime? trialStartedAt;
   final int reminderHour;
   final int reminderMinute;
 
@@ -43,7 +44,15 @@ class UserProfile {
 
   bool get isOnboarded => name.isNotEmpty && intentions.isNotEmpty;
 
-  bool get canGenerateFreely => isSubscribed || !freeStoryUsed;
+  /// Whether the free day is still running. Advisory only — the server holds
+  /// the authoritative clock, because a limit a device can reset by clearing
+  /// its storage is not a limit.
+  bool get trialActive {
+    if (trialStartedAt == null) return true;
+    return DateTime.now().difference(trialStartedAt!) < const Duration(hours: 24);
+  }
+
+  bool get canGenerateFreely => isSubscribed || trialActive;
 
   UserProfile copyWith({
     String? name,
@@ -51,7 +60,7 @@ class UserProfile {
     String? aspiration,
     String? voice,
     bool? isSubscribed,
-    bool? freeStoryUsed,
+    DateTime? trialStartedAt,
     int? reminderHour,
     int? reminderMinute,
     String? countryOverride,
@@ -62,7 +71,7 @@ class UserProfile {
     voice: voice ?? this.voice,
     joinedAt: joinedAt,
     isSubscribed: isSubscribed ?? this.isSubscribed,
-    freeStoryUsed: freeStoryUsed ?? this.freeStoryUsed,
+    trialStartedAt: trialStartedAt ?? this.trialStartedAt,
     reminderHour: reminderHour ?? this.reminderHour,
     reminderMinute: reminderMinute ?? this.reminderMinute,
     countryOverride: countryOverride ?? this.countryOverride,
@@ -75,7 +84,7 @@ class UserProfile {
     'voice': voice,
     'joinedAt': joinedAt.toIso8601String(),
     'isSubscribed': isSubscribed,
-    'freeStoryUsed': freeStoryUsed,
+    'trialStartedAt': trialStartedAt?.toIso8601String(),
     'reminderHour': reminderHour,
     'reminderMinute': reminderMinute,
     'countryOverride': countryOverride,
@@ -91,7 +100,7 @@ class UserProfile {
     joinedAt:
         DateTime.tryParse(map['joinedAt'] as String? ?? '') ?? DateTime.now(),
     isSubscribed: map['isSubscribed'] as bool? ?? false,
-    freeStoryUsed: map['freeStoryUsed'] as bool? ?? false,
+    trialStartedAt: DateTime.tryParse(map['trialStartedAt'] as String? ?? ''),
     reminderHour: (map['reminderHour'] as num?)?.toInt() ?? 21,
     reminderMinute: (map['reminderMinute'] as num?)?.toInt() ?? 0,
     countryOverride: map['countryOverride'] as String?,

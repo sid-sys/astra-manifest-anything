@@ -13,6 +13,7 @@ class PlaybackState {
     this.position = Duration.zero,
     this.duration = Duration.zero,
     this.looping = false,
+    this.speed = 1.0,
     this.queue = const [],
   });
 
@@ -21,6 +22,10 @@ class PlaybackState {
   final Duration position;
   final Duration duration;
   final bool looping;
+
+  /// Playback rate. Applies to real audio only — the read-along clock runs at
+  /// the same rate regardless, since there is nothing to speed up.
+  final double speed;
 
   /// Stories that play after the current one, in order.
   final List<Story> queue;
@@ -37,6 +42,7 @@ class PlaybackState {
     Duration? position,
     Duration? duration,
     bool? looping,
+    double? speed,
     List<Story>? queue,
   }) => PlaybackState(
     story: story ?? this.story,
@@ -44,6 +50,7 @@ class PlaybackState {
     position: position ?? this.position,
     duration: duration ?? this.duration,
     looping: looping ?? this.looping,
+    speed: speed ?? this.speed,
     queue: queue ?? this.queue,
   );
 }
@@ -60,6 +67,15 @@ class PlaybackController extends ChangeNotifier {
     _player.positionStream.listen((position) {
       if (_usingVirtualClock) return;
       _state = _state.copyWith(position: position);
+      notifyListeners();
+    });
+
+    // The file is the final authority on its own length. The stored duration is
+    // measured server-side and should agree, but if it ever drifts the scrub
+    // bar must follow the audio rather than the metadata.
+    _player.durationStream.listen((duration) {
+      if (_usingVirtualClock || duration == null) return;
+      _state = _state.copyWith(duration: duration);
       notifyListeners();
     });
 
@@ -95,6 +111,7 @@ class PlaybackController extends ChangeNotifier {
       try {
         await _player.setUrl(story.audioUrl!);
         await _player.setLoopMode(_state.looping ? LoopMode.one : LoopMode.off);
+        await _player.setSpeed(_state.speed);
         await _player.play();
         return;
       } catch (error) {
@@ -128,6 +145,18 @@ class PlaybackController extends ChangeNotifier {
 
   Future<void> skip(Duration delta) =>
       seek(_clamp(_state.position + delta));
+
+  /// The rates the player cycles through. Nothing below 1 — these are already
+  /// narrated slowly, and slower turns the voice into a drone.
+  static const speeds = [1.0, 1.25, 1.5, 0.75];
+
+  /// Advances to the next rate and returns it.
+  Future<void> cycleSpeed() async {
+    final next = speeds[(speeds.indexOf(_state.speed) + 1) % speeds.length];
+    _state = _state.copyWith(speed: next);
+    notifyListeners();
+    if (!_usingVirtualClock) await _player.setSpeed(next);
+  }
 
   Future<void> toggleLoop() async {
     final looping = !_state.looping;

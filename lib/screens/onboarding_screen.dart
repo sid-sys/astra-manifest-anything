@@ -100,7 +100,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        'Your first story is free — before any payment screen.',
+                        'Your first day is free — before any payment screen.',
                         style: AstraTextStyles.small
                             .copyWith(color: AstraColors.good),
                       ),

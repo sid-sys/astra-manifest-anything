@@ -1,5 +1,13 @@
 import '../models/intention.dart';
 
+/// One card in the affirmation deck: the line and the life area it belongs to.
+class Affirmation {
+  const Affirmation({required this.line, required this.intention});
+
+  final String line;
+  final Intention intention;
+}
+
 /// The daily affirmation pool.
 ///
 /// Chosen deterministically from the date so everyone opening the app on the
@@ -39,6 +47,29 @@ class Affirmations {
       'I am allowed to be unreachable.',
     ],
   };
+
+  /// The full deck for a set of intentions, ordered so the swipe moves between
+  /// life areas rather than sitting on one of them for three cards.
+  static List<Affirmation> deck(Set<Intention> intentions) {
+    final chosen = intentions.isEmpty ? _byIntention.keys.toSet() : intentions;
+    final byIntention = [
+      for (final intention in chosen)
+        [
+          for (final line in _byIntention[intention]!)
+            Affirmation(line: line, intention: intention),
+        ],
+    ];
+
+    // Round-robin across intentions: card 1 from each, then card 2, and so on.
+    final deck = <Affirmation>[];
+    final deepest = byIntention.fold(0, (m, l) => l.length > m ? l.length : m);
+    for (var round = 0; round < deepest; round++) {
+      for (final lines in byIntention) {
+        if (round < lines.length) deck.add(lines[round]);
+      }
+    }
+    return deck;
+  }
 
   static String forDay(DateTime day, Set<Intention> intentions) {
     final pool = intentions.isEmpty

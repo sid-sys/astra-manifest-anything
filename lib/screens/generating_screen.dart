@@ -1,0 +1,59 @@
+import 'package:flutter/material.dart';
+
+import '../theme/astra_theme.dart';
+import '../widgets/starfield.dart';
+
+/// Shown while a story is being written and narrated.
+///
+/// It gets a whole screen rather than a spinner on a button because the wait is
+/// about a minute — long enough that a button that merely looks busy reads as a
+/// hang. Naming the two stages also makes the wait legible: the user can see
+/// that something slow is meant to be slow.
+class GeneratingScreen extends StatelessWidget {
+  const GeneratingScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+    // Leaving mid-generation would orphan the story: the function keeps going
+    // and the audio is still paid for, so there is nothing to gain by backing
+    // out and a story to lose.
+    canPop: false,
+    child: Scaffold(
+      body: Starfield(
+        child: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: AstraSpacing.screenPadding,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.4,
+                      color: AstraColors.gold,
+                    ),
+                  ),
+                  const SizedBox(height: AstraSpacing.xl),
+                  Text(
+                    'Crafting your story',
+                    textAlign: TextAlign.center,
+                    style: AstraTextStyles.display(26),
+                  ),
+                  const SizedBox(height: AstraSpacing.sm),
+                  Text(
+                    'Writing it, then recording it in your voice.\n'
+                    'This takes about a minute.',
+                    textAlign: TextAlign.center,
+                    style: AstraTextStyles.small,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}

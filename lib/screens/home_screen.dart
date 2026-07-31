@@ -1,26 +1,66 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/intention.dart';
+import '../models/story.dart';
 import '../providers.dart';
 import '../services/affirmations.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
 import 'player_screen.dart';
+import 'story_flow.dart';
 
-/// The daily ritual: tonight's story, today's affirmation, and the evidence
-/// that the practice is adding up.
-class HomeScreen extends ConsumerWidget {
+/// The daily ritual: today's story, a box to ask for a new one, everything
+/// made so far, and the evidence that the practice is adding up.
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key, required this.onCreate, required this.onLibrary});
 
   final VoidCallback onCreate;
   final VoidCallback onLibrary;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  final _wishController = TextEditingController();
+  bool _weaving = false;
+
+  @override
+  void dispose() {
+    _wishController.dispose();
+    super.dispose();
+  }
+
+  /// The one-line path: type a wish, get a story. Length, voice and mood keep
+  /// their defaults, and Create exists for anyone who wants to set them.
+  Future<void> _weaveFromWish() async {
+    final wish = _wishController.text.trim();
+    if (wish.isEmpty || _weaving) return;
+
+    setState(() => _weaving = true);
+    final profile = ref.read(profileProvider);
+
+    final made = await weaveStory(
+      context,
+      ref,
+      intention: profile.intentions.isEmpty
+          ? Intention.career
+          : profile.intentions.first,
+      scene: wish,
+    );
+
+    if (!mounted) return;
+    if (made) _wishController.clear();
+    setState(() => _weaving = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final profile = ref.watch(profileProvider);
+    final stories = ref.watch(storiesProvider);
     final daily = ref.watch(dailyStoryProvider);
     final streak = ref.watch(streakProvider);
-    final storyCount = ref.watch(storiesProvider).length;
     final minutes = ref.watch(minutesListenedProvider);
     final journalCount = ref.watch(journalProvider).length;
 
@@ -36,7 +76,7 @@ class HomeScreen extends ConsumerWidget {
         ),
         const SizedBox(height: AstraSpacing.lg),
         Text(
-          '${_greeting()}, ${profile.name}',
+          "Let's manifest, ${profile.name}",
           style: AstraTextStyles.display(28),
         ),
         const SizedBox(height: AstraSpacing.xl),
@@ -44,13 +84,16 @@ class HomeScreen extends ConsumerWidget {
         if (daily != null)
           AstraCard(
             raised: true,
-            onTap: () => _openPlayer(context, ref),
+            onTap: () => _open(daily),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("TONIGHT'S STORY", style: AstraTextStyles.eyebrow),
+                Text("TODAY'S MOMENT", style: AstraTextStyles.eyebrow),
                 const SizedBox(height: AstraSpacing.sm),
-                Text(daily.title, style: AstraTextStyles.label.copyWith(fontSize: 16)),
+                Text(
+                  daily.title,
+                  style: AstraTextStyles.label.copyWith(fontSize: 16),
+                ),
                 const SizedBox(height: 2),
                 Text(
                   '${daily.durationLabel} · written for your '
@@ -61,7 +104,7 @@ class HomeScreen extends ConsumerWidget {
                 AstraButton(
                   label: 'Listen',
                   icon: Icons.play_arrow_rounded,
-                  onPressed: () => _openPlayer(context, ref),
+                  onPressed: () => _open(daily),
                 ),
               ],
             ),
@@ -80,18 +123,79 @@ class HomeScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'It takes about a minute, and this one is free.',
+                  'Say what you want below and Astra writes it. '
+                  'Your first day is free.',
                   style: AstraTextStyles.small,
-                ),
-                const SizedBox(height: AstraSpacing.md),
-                AstraButton(
-                  label: 'Weave my first story',
-                  icon: Icons.auto_awesome,
-                  onPressed: onCreate,
                 ),
               ],
             ),
           ),
+
+        const SizedBox(height: AstraSpacing.md),
+
+        AstraCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'What do you want to manifest today?',
+                style: AstraTextStyles.label.copyWith(fontSize: 15),
+              ),
+              const SizedBox(height: AstraSpacing.sm),
+              TextField(
+                controller: _wishController,
+                minLines: 2,
+                maxLines: 3,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _weaveFromWish(),
+                style: AstraTextStyles.body,
+                cursorColor: AstraColors.gold,
+                decoration: InputDecoration(
+                  border: InputBorder.none,
+                  isDense: true,
+                  hintText: 'I want to travel around the world…',
+                  hintStyle: AstraTextStyles.bodyDim,
+                ),
+              ),
+              const SizedBox(height: AstraSpacing.md),
+              AstraButton(
+                label: _weaving ? 'Writing and recording…' : 'Manifest this',
+                icon: Icons.auto_awesome,
+                busy: _weaving,
+                onPressed: _weaveFromWish,
+              ),
+              const SizedBox(height: AstraSpacing.sm),
+              Text(
+                'Narrated by an AI voice, in your own words. Takes about a '
+                'minute.',
+                style: AstraTextStyles.small,
+              ),
+              const SizedBox(height: AstraSpacing.sm),
+              AstraGhostButton(
+                label: 'More options',
+                onPressed: widget.onCreate,
+              ),
+            ],
+          ),
+        ),
+
+        if (stories.isNotEmpty) ...[
+          const SizedBox(height: AstraSpacing.xl),
+          Row(
+            children: [
+              Expanded(child: Text('Your stories', style: AstraTextStyles.label)),
+              GestureDetector(
+                onTap: widget.onLibrary,
+                child: Text('See all', style: AstraTextStyles.small),
+              ),
+            ],
+          ),
+          const SizedBox(height: AstraSpacing.sm),
+          for (final story in stories.take(4)) ...[
+            _StoryRow(story: story, onTap: () => _open(story)),
+            const SizedBox(height: AstraSpacing.sm),
+          ],
+        ],
 
         const SizedBox(height: AstraSpacing.md),
         AstraCard(
@@ -111,40 +215,77 @@ class HomeScreen extends ConsumerWidget {
         const SizedBox(height: AstraSpacing.md),
         Row(
           children: [
-            Expanded(child: _Stat(label: 'Stories', value: '$storyCount')),
+            Expanded(child: _Stat(label: 'Stories', value: '${stories.length}')),
             const SizedBox(width: AstraSpacing.sm),
             Expanded(child: _Stat(label: 'Minutes', value: '$minutes')),
             const SizedBox(width: AstraSpacing.sm),
             Expanded(child: _Stat(label: 'Journal', value: '$journalCount')),
           ],
         ),
-
-        if (storyCount > 1) ...[
-          const SizedBox(height: AstraSpacing.md),
-          AstraGhostButton(label: 'Open your library', onPressed: onLibrary),
-        ],
       ],
     );
   }
 
-  void _openPlayer(BuildContext context, WidgetRef ref) {
+  /// Plays [story] with everything else queued behind it, so the player never
+  /// runs dry at the end of one track.
+  void _open(Story story) {
     final stories = ref.read(storiesProvider);
-    if (stories.isEmpty) return;
-
     ref
         .read(playbackProvider)
-        .play(stories.first, queue: stories.skip(1).toList());
+        .play(story, queue: stories.where((s) => s.id != story.id).toList());
     Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => const PlayerScreen()),
     );
   }
+}
 
-  static String _greeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
-  }
+/// One story in the home list. Tapping it plays it.
+class _StoryRow extends StatelessWidget {
+  const _StoryRow({required this.story, required this.onTap});
+
+  final Story story;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => AstraCard(
+    onTap: onTap,
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    child: Row(
+      children: [
+        Text(
+          story.intention.glyph,
+          style: TextStyle(fontSize: 18, color: story.intention.accent),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                story.title,
+                style: AstraTextStyles.body.copyWith(fontSize: 14),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${story.durationLabel} · ${story.intention.label}',
+                style: AstraTextStyles.small,
+              ),
+            ],
+          ),
+        ),
+        if (story.favorite)
+          const Icon(Icons.favorite, size: 15, color: AstraColors.gold),
+        const SizedBox(width: 8),
+        const Icon(
+          Icons.play_circle_outline_rounded,
+          color: AstraColors.gold,
+          size: 26,
+        ),
+      ],
+    ),
+  );
 }
 
 class _Stat extends StatelessWidget {
@@ -160,10 +301,7 @@ class _Stat extends StatelessWidget {
       children: [
         Text(label, style: AstraTextStyles.small),
         const SizedBox(height: 2),
-        Text(
-          value,
-          style: AstraTextStyles.price.copyWith(fontSize: 19),
-        ),
+        Text(value, style: AstraTextStyles.price.copyWith(fontSize: 19)),
       ],
     ),
   );

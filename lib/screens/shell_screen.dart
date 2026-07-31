@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/starfield.dart';
+import 'affirmations_screen.dart';
 import 'create_screen.dart';
 import 'home_screen.dart';
 import 'journal_screen.dart';
@@ -11,7 +12,7 @@ import 'library_screen.dart';
 import 'player_screen.dart';
 import 'profile_screen.dart';
 
-/// The five-tab frame, with a mini player docked above the bar whenever
+/// The tab frame, with a mini player docked above the bar whenever
 /// something is loaded so playback survives navigation.
 class ShellScreen extends ConsumerStatefulWidget {
   const ShellScreen({super.key});
@@ -25,14 +26,20 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
 
   void _goTo(int tab) => setState(() => _tab = tab);
 
+  /// Create is a route rather than a tab. Home already takes a wish in one
+  /// line, so the full set of knobs is the exception, not the main path.
+  void _openCreate() => Navigator.of(context).push(
+    MaterialPageRoute<void>(builder: (_) => const CreateRoute()),
+  );
+
   @override
   Widget build(BuildContext context) {
     final playback = ref.watch(playbackProvider);
 
     final screens = [
-      HomeScreen(onCreate: () => _goTo(2), onLibrary: () => _goTo(1)),
-      LibraryScreen(onCreate: () => _goTo(2)),
-      const CreateScreen(),
+      HomeScreen(onCreate: _openCreate, onLibrary: () => _goTo(1)),
+      LibraryScreen(onCreate: _openCreate),
+      const AffirmationsScreen(),
       const JournalScreen(),
       const ProfileScreen(),
     ];
@@ -95,9 +102,9 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                     label: 'Library',
                   ),
                   NavigationDestination(
-                    icon: Icon(Icons.auto_awesome_outlined),
-                    selectedIcon: Icon(Icons.auto_awesome),
-                    label: 'Create',
+                    icon: Icon(Icons.favorite_border),
+                    selectedIcon: Icon(Icons.favorite),
+                    label: 'Affirm',
                   ),
                   NavigationDestination(
                     icon: Icon(Icons.menu_book_outlined),

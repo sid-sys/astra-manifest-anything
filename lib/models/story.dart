@@ -16,6 +16,7 @@ class Story {
     required this.createdAt,
     this.audioUrl,
     this.downloaded = false,
+    this.favorite = false,
   });
 
   final String id;
@@ -27,12 +28,13 @@ class Story {
   final DateTime createdAt;
   final String? audioUrl;
   final bool downloaded;
+  final bool favorite;
 
   bool get hasAudio => audioUrl != null;
 
   String get durationLabel => '${duration.inMinutes} min';
 
-  Story copyWith({String? audioUrl, bool? downloaded}) => Story(
+  Story copyWith({String? audioUrl, bool? downloaded, bool? favorite}) => Story(
     id: id,
     title: title,
     intention: intention,
@@ -42,6 +44,7 @@ class Story {
     createdAt: createdAt,
     audioUrl: audioUrl ?? this.audioUrl,
     downloaded: downloaded ?? this.downloaded,
+    favorite: favorite ?? this.favorite,
   );
 
   Map<String, dynamic> toMap() => {
@@ -53,6 +56,7 @@ class Story {
     'createdAt': createdAt.toIso8601String(),
     'audioUrl': audioUrl,
     'downloaded': downloaded,
+    'favorite': favorite,
   };
 
   factory Story.fromMap(String id, Map<String, dynamic> map) => Story(
@@ -66,5 +70,6 @@ class Story {
         DateTime.tryParse(map['createdAt'] as String? ?? '') ?? DateTime.now(),
     audioUrl: map['audioUrl'] as String?,
     downloaded: map['downloaded'] as bool? ?? false,
+    favorite: map['favorite'] as bool? ?? false,
   );
 }

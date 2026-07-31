@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'models/intention.dart';
 import 'models/journal_entry.dart';
 import 'models/plan.dart';
 import 'models/story.dart';
@@ -34,6 +35,44 @@ final storyServiceProvider = Provider<StoryService>(
   ),
 );
 
+/// Runs a generation end to end.
+///
+/// Home and Create both make stories and both have to do the same three things
+/// afterwards — store it, start the trial clock, keep the library in sync. This
+/// exists so neither screen owns that sequence privately and they cannot drift.
+class StoryComposer {
+  StoryComposer(this._ref);
+
+  final Ref _ref;
+
+  Future<Story> compose({
+    required Intention intention,
+    required String scene,
+    String mood = 'Calm',
+    Duration length = const Duration(minutes: 7),
+    String? voice,
+  }) async {
+    final profile = _ref.read(profileProvider);
+
+    final story = await _ref
+        .read(storyServiceProvider)
+        .generate(
+          profile: profile,
+          intention: intention,
+          scene: scene,
+          mood: mood,
+          length: length,
+          voice: voice ?? profile.voice,
+        );
+
+    await _ref.read(storiesProvider.notifier).add(story);
+    await _ref.read(profileProvider.notifier).noteTrialStarted();
+    return story;
+  }
+}
+
+final storyComposerProvider = Provider<StoryComposer>(StoryComposer.new);
+
 // ------------------------------------------------------------------ profile
 
 class ProfileNotifier extends StateNotifier<UserProfile> {
@@ -47,8 +86,22 @@ class ProfileNotifier extends StateNotifier<UserProfile> {
     await _repository.saveProfile(profile);
   }
 
-  Future<void> markFreeStoryUsed() =>
-      update(state.copyWith(freeStoryUsed: true));
+  /// Starts the free-day clock locally on the first successful generation.
+  ///
+  /// The server stamps its own copy and is the one that counts; this only keeps
+  /// the on-screen copy honest between launches.
+  Future<void> noteTrialStarted() async {
+    if (state.trialStartedAt != null) return;
+    await update(state.copyWith(trialStartedAt: DateTime.now()));
+  }
+
+  /// Backdates the clock so the UI stops offering a trial the server has
+  /// already refused. Called when generation comes back resource-exhausted.
+  Future<void> noteTrialOver() => update(
+    state.copyWith(
+      trialStartedAt: DateTime.now().subtract(const Duration(hours: 24)),
+    ),
+  );
 
   Future<void> subscribe() => update(state.copyWith(isSubscribed: true));
 }
@@ -108,6 +161,9 @@ class StoriesNotifier extends StateNotifier<List<Story>> {
 
   Future<void> toggleDownloaded(Story story) =>
       update(story.copyWith(downloaded: !story.downloaded));
+
+  Future<void> toggleFavorite(Story story) =>
+      update(story.copyWith(favorite: !story.favorite));
 }
 
 final storiesProvider = StateNotifierProvider<StoriesNotifier, List<Story>>(

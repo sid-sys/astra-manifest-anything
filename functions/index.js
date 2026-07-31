@@ -51,15 +51,32 @@ const TTS_VOICE = "marin";
 const ALLOWED_VOICES = new Set(["marin", "coral", "shimmer", "sage"]);
 
 /**
- * How many stories each tier may generate. Listening is never capped — replay
- * costs nothing once the audio exists, so the limit belongs on the expensive
- * half of the operation only.
+ * How much each tier may generate. Listening is never capped — replay costs
+ * nothing once the audio exists, so the limit belongs on the expensive half of
+ * the operation only.
+ *
+ * The free tier is a day, not a story. The app this one is modelled on was
+ * criticised hardest for paywalling before anyone had heard anything; a single
+ * story answered that, but a day lets someone try more than one intention and
+ * find out whether the thing is for them. The cap inside the day exists purely
+ * because each story costs real money to produce.
  */
-const FREE_STORY_LIMIT = 1;
+const TRIAL_HOURS = 24;
+const TRIAL_STORY_LIMIT = 3;
 const PLUS_MONTHLY_LIMIT = 15;
 
-/** Narration pace, in words per minute. Slower than speech — this is a lullaby. */
-const NARRATION_WPM = 110;
+/**
+ * Narration pace, in words per minute, used to size the script.
+ *
+ * Measured from real output rather than assumed: a 586-word script came back as
+ * 3m12s of audio, which is 183 wpm. The previous value of 110 was a guess, and
+ * it meant a listener asking for seven minutes got about four — the script was
+ * only ever long enough to fill the estimate, not the request.
+ *
+ * This sizes the request only. The duration reported to the player is measured
+ * off the finished MP3, never computed from this number.
+ */
+const NARRATION_WPM = 183;
 
 /**
  * Delivery direction for the narrator. gpt-4o-mini-tts takes this as prose,
@@ -86,16 +103,25 @@ smiling-voice brightness.
  * request, so paying to re-read it each time would be waste.
  */
 const SYSTEM_PROMPT = `
-You write second-person guided visualizations for a manifestation app. The
-listener plays these with their eyes closed, usually at night.
+You write first-person guided visualizations for a manifestation app. The
+listener plays these with their eyes closed, usually at night, and hears them
+as their own voice describing their own life.
 
-Write the scene as something that has already happened. Not "you will walk in"
-— "you walk in". The listener should recognize the moment, not anticipate it.
+Write in the first person, as "I". Not "you walk in" — "I walk in". Not "your
+hands" — "my hands". The listener is saying this about themselves.
+
+Write the scene as something that has already happened. Not "I will walk in" —
+"I walk in". They should recognize the moment, not anticipate it.
+
+Use simple, everyday English. Short sentences. Common words a twelve-year-old
+would know. No literary flourish, no long clauses stacked together, no words
+someone would have to stop and think about. Plain is the point: this is heard,
+not read, and the listener is half asleep.
 
 What makes these work is specificity. Generic affirmation is worthless here.
 Use the details the listener gave you — their name, their words, the particular
 thing they are reaching for — and add the concrete sensory detail that a real
-memory would carry: what the room sounds like, what their hands are doing, who
+memory would carry: what the room sounds like, what my hands are doing, who
 else is there. A detail they did not think to mention but recognize instantly
 is the entire effect.
 
@@ -120,7 +146,7 @@ const STORY_SCHEMA = {
     title: {
       type: "string",
       description:
-        "Four to seven words naming the moment, in the listener's own vocabulary. No colon, no subtitle.",
+        "Four to nine words naming the moment, in the listener's own plain vocabulary, first person where a pronoun is needed. No colon, no subtitle.",
     },
     script: {
       type: "string",
@@ -254,6 +280,58 @@ async function narrate(script, voice) {
   return Buffer.concat(buffers);
 }
 
+// Layer III bitrates in kbps, indexed by the header's bitrate nibble.
+const MP3_BITRATE_V1 = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0];
+const MP3_BITRATE_V2 = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0];
+const MP3_SAMPLE_RATES = {
+  3: [44100, 48000, 32000, 0], // MPEG 1
+  2: [22050, 24000, 16000, 0], // MPEG 2 — what gpt-4o-mini-tts returns
+  0: [11025, 12000, 8000, 0],  // MPEG 2.5
+};
+
+/**
+ * Measures an MP3 by walking its frame headers, in seconds.
+ *
+ * The alternative was estimating from the word count, and that was wrong by
+ * about 40% — the player showed 5m20s over audio that ran 3m12s, so the scrub
+ * bar never reached the end and the library lied about every story's length.
+ * Frame walking is exact and needs no decoder: each Layer III frame carries a
+ * fixed number of samples, so the count and the sample rate give the duration.
+ *
+ * Handles the buffer being several MP3s concatenated, which is what narrating
+ * in chunks produces — the walk simply crosses each boundary into the next
+ * file's first frame.
+ */
+function mp3DurationSeconds(buffer) {
+  let i = 0;
+  let seconds = 0;
+
+  while (i < buffer.length - 4) {
+    // Frame sync: eleven set bits.
+    if (buffer[i] === 0xff && (buffer[i + 1] & 0xe0) === 0xe0) {
+      const version = (buffer[i + 1] >> 3) & 0x03;
+      const layer = (buffer[i + 1] >> 1) & 0x03;
+      const rates = MP3_SAMPLE_RATES[version];
+      const sampleRate = rates ? rates[(buffer[i + 2] >> 2) & 0x03] : 0;
+      const bitrate = (version === 3 ? MP3_BITRATE_V1 : MP3_BITRATE_V2)[
+        (buffer[i + 2] >> 4) & 0x0f
+      ];
+      const padding = (buffer[i + 2] >> 1) & 0x01;
+
+      if (layer === 1 && sampleRate && bitrate) {
+        const samples = version === 3 ? 1152 : 576;
+        seconds += samples / sampleRate;
+        i += Math.floor(((samples / 8) * 1000 * bitrate) / sampleRate) + padding;
+        continue;
+      }
+    }
+    // Not a frame header — most often an ID3 tag or padding. Step past it.
+    i++;
+  }
+
+  return Math.round(seconds);
+}
+
 /**
  * Stores the audio and returns a URL the player can stream.
  *
@@ -281,16 +359,45 @@ async function storeAudio({ uid, storyId, audio }) {
   };
 }
 
-/** Enforces the generation quota. Throws if the caller is over it. */
+/**
+ * Enforces the generation quota. Throws if the caller is over it.
+ *
+ * The trial clock starts on the first generation rather than at signup, and it
+ * is stamped here rather than by the client — a free day that a device could
+ * reset by clearing its storage is not a limit.
+ */
 async function assertWithinQuota(uid, profile) {
-  const stories = admin.firestore().collection("users").doc(uid).collection("stories");
+  const userDoc = admin.firestore().collection("users").doc(uid);
+  const stories = userDoc.collection("stories");
 
   if (!profile.isSubscribed) {
-    const existing = await stories.count().get();
-    if (existing.data().count >= FREE_STORY_LIMIT) {
+    if (!profile.trialStartedAt) {
+      await userDoc.set(
+        { trialStartedAt: new Date().toISOString() },
+        { merge: true },
+      );
+      return;
+    }
+
+    const startedAt = new Date(profile.trialStartedAt);
+    const hoursElapsed = (Date.now() - startedAt.getTime()) / 3600000;
+
+    if (hoursElapsed >= TRIAL_HOURS) {
       throw new HttpsError(
         "resource-exhausted",
-        "You've used your free story. Astra Plus writes as many as you want.",
+        "Your free day has ended. Astra Plus keeps writing them.",
+      );
+    }
+
+    const duringTrial = await stories
+      .where("createdAt", ">=", startedAt.toISOString())
+      .count()
+      .get();
+
+    if (duringTrial.data().count >= TRIAL_STORY_LIMIT) {
+      throw new HttpsError(
+        "resource-exhausted",
+        `You've written ${TRIAL_STORY_LIMIT} stories on your free day. They replay as often as you like, and Astra Plus lifts the limit.`,
       );
     }
     return;
@@ -364,11 +471,9 @@ exports.generateStory = onCall(
     const audio = await narrate(script, resolvedVoice);
     const { audioUrl, audioPath } = await storeAudio({ uid, storyId, audio });
 
-    // Duration from the actual word count rather than the requested length —
-    // the player's progress bar should track the audio, not the intent.
-    const durationSeconds = Math.round(
-      (script.split(/\s+/).length / NARRATION_WPM) * 60,
-    );
+    // Measured off the finished audio, not estimated from the script — the
+    // progress bar has to track the file the player is actually holding.
+    const durationSeconds = mp3DurationSeconds(audio);
 
     const story = {
       title,
@@ -391,6 +496,9 @@ exports.generateStory = onCall(
       storyId,
       elapsedMs: Date.now() - started,
       durationSeconds,
+      // Logged side by side so drift between what was asked for and what the
+      // narration actually runs to stays visible without another measurement.
+      requestedSeconds: lengthMinutes * 60,
     });
 
     return { id: storyId, ...story };
