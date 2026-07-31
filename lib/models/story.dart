@@ -61,7 +61,7 @@ class Story {
     intention: Intention.fromName(map['intention'] as String? ?? 'career'),
     script: map['script'] as String? ?? '',
     duration: Duration(seconds: (map['durationSeconds'] as num?)?.toInt() ?? 0),
-    voice: map['voice'] as String? ?? 'Meera',
+    voice: map['voice'] as String? ?? 'marin',
     createdAt:
         DateTime.tryParse(map['createdAt'] as String? ?? '') ?? DateTime.now(),
     audioUrl: map['audioUrl'] as String?,

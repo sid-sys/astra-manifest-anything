@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers.dart';
+import '../services/story_service.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
 import '../widgets/starfield.dart';
@@ -82,7 +83,7 @@ class PlayerScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${story.intention.label} · ${story.voice} · '
+                      '${story.intention.label} · ${voiceLabel(story.voice)} · '
                       '${story.durationLabel}',
                       textAlign: TextAlign.center,
                       style: AstraTextStyles.small,

@@ -3,9 +3,12 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
-  "storage": {
-    "rules": "storage.rules"
-  },
+  "storage": [
+    {
+      "bucket": "astra-manifest-audio-asia",
+      "rules": "storage.rules"
+    }
+  ],
   "functions": [
     {
       "source": "functions",

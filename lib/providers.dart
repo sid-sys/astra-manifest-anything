@@ -8,7 +8,7 @@ import 'models/user_profile.dart';
 import 'services/astra_repository.dart';
 import 'services/playback_controller.dart';
 import 'services/region_service.dart';
-import 'services/story_generator.dart';
+import 'services/story_service.dart';
 
 /// Overridden in `main` once the platform is ready.
 final sharedPreferencesProvider = Provider<SharedPreferences>(
@@ -25,8 +25,11 @@ final repositoryProvider = Provider<AstraRepository>(
   ),
 );
 
-final storyGeneratorProvider = Provider<StoryGenerator>(
-  (ref) => StoryGenerator(),
+final storyServiceProvider = Provider<StoryService>(
+  (ref) => StoryService(
+    repository: ref.watch(repositoryProvider),
+    signedIn: ref.watch(uidProvider) != null,
+  ),
 );
 
 // ------------------------------------------------------------------ profile

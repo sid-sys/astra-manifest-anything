@@ -3,12 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/intention.dart';
 import '../providers.dart';
+import '../services/story_service.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
 import 'paywall_screen.dart';
 import 'player_screen.dart';
 
-const _voices = ['Meera', 'Arun', 'Sofia', 'Noor'];
 const _moods = ['Calm', 'Cinematic', 'Tender'];
 const _lengths = [5, 7, 10];
 
@@ -27,7 +27,7 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
 
   Intention? _intention;
   int _lengthMinutes = 7;
-  String _voice = _voices.first;
+  String _voice = astraVoices.first;
   String _mood = _moods.first;
   bool _weaving = false;
 
@@ -53,10 +53,11 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
         (profile.intentions.isEmpty ? Intention.career : profile.intentions.first);
 
     try {
-      final story = await ref.read(storyGeneratorProvider).generate(
+      final story = await ref.read(storyServiceProvider).generate(
             profile: profile,
             intention: intention,
             scene: _sceneController.text,
+            mood: _mood,
             length: Duration(minutes: _lengthMinutes),
             voice: _voice,
           );
@@ -71,6 +72,18 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
       ref.read(playbackProvider).play(story);
       await Navigator.of(context).push(
         MaterialPageRoute<void>(builder: (_) => const PlayerScreen()),
+      );
+    } on StoryQuotaExceeded catch (error) {
+      // The server is the real gate — the local flag can be stale after a
+      // reinstall or a second device. Send them where the message points.
+      if (!mounted) return;
+      await ref.read(profileProvider.notifier).markFreeStoryUsed();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+      await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => const PaywallScreen()),
       );
     } catch (error) {
       if (!mounted) return;
@@ -165,8 +178,8 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
               child: _Picker<String>(
                 label: 'Voice',
                 value: _voice,
-                options: _voices,
-                display: (v) => v,
+                options: astraVoices,
+                display: voiceLabel,
                 onChanged: (v) => setState(() => _voice = v),
               ),
             ),
@@ -187,14 +200,15 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
         Text(
           profile.canGenerateFreely
               ? 'Written from your profile details, so it sounds like your '
-                  'life and not a template.'
+                  'life and not a template. Narrated by an AI voice. Writing '
+                  'and recording takes about a minute.'
               : 'Astra Plus writes as many stories as you want, whenever you want.',
           style: AstraTextStyles.small,
         ),
         const SizedBox(height: AstraSpacing.xl),
 
         AstraButton(
-          label: _weaving ? 'Weaving…' : 'Weave my story',
+          label: _weaving ? 'Writing and recording…' : 'Weave my story',
           icon: Icons.auto_awesome,
           busy: _weaving,
           onPressed: _weave,

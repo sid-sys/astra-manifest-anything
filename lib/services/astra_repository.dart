@@ -65,7 +65,12 @@ class AstraRepository {
     final stories = loadStories()..insert(0, story);
     await saveStories(stories);
     await _mirror(
-      () => _userDoc.collection('stories').doc(story.id).set(story.toMap()),
+      // Merged, not replaced: the generating function writes fields the client
+      // model does not carry (audioPath), and a plain set would erase them.
+      () => _userDoc
+          .collection('stories')
+          .doc(story.id)
+          .set(story.toMap(), SetOptions(merge: true)),
     );
   }
 
@@ -77,7 +82,12 @@ class AstraRepository {
     stories[index] = story;
     await saveStories(stories);
     await _mirror(
-      () => _userDoc.collection('stories').doc(story.id).set(story.toMap()),
+      // Merged, not replaced: the generating function writes fields the client
+      // model does not carry (audioPath), and a plain set would erase them.
+      () => _userDoc
+          .collection('stories')
+          .doc(story.id)
+          .set(story.toMap(), SetOptions(merge: true)),
     );
   }
 

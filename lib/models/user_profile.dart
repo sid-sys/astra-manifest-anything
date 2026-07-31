@@ -37,7 +37,7 @@ class UserProfile {
     name: '',
     intentions: const {},
     aspiration: '',
-    voice: 'Meera',
+    voice: 'marin',
     joinedAt: DateTime.now(),
   );
 
@@ -87,7 +87,7 @@ class UserProfile {
         .map((n) => Intention.fromName(n as String))
         .toSet(),
     aspiration: map['aspiration'] as String? ?? '',
-    voice: map['voice'] as String? ?? 'Meera',
+    voice: map['voice'] as String? ?? 'marin',
     joinedAt:
         DateTime.tryParse(map['joinedAt'] as String? ?? '') ?? DateTime.now(),
     isSubscribed: map['isSubscribed'] as bool? ?? false,

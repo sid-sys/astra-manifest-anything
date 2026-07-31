@@ -24,11 +24,31 @@ const OPENAI_API_KEY = defineSecret("OPENAI_API_KEY");
 // Same region as Firestore — keeps the round trips short.
 setGlobalOptions({ region: "asia-south1", maxInstances: 10 });
 
+/**
+ * Audio bucket, named explicitly rather than using the project default.
+ *
+ * The default bucket was provisioned in us-east1; this one sits in asia-south1
+ * alongside Firestore and this function, which is where the listeners are. A
+ * bucket's region is permanent, so co-locating meant creating a second one
+ * rather than moving the first.
+ */
+const AUDIO_BUCKET = "astra-manifest-audio-asia";
+
 // ---------------------------------------------------------------- generation
 
 const STORY_MODEL = "claude-opus-5";
 const TTS_MODEL = "gpt-4o-mini-tts";
 const TTS_VOICE = "marin";
+
+/**
+ * Voices the app may request, lowercased to match OpenAI's ids.
+ *
+ * An allowlist rather than a passthrough: an unrecognised value would fail the
+ * synthesis call after the script has already been paid for, so anything not on
+ * this list quietly becomes the default. All four read as a young woman — the
+ * brief in VOICE_INSTRUCTIONS assumes that and would fight a baritone.
+ */
+const ALLOWED_VOICES = new Set(["marin", "coral", "shimmer", "sage"]);
 
 /**
  * How many stories each tier may generate. Listening is never capped — replay
@@ -119,7 +139,7 @@ const STORY_SCHEMA = {
  * task, not multi-step reasoning, and thinking tokens bill at output rates.
  * Effort is the dial to turn if story quality ever needs more room.
  */
-async function writeScript({ profile, intention, scene, lengthMinutes }) {
+async function writeScript({ profile, intention, scene, mood, lengthMinutes }) {
   const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
   const targetWords = Math.round(lengthMinutes * NARRATION_WPM);
 
@@ -128,6 +148,7 @@ async function writeScript({ profile, intention, scene, lengthMinutes }) {
     `Intention: ${intention}`,
     profile.aspiration ? `In their words: ${profile.aspiration}` : null,
     scene ? `The moment they asked for: ${scene}` : null,
+    mood ? `Mood: ${mood}` : null,
     `Target length: about ${targetWords} words (${lengthMinutes} minutes read slowly).`,
   ]
     .filter(Boolean)
@@ -166,11 +187,15 @@ async function writeScript({ profile, intention, scene, lengthMinutes }) {
   }
 
   const { title, script } = JSON.parse(text);
+  // input_tokens is the *uncached remainder*, so the cache fields have to be
+  // logged alongside it — otherwise the prompt looks 6x smaller than it is and
+  // there is no way to tell whether caching is working at all.
   logger.info("Script written", {
     words: script.split(/\s+/).length,
     inputTokens: response.usage.input_tokens,
-    outputTokens: response.usage.output_tokens,
+    cacheWrite: response.usage.cache_creation_input_tokens,
     cacheRead: response.usage.cache_read_input_tokens,
+    outputTokens: response.usage.output_tokens,
   });
 
   return { title, script };
@@ -202,7 +227,7 @@ function chunkScript(script, maxChars = 3000) {
 }
 
 /** Narrates the script and returns one MP3 buffer. */
-async function narrate(script) {
+async function narrate(script, voice) {
   const openai = new OpenAI({ apiKey: OPENAI_API_KEY.value() });
   const chunks = chunkScript(script);
 
@@ -212,7 +237,7 @@ async function narrate(script) {
   for (const chunk of chunks) {
     const speech = await openai.audio.speech.create({
       model: TTS_MODEL,
-      voice: TTS_VOICE,
+      voice,
       input: chunk,
       instructions: VOICE_INSTRUCTIONS,
       response_format: "mp3",
@@ -221,6 +246,7 @@ async function narrate(script) {
   }
 
   logger.info("Narration rendered", {
+    voice,
     chunks: chunks.length,
     bytes: buffers.reduce((sum, b) => sum + b.length, 0),
   });
@@ -237,7 +263,7 @@ async function narrate(script) {
  * owner's own Firestore document.
  */
 async function storeAudio({ uid, storyId, audio }) {
-  const bucket = admin.storage().bucket();
+  const bucket = admin.storage().bucket(AUDIO_BUCKET);
   const path = `users/${uid}/stories/${storyId}.mp3`;
   const token = crypto.randomUUID();
 
@@ -305,6 +331,7 @@ exports.generateStory = onCall(
     const {
       intention = "career",
       scene = "",
+      mood = "",
       lengthMinutes = 7,
       voice = TTS_VOICE,
     } = request.data ?? {};
@@ -312,6 +339,11 @@ exports.generateStory = onCall(
     if (![5, 7, 10].includes(lengthMinutes)) {
       throw new HttpsError("invalid-argument", "Length must be 5, 7, or 10 minutes.");
     }
+
+    const requestedVoice = String(voice).toLowerCase();
+    const resolvedVoice = ALLOWED_VOICES.has(requestedVoice)
+      ? requestedVoice
+      : TTS_VOICE;
 
     const db = admin.firestore();
     const profileSnap = await db.collection("users").doc(uid).get();
@@ -324,11 +356,12 @@ exports.generateStory = onCall(
       profile,
       intention,
       scene,
+      mood,
       lengthMinutes,
     });
 
     const storyId = `story_${Date.now()}`;
-    const audio = await narrate(script);
+    const audio = await narrate(script, resolvedVoice);
     const { audioUrl, audioPath } = await storeAudio({ uid, storyId, audio });
 
     // Duration from the actual word count rather than the requested length —
@@ -342,7 +375,10 @@ exports.generateStory = onCall(
       intention,
       script,
       durationSeconds,
-      voice,
+      // The voice that actually narrated, not the one that was asked for — the
+      // library labels each story with this, and a label that can be wrong is
+      // worse than no label.
+      voice: resolvedVoice,
       createdAt: new Date().toISOString(),
       audioUrl,
       audioPath,
