@@ -55,7 +55,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                 Text(
                   trialSpent
                       ? 'Pick a plan to keep writing them.'
-                      : 'Three stories, today, without paying anything. Start '
+                      : 'Two stories, today, without paying anything. Start '
                             'a plan whenever you are ready — or skip this and '
                             'go straight to your first story.',
                   style: AstraTextStyles.bodyDim,
@@ -73,26 +73,9 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
 
                 const SizedBox(height: AstraSpacing.sm),
                 Text(
-                  '15 stories a month · unlimited listening · all voices · '
-                  'everything you keep, kept',
+                  '${PricingCatalog.plusMonthlyStories} stories a month · unlimited listening · '
+                  'all voices · everything you keep, kept',
                   style: AstraTextStyles.small,
-                ),
-                const SizedBox(height: AstraSpacing.sm),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.check_circle_outline,
-                        size: 15, color: AstraColors.good),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Prices are always shown per billing period. Nothing '
-                        'monthly that charges weekly.',
-                        style: AstraTextStyles.small
-                            .copyWith(color: AstraColors.good),
-                      ),
-                    ),
-                  ],
                 ),
 
                 const Spacer(),

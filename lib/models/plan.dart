@@ -59,8 +59,35 @@ class Plan {
 /// Adding a region is a data change here, never a UI change. When Play Billing
 /// goes live it returns its own localized price and that becomes the source of
 /// truth; this table is the pre-billing default and the offline fallback.
+///
+/// ## How these numbers were derived
+///
+/// A five-minute story costs about $0.10 to produce, measured rather than
+/// estimated: 915 words at the observed 183 wpm, 5.34 characters per word.
+/// Narration is 59% of that ($12 per million characters), the script 37%
+/// ($25 per million output tokens), infrastructure the rest. Planning uses
+/// $0.105 to leave a 10% buffer.
+///
+/// Every plan is priced so that a subscriber who uses their entire monthly
+/// allowance still leaves an 80% gross margin, after Google Play takes 15%:
+///
+///     list price ≥ stories × 12 (if yearly) × $0.105 / 0.20 / 0.85
+///
+/// The yearly plan is what binds. A steep annual discount at a fixed
+/// allowance forces either a much higher list price or a much smaller
+/// allowance, so the discount is held at two months free rather than the ~45%
+/// it was — at the old ₹1,999 the yearly margin was 3.8%.
+///
+/// The 15% assumes Play's reduced rate for the first $1M of annual revenue.
+/// Above that Play takes 30% and the yearly plans fall to ~77%; raise them or
+/// drop the allowance to 8 when that happens.
 class PricingCatalog {
   const PricingCatalog._();
+
+  /// Stories per month on Plus. Set by the margin arithmetic above, not by
+  /// feel: at $7.99 the 80% floor allows 12, and 10 leaves room for the cost
+  /// of a story to drift before the price has to move.
+  static const plusMonthlyStories = 10;
 
   static const _countryToCurrency = <String, String>{'IN': 'INR'};
 
@@ -68,35 +95,39 @@ class PricingCatalog {
 
   static const _plansByCurrency = <String, List<Plan>>{
     'INR': [
+      // ₹649 ≈ $7.50 → 83% margin at 10 stories.
       Plan(
         id: 'astra_plus_monthly_inr',
         period: BillingPeriod.month,
-        amount: 299,
+        amount: 649,
         currencyCode: 'INR',
         popular: true,
       ),
+      // ₹6,499 ≈ $75.13 → 80.3% margin at 10 stories a month.
       Plan(
         id: 'astra_plus_yearly_inr',
         period: BillingPeriod.year,
-        amount: 1999,
+        amount: 6499,
         currencyCode: 'INR',
-        badge: 'Save 44%',
+        badge: 'Save 17%',
       ),
     ],
     'USD': [
+      // $7.99 → 84.5% margin at 10 stories.
       Plan(
         id: 'astra_plus_monthly_usd',
         period: BillingPeriod.month,
-        amount: 6.99,
+        amount: 7.99,
         currencyCode: 'USD',
         popular: true,
       ),
+      // $79.99 → 81.5% margin at 10 stories a month.
       Plan(
         id: 'astra_plus_yearly_usd',
         period: BillingPeriod.year,
-        amount: 44.99,
+        amount: 79.99,
         currencyCode: 'USD',
-        badge: 'Save 46%',
+        badge: 'Save 17%',
       ),
     ],
   };

@@ -51,17 +51,6 @@ const TTS_VOICE = "marin";
 const ALLOWED_VOICES = new Set(["marin", "coral", "shimmer", "sage"]);
 
 /**
- * How much each tier may generate. Listening is never capped — replay costs
- * nothing once the audio exists, so the limit belongs on the expensive half of
- * the operation only.
- *
- * The free tier is a day, not a story. The app this one is modelled on was
- * criticised hardest for paywalling before anyone had heard anything; a single
- * story answered that, but a day lets someone try more than one intention and
- * find out whether the thing is for them. The cap inside the day exists purely
- * because each story costs real money to produce.
- */
-/**
  * Every story is the same length now. The picker that set it was three taps of
  * friction in front of the one field that matters, and 5 minutes is what a
  * bedtime listen wants — long enough to settle into, short enough to finish.
@@ -69,9 +58,31 @@ const ALLOWED_VOICES = new Set(["marin", "coral", "shimmer", "sage"]);
 const STORY_MINUTES = 5;
 const DEFAULT_MOOD = "Calm";
 
+/**
+ * How much each tier may generate. Listening is never capped — replay costs
+ * nothing once the audio exists, so the limit belongs on the expensive half of
+ * the operation only.
+ *
+ * The free tier is a day, not a story. The app this one is modelled on was
+ * criticised hardest for paywalling before anyone had heard anything; a single
+ * story answered that, but a day lets someone try more than one intention and
+ * find out whether the thing is for them.
+ *
+ * These caps are the margin.
+ *
+ * A five-minute story costs about $0.10 to make — narration 59%, script 37%,
+ * infrastructure 4% — and every plan in `plan.dart` is priced so a subscriber
+ * who uses the whole allowance still leaves 80% gross after Google Play's cut.
+ * Raising a limit here without moving the price there moves the margin; the
+ * two numbers are one decision.
+ *
+ * Two trial stories costs about $0.21 per trial user, which is the real
+ * acquisition cost of this app: at a 5% conversion rate it is roughly $4 of
+ * production spent per subscriber won.
+ */
 const TRIAL_HOURS = 24;
-const TRIAL_STORY_LIMIT = 3;
-const PLUS_MONTHLY_LIMIT = 15;
+const TRIAL_STORY_LIMIT = 2;
+const PLUS_MONTHLY_LIMIT = 10;
 
 /**
  * Narration pace, in words per minute, used to size the script.
