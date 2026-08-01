@@ -200,6 +200,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           streak: streak,
           week: ref.watch(weekActivityProvider),
           name: profile.name,
+          since: profile.joinedAt,
         ),
 
         const SizedBox(height: AstraSpacing.md),

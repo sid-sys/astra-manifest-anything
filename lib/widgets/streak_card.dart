@@ -14,6 +14,7 @@ class StreakCard extends StatelessWidget {
     required this.streak,
     required this.week,
     required this.name,
+    required this.since,
   });
 
   /// Consecutive days ending today.
@@ -24,12 +25,21 @@ class StreakCard extends StatelessWidget {
 
   final String name;
 
+  /// When the user joined. Days before this are drawn blank rather than
+  /// missed — someone who installed on Saturday did not fail Monday through
+  /// Friday, and greeting them with five crosses is both wrong and bleak.
+  final DateTime since;
+
   static const _labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   @override
   Widget build(BuildContext context) {
     // Monday is 1, so today's index is weekday - 1.
-    final todayIndex = DateTime.now().weekday - 1;
+    final now = DateTime.now();
+    final todayIndex = now.weekday - 1;
+    final monday = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: todayIndex));
+    final joined = DateTime(since.year, since.month, since.day);
 
     return Container(
       width: double.infinity,
@@ -90,8 +100,11 @@ class StreakCard extends StatelessWidget {
                   _DayDot(
                     label: _labels[i],
                     done: week[i],
-                    // Only a day that has actually passed can be a miss.
-                    missed: !week[i] && i < todayIndex,
+                    // A miss needs a day that has passed *and* that the user
+                    // was around for.
+                    missed: !week[i] &&
+                        i < todayIndex &&
+                        !monday.add(Duration(days: i)).isBefore(joined),
                     isToday: i == todayIndex,
                   ),
               ],
