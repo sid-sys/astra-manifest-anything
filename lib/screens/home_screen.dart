@@ -5,21 +5,33 @@ import '../models/intention.dart';
 import '../models/story.dart';
 import '../providers.dart';
 import '../services/affirmations.dart';
+import '../services/trending_manifestations.dart';
 import '../services/wish_prompts.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
+import '../widgets/profile_avatar.dart';
 import '../widgets/streak_card.dart';
-import 'create_screen.dart';
 import 'player_screen.dart';
+import 'profile_screen.dart';
 import 'story_flow.dart';
 
-/// The daily ritual: today's story, a box to ask for a new one, everything
-/// made so far, and the evidence that the practice is adding up.
+/// The daily ritual, arranged as one question.
+///
+/// Everything above the fold serves a single ask — your face, your name, the
+/// question, the box, and a row of things other people are asking for. The
+/// library, the streak and the stats live below it, because they are evidence
+/// that the practice is working rather than the thing you came to do.
 class HomeScreen extends ConsumerStatefulWidget {
-  const HomeScreen({super.key, required this.onCreate, required this.onLibrary});
+  const HomeScreen({
+    super.key,
+    required this.onCreate,
+    required this.onLibrary,
+    required this.onProfile,
+  });
 
   final VoidCallback onCreate;
   final VoidCallback onLibrary;
+  final VoidCallback onProfile;
 
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
@@ -29,6 +41,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _wishController = TextEditingController();
   late String _suggestion;
   bool _weaving = false;
+
+  /// Set when a trending chip is tapped, so the story is written against that
+  /// chip's intention rather than the user's default one — tapping "Marry her"
+  /// under a Career profile should still produce a love story.
+  Intention? _chipIntention;
 
   @override
   void initState() {
@@ -58,160 +75,174 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final made = await weaveStory(
       context,
       ref,
-      intention: _intention,
+      intention: _chipIntention ?? _intention,
       scene: wish,
     );
 
     if (!mounted) return;
-    if (made) _wishController.clear();
+    if (made) {
+      _wishController.clear();
+      _chipIntention = null;
+    }
     setState(() => _weaving = false);
+  }
+
+  /// Fills the box rather than generating immediately.
+  ///
+  /// A chip that spent a story on one tap would be a trap next to a text field
+  /// — the user gets to read it, edit it, and press the button themselves.
+  void _useTrending(TrendingWish trending) {
+    setState(() {
+      _wishController.text = trending.wish;
+      _chipIntention = trending.intention;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final profile = ref.watch(profileProvider);
     final stories = ref.watch(storiesProvider);
-    final daily = ref.watch(dailyStoryProvider);
     final streak = ref.watch(streakProvider);
     final minutes = ref.watch(minutesListenedProvider);
     final keptCount = ref.watch(tasteProvider).liked.length;
+    final trending = TrendingManifestations.forDay(
+      DateTime.now(),
+      profile.intentions,
+    );
 
+    // The list pads nothing horizontally: the trending row and the story row
+    // run to both edges so a card sitting half off-screen advertises the swipe.
+    // Everything else asks for the inset it wants.
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+      padding: const EdgeInsets.only(top: 4, bottom: 32),
       children: [
-        Wordmark('Astra', align: TextAlign.left),
-        const SizedBox(height: AstraSpacing.lg),
-        Text(
-          "Let's manifest, ${profile.name}",
-          style: AstraTextStyles.display(28),
+        _Inset(
+          child: _HomeHeader(
+            onFavourites: widget.onProfile,
+            onHistory: widget.onLibrary,
+          ),
         ),
         const SizedBox(height: AstraSpacing.xl),
 
-        if (daily != null)
-          AstraCard(
-            raised: true,
-            onTap: () => _open(daily),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("TODAY'S MOMENT", style: AstraTextStyles.eyebrow),
-                const SizedBox(height: AstraSpacing.sm),
-                Text(
-                  daily.title,
-                  style: AstraTextStyles.label.copyWith(fontSize: 16),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${daily.durationLabel} · written for your '
-                  '${daily.intention.label.toLowerCase()} intention',
-                  style: AstraTextStyles.small,
-                ),
-                const SizedBox(height: AstraSpacing.md),
-                AstraButton(
-                  label: 'Listen',
-                  icon: Icons.play_arrow_rounded,
-                  onPressed: () => _open(daily),
-                ),
-              ],
+        Center(child: ProfileAvatar(name: profile.name)),
+        const SizedBox(height: AstraSpacing.lg),
+
+        _Inset(child: _Question(name: profile.name)),
+        const SizedBox(height: AstraSpacing.lg),
+
+        _Inset(
+          child: _WishBar(
+            controller: _wishController,
+            hint: _suggestion,
+            busy: _weaving,
+            onSubmit: _weaveFromWish,
+          ),
+        ),
+        const SizedBox(height: AstraSpacing.lg),
+
+        _Inset(
+          child: Row(
+            children: [
+              const Text('🔥', style: TextStyle(fontSize: 11)),
+              const SizedBox(width: 6),
+              Text('TRENDING MANIFESTATIONS', style: AstraTextStyles.eyebrow),
+            ],
+          ),
+        ),
+        const SizedBox(height: AstraSpacing.sm),
+        SizedBox(
+          height: 38,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            itemCount: trending.length,
+            separatorBuilder: (_, _) => const SizedBox(width: AstraSpacing.sm),
+            itemBuilder: (_, i) => TagChip(
+              label: trending[i].label,
+              accent: trending[i].intention.accent,
+              selected: _wishController.text == trending[i].wish,
+              onTap: () => _useTrending(trending[i]),
             ),
-          )
+          ),
+        ),
+        const SizedBox(height: AstraSpacing.xl),
+
+        _Inset(
+          child: Row(
+            children: [
+              Expanded(
+                child: Text('For you', style: AstraTextStyles.display(22)),
+              ),
+              _PillButton(
+                label: 'Edit desires',
+                icon: Icons.edit_outlined,
+                onTap: () => editIntentions(context, ref),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AstraSpacing.md),
+
+        if (stories.isEmpty)
+          _Inset(child: _FirstStoryCard(onCreate: widget.onCreate))
         else
-          AstraCard(
-            raised: true,
+          SizedBox(
+            height: 186,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              itemCount: stories.length + 1,
+              separatorBuilder: (_, _) =>
+                  const SizedBox(width: AstraSpacing.md),
+              itemBuilder: (_, i) => i == stories.length
+                  ? _SeeAllCard(onTap: widget.onLibrary)
+                  : _StoryCard(
+                      story: stories[i],
+                      onTap: () => _open(stories[i]),
+                    ),
+            ),
+          ),
+        const SizedBox(height: AstraSpacing.xl),
+
+        _Inset(
+          child: AstraCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('YOUR FIRST STORY', style: AstraTextStyles.eyebrow),
+                Text('Affirmation of the day', style: AstraTextStyles.small),
                 const SizedBox(height: AstraSpacing.sm),
                 Text(
-                  'Nothing written yet',
-                  style: AstraTextStyles.label.copyWith(fontSize: 16),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Say what you want below and Astra writes it. '
-                  'Your first day is free.',
-                  style: AstraTextStyles.small,
+                  '“${Affirmations.forDay(DateTime.now(), profile.intentions, ref.watch(tasteProvider))}”',
+                  style: AstraTextStyles.quote,
                 ),
               ],
             ),
           ),
+        ),
 
         const SizedBox(height: AstraSpacing.md),
-
-        WishField(
-          controller: _wishController,
-          label: 'What do you want to manifest today?',
-          suggestion: _suggestion,
-          onRotate: () => setState(() {
-            _suggestion = WishPrompts.next(_intention, previous: _suggestion);
-          }),
-        ),
-        const SizedBox(height: AstraSpacing.md),
-        AstraButton(
-          label: _weaving ? 'Writing…' : 'Generate',
-          icon: Icons.auto_awesome,
-          busy: _weaving,
-          onPressed: _weaveFromWish,
-        ),
-        const SizedBox(height: AstraSpacing.sm),
-        Text(
-          'Five minutes, narrated by an AI voice in your own words.',
-          style: AstraTextStyles.small,
-        ),
-        const SizedBox(height: AstraSpacing.sm),
-        AstraGhostButton(label: 'More options', onPressed: widget.onCreate),
-
-        if (stories.isNotEmpty) ...[
-          const SizedBox(height: AstraSpacing.xl),
-          Row(
-            children: [
-              Expanded(child: Text('Your stories', style: AstraTextStyles.label)),
-              GestureDetector(
-                onTap: widget.onLibrary,
-                child: Text('See all', style: AstraTextStyles.small),
-              ),
-            ],
-          ),
-          const SizedBox(height: AstraSpacing.sm),
-          for (final story in stories.take(4)) ...[
-            _StoryRow(story: story, onTap: () => _open(story)),
-            const SizedBox(height: AstraSpacing.sm),
-          ],
-        ],
-
-        const SizedBox(height: AstraSpacing.md),
-        AstraCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Affirmation of the day', style: AstraTextStyles.small),
-              const SizedBox(height: AstraSpacing.sm),
-              Text(
-                '“${Affirmations.forDay(DateTime.now(), profile.intentions, ref.watch(tasteProvider))}”',
-                style: AstraTextStyles.quote,
-              ),
-            ],
+        _Inset(
+          child: StreakCard(
+            streak: streak,
+            week: ref.watch(weekActivityProvider),
+            name: profile.name,
+            since: profile.joinedAt,
           ),
         ),
 
         const SizedBox(height: AstraSpacing.md),
-        StreakCard(
-          streak: streak,
-          week: ref.watch(weekActivityProvider),
-          name: profile.name,
-          since: profile.joinedAt,
-        ),
-
-        const SizedBox(height: AstraSpacing.md),
-        Row(
-          children: [
-            Expanded(child: _Stat(label: 'Stories', value: '${stories.length}')),
-            const SizedBox(width: AstraSpacing.sm),
-            Expanded(child: _Stat(label: 'Minutes', value: '$minutes')),
-            const SizedBox(width: AstraSpacing.sm),
-            Expanded(child: _Stat(label: 'Kept', value: '$keptCount')),
-          ],
+        _Inset(
+          child: Row(
+            children: [
+              Expanded(
+                child: _Stat(label: 'Stories', value: '${stories.length}'),
+              ),
+              const SizedBox(width: AstraSpacing.sm),
+              Expanded(child: _Stat(label: 'Minutes', value: '$minutes')),
+              const SizedBox(width: AstraSpacing.sm),
+              Expanded(child: _Stat(label: 'Kept', value: '$keptCount')),
+            ],
+          ),
         ),
       ],
     );
@@ -230,50 +261,401 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-/// One story in the home list. Tapping it plays it.
-class _StoryRow extends StatelessWidget {
-  const _StoryRow({required this.story, required this.onTap});
+/// The screen's horizontal margin, applied per-section so the two scrolling
+/// rows can ignore it.
+class _Inset extends StatelessWidget {
+  const _Inset({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) =>
+      Padding(padding: AstraSpacing.screenPadding, child: child);
+}
+
+class _HomeHeader extends StatelessWidget {
+  const _HomeHeader({required this.onFavourites, required this.onHistory});
+
+  final VoidCallback onFavourites;
+  final VoidCallback onHistory;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(child: Wordmark('Astra', align: TextAlign.left)),
+      _HeaderIcon(
+        icon: Icons.favorite_border,
+        tooltip: 'Saved',
+        onTap: onFavourites,
+      ),
+      const SizedBox(width: AstraSpacing.sm),
+      _HeaderIcon(
+        icon: Icons.history_rounded,
+        tooltip: 'Your library',
+        onTap: onHistory,
+      ),
+    ],
+  );
+}
+
+class _HeaderIcon extends StatelessWidget {
+  const _HeaderIcon({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: tooltip,
+    child: Semantics(
+      button: true,
+      label: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 34,
+          height: 34,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: AstraColors.card,
+            border: Border.all(color: AstraColors.line),
+          ),
+          child: Icon(icon, size: 16, color: AstraColors.text),
+        ),
+      ),
+    ),
+  );
+}
+
+/// "Sid, what do you want to manifest?" — the verb set in italic serif, which
+/// is the one flourish on the screen and the reason the question reads as a
+/// question rather than a form label.
+class _Question extends StatelessWidget {
+  const _Question({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) => Text.rich(
+    TextSpan(
+      children: [
+        TextSpan(text: name.isEmpty ? 'What do you want to ' : '$name, what do you want to '),
+        TextSpan(
+          text: 'manifest',
+          style: AstraTextStyles.display(
+            26,
+          ).copyWith(fontStyle: FontStyle.italic, color: AstraColors.gold),
+        ),
+        const TextSpan(text: '?'),
+      ],
+    ),
+    textAlign: TextAlign.center,
+    style: AstraTextStyles.display(26),
+  );
+}
+
+/// The wish box: one rounded field with the submit button inside it.
+///
+/// The button lives in the field rather than under it so the whole ask is a
+/// single object — and it is disabled until there is something to send, which
+/// is what keeps an empty tap from reading as a broken button.
+class _WishBar extends StatefulWidget {
+  const _WishBar({
+    required this.controller,
+    required this.hint,
+    required this.busy,
+    required this.onSubmit,
+  });
+
+  final TextEditingController controller;
+  final String hint;
+  final bool busy;
+  final VoidCallback onSubmit;
+
+  @override
+  State<_WishBar> createState() => _WishBarState();
+}
+
+class _WishBarState extends State<_WishBar> {
+  @override
+  Widget build(BuildContext context) {
+    final ready = widget.controller.text.trim().isNotEmpty && !widget.busy;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 6, 6, 6),
+      decoration: BoxDecoration(
+        color: AstraColors.card,
+        border: Border.all(color: AstraColors.line),
+        borderRadius: BorderRadius.circular(AstraSpacing.pillRadius),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: widget.controller,
+              style: AstraTextStyles.body,
+              cursorColor: AstraColors.gold,
+              minLines: 1,
+              maxLines: 3,
+              textInputAction: TextInputAction.send,
+              onChanged: (_) => setState(() {}),
+              onSubmitted: (_) => widget.onSubmit(),
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                isDense: true,
+                hintText: widget.hint,
+                hintStyle: AstraTextStyles.bodyDim.copyWith(
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: AstraSpacing.sm),
+          Semantics(
+            button: true,
+            enabled: ready,
+            label: 'Generate this story',
+            child: InkWell(
+              onTap: ready ? widget.onSubmit : null,
+              customBorder: const CircleBorder(),
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 160),
+                opacity: ready ? 1 : 0.45,
+                child: Container(
+                  width: 42,
+                  height: 42,
+                  alignment: Alignment.center,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: AstraColors.goldGradient,
+                  ),
+                  child: widget.busy
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.2,
+                            color: Color(0xFF14101F),
+                          ),
+                        )
+                      : const Icon(
+                          Icons.arrow_upward_rounded,
+                          size: 20,
+                          color: Color(0xFF14101F),
+                        ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Small bordered pill — "Edit desires" and anything else that sits beside a
+/// section title.
+class _PillButton extends StatelessWidget {
+  const _PillButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AstraSpacing.pillRadius),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: AstraColors.card,
+          border: Border.all(color: AstraColors.line),
+          borderRadius: BorderRadius.circular(AstraSpacing.pillRadius),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: AstraColors.gold),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: AstraTextStyles.small.copyWith(color: AstraColors.text),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// A story in the "For you" row.
+///
+/// No artwork: the app has no images and inventing stock photography for a
+/// story about the user's own life would be a worse lie than a colour. The
+/// intention's accent carries it instead, so the row still reads as distinct
+/// cards at a glance.
+class _StoryCard extends StatelessWidget {
+  const _StoryCard({required this.story, required this.onTap});
 
   final Story story;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => AstraCard(
-    onTap: onTap,
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-    child: Row(
-      children: [
-        Text(
-          story.intention.glyph,
-          style: TextStyle(fontSize: 18, color: story.intention.accent),
+  Widget build(BuildContext context) {
+    final accent = story.intention.accent;
+
+    return SizedBox(
+      width: 208,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: Ink(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  accent.withValues(alpha: 0.22),
+                  AstraColors.card,
+                ],
+              ),
+              border: Border.all(color: accent.withValues(alpha: 0.35)),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${story.intention.label.toUpperCase()} · '
+                          '${story.durationLabel.toUpperCase()}',
+                          style: AstraTextStyles.eyebrow.copyWith(color: accent),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (story.favorite)
+                        const Icon(
+                          Icons.favorite,
+                          size: 13,
+                          color: AstraColors.gold,
+                        ),
+                    ],
+                  ),
+                  const Spacer(),
+                  Text(
+                    story.title,
+                    style: AstraTextStyles.display(17),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: AstraSpacing.md),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.play_circle_fill_rounded,
+                        size: 26,
+                        color: AstraColors.gold,
+                      ),
+                      const SizedBox(width: 8),
+                      Text('Listen', style: AstraTextStyles.small),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
-        const SizedBox(width: 12),
-        Expanded(
+      ),
+    );
+  }
+}
+
+/// The last card in the row — the way into the full library, placed where the
+/// scroll naturally ends rather than as a "see all" link nobody looks at.
+class _SeeAllCard extends StatelessWidget {
+  const _SeeAllCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 132,
+    child: Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: AstraColors.card,
+            border: Border.all(color: AstraColors.line),
+            borderRadius: BorderRadius.circular(18),
+          ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(
-                story.title,
-                style: AstraTextStyles.body.copyWith(fontSize: 14),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              const Icon(
+                Icons.library_music_outlined,
+                color: AstraColors.gold,
+                size: 24,
               ),
-              const SizedBox(height: 2),
-              Text(
-                '${story.durationLabel} · ${story.intention.label}',
-                style: AstraTextStyles.small,
-              ),
+              const SizedBox(height: AstraSpacing.sm),
+              Text('All stories', style: AstraTextStyles.small),
             ],
           ),
         ),
-        if (story.favorite)
-          const Icon(Icons.favorite, size: 15, color: AstraColors.gold),
-        const SizedBox(width: 8),
-        const Icon(
-          Icons.play_circle_outline_rounded,
-          color: AstraColors.gold,
-          size: 26,
+      ),
+    ),
+  );
+}
+
+/// What "For you" shows before there is anything to show.
+class _FirstStoryCard extends StatelessWidget {
+  const _FirstStoryCard({required this.onCreate});
+
+  final VoidCallback onCreate;
+
+  @override
+  Widget build(BuildContext context) => AstraCard(
+    raised: true,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('YOUR FIRST STORY', style: AstraTextStyles.eyebrow),
+        const SizedBox(height: AstraSpacing.sm),
+        Text(
+          'Nothing written yet',
+          style: AstraTextStyles.label.copyWith(fontSize: 16),
         ),
+        const SizedBox(height: 2),
+        Text(
+          'Say what you want above, or tap one of the manifestations. '
+          'Your first day is free.',
+          style: AstraTextStyles.small,
+        ),
+        const SizedBox(height: AstraSpacing.md),
+        AstraGhostButton(label: 'More options', onPressed: onCreate),
       ],
     ),
   );

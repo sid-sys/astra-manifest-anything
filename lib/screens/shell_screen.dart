@@ -61,7 +61,11 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
   @override
   Widget build(BuildContext context) {
     final screens = [
-      HomeScreen(onCreate: _openCreate, onLibrary: () => _goTo(1)),
+      HomeScreen(
+        onCreate: _openCreate,
+        onLibrary: () => _goTo(1),
+        onProfile: () => _goTo(3),
+      ),
       LibraryScreen(onCreate: _openCreate),
       const AffirmationsScreen(),
       const ProfileScreen(),

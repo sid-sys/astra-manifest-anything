@@ -52,7 +52,7 @@ class ProfileScreen extends ConsumerWidget {
         _SettingRow(
           label: 'Intentions & life details',
           value: profile.intentions.map((i) => i.label).join(', '),
-          onTap: () => _editIntentions(context, ref),
+          onTap: () => editIntentions(context, ref),
         ),
         _SettingRow(
           label: 'Daily reminder',
@@ -212,62 +212,69 @@ class ProfileScreen extends ConsumerWidget {
         );
   }
 
-  Future<void> _editIntentions(BuildContext context, WidgetRef ref) async {
-    final profile = ref.read(profileProvider);
-    final selected = {...profile.intentions};
+}
 
-    final saved = await showModalBottomSheet<bool>(
-      context: context,
-      backgroundColor: AstraColors.inkRaised,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (sheetContext, setSheetState) => SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Intentions', style: AstraTextStyles.display(20)),
-                const SizedBox(height: AstraSpacing.md),
-                Wrap(
-                  spacing: AstraSpacing.sm,
-                  runSpacing: AstraSpacing.sm,
-                  children: [
-                    for (final intention in Intention.values)
-                      TagChip(
-                        label: '${intention.glyph}  ${intention.label}',
-                        selected: selected.contains(intention),
-                        accent: intention.accent,
-                        onTap: () => setSheetState(() {
-                          selected.contains(intention)
-                              ? selected.remove(intention)
-                              : selected.add(intention);
-                        }),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: AstraSpacing.lg),
-                AstraButton(
-                  label: 'Save',
-                  onPressed: selected.isEmpty
-                      ? null
-                      : () => Navigator.of(sheetContext).pop(true),
-                ),
-              ],
-            ),
+/// The intentions sheet.
+///
+/// Top-level rather than a method because two screens open it now: Profile,
+/// where it reads as a setting, and Home's "Edit desires", where it is the
+/// control over what the feed is made of. One sheet, so the two can never
+/// drift apart.
+Future<void> editIntentions(BuildContext context, WidgetRef ref) async {
+  final profile = ref.read(profileProvider);
+  final selected = {...profile.intentions};
+
+  final saved = await showModalBottomSheet<bool>(
+    context: context,
+    backgroundColor: AstraColors.inkRaised,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+    ),
+    builder: (sheetContext) => StatefulBuilder(
+      builder: (sheetContext, setSheetState) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Intentions', style: AstraTextStyles.display(20)),
+              const SizedBox(height: AstraSpacing.md),
+              Wrap(
+                spacing: AstraSpacing.sm,
+                runSpacing: AstraSpacing.sm,
+                children: [
+                  for (final intention in Intention.values)
+                    TagChip(
+                      label: '${intention.glyph}  ${intention.label}',
+                      selected: selected.contains(intention),
+                      accent: intention.accent,
+                      onTap: () => setSheetState(() {
+                        selected.contains(intention)
+                            ? selected.remove(intention)
+                            : selected.add(intention);
+                      }),
+                    ),
+                ],
+              ),
+              const SizedBox(height: AstraSpacing.lg),
+              AstraButton(
+                label: 'Save',
+                onPressed: selected.isEmpty
+                    ? null
+                    : () => Navigator.of(sheetContext).pop(true),
+              ),
+            ],
           ),
         ),
       ),
-    );
+    ),
+  );
 
-    if (saved != true) return;
-    await ref
-        .read(profileProvider.notifier)
-        .update(profile.copyWith(intentions: selected));
-  }
+  if (saved != true) return;
+  await ref
+      .read(profileProvider.notifier)
+      .update(profile.copyWith(intentions: selected));
 }
 
 class _SettingRow extends StatelessWidget {

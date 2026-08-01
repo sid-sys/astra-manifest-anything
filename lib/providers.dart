@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -190,6 +191,38 @@ final dailyStoryProvider = Provider<Story?>((ref) {
   final stories = ref.watch(storiesProvider);
   return stories.isEmpty ? null : stories.first;
 });
+
+// ------------------------------------------------------------------- avatar
+
+/// The profile photo, decoded once and held in memory.
+///
+/// Stored as base64 on disk and as bytes here so the home screen can paint it
+/// without decoding on every build. Null means no photo has been chosen, which
+/// is the normal state — the avatar falls back to the user's initial.
+class AvatarNotifier extends StateNotifier<Uint8List?> {
+  AvatarNotifier(this._repository) : super(_decode(_repository.loadAvatar()));
+
+  final AstraRepository _repository;
+
+  static Uint8List? _decode(String? base64) {
+    if (base64 == null || base64.isEmpty) return null;
+    try {
+      return base64Decode(base64);
+    } catch (error) {
+      debugPrint('Astra: stored avatar could not be decoded — $error');
+      return null;
+    }
+  }
+
+  Future<void> set(Uint8List? bytes) async {
+    state = bytes;
+    await _repository.saveAvatar(bytes == null ? null : base64Encode(bytes));
+  }
+}
+
+final avatarProvider = StateNotifierProvider<AvatarNotifier, Uint8List?>(
+  (ref) => AvatarNotifier(ref.watch(repositoryProvider)),
+);
 
 // -------------------------------------------------------------------- taste
 

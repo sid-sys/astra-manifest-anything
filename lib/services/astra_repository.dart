@@ -21,6 +21,7 @@ class AstraRepository {
   static const _profileKey = 'astra.profile';
   static const _storiesKey = 'astra.stories';
   static const _tasteKey = 'astra.taste';
+  static const _avatarKey = 'astra.avatar';
 
   final SharedPreferences _prefs;
 
@@ -47,6 +48,25 @@ class AstraRepository {
   Future<void> saveProfile(UserProfile profile) async {
     await _prefs.setString(_profileKey, jsonEncode(profile.toMap()));
     await _mirror(() => _userDoc.set(profile.toMap(), SetOptions(merge: true)));
+  }
+
+  // ----------------------------------------------------------------- avatar
+
+  /// The profile photo, base64-encoded, or null if none was chosen.
+  ///
+  /// Deliberately not part of [UserProfile] and deliberately not mirrored: the
+  /// profile document is written on every settings change, and pushing 20KB of
+  /// image through each of those writes to back up something the story
+  /// generator never reads would be paying for nothing. A photo that does not
+  /// survive a reinstall is an acceptable loss; a story is not.
+  String? loadAvatar() => _prefs.getString(_avatarKey);
+
+  Future<void> saveAvatar(String? base64) async {
+    if (base64 == null) {
+      await _prefs.remove(_avatarKey);
+      return;
+    }
+    await _prefs.setString(_avatarKey, base64);
   }
 
   // ---------------------------------------------------------------- stories
