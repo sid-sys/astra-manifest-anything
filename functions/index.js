@@ -580,3 +580,57 @@ exports.narrateStory = onCall(
     return { audioUrl, audioPath, durationSeconds, voice };
   },
 );
+
+// ------------------------------------------------------------------- account
+
+/**
+ * Erases everything this account has, everywhere, and cannot be undone.
+ *
+ * Server-side because the client has no business holding the permissions this
+ * needs: deleting another user's audio would be one wrong path away if the
+ * bucket were writable from the app. The uid comes from the verified auth
+ * token, never from the request body, so the only account a caller can delete
+ * is their own.
+ *
+ * Order matters. Audio goes first because it is the part that costs money to
+ * keep and the part with no other record of its existence; if the function
+ * dies halfway, a Firestore document pointing at a deleted file is a much
+ * better failure than an audio file no document remembers. The auth user goes
+ * last, because deleting it first would strip the credentials the rest of the
+ * work is authorised by.
+ */
+exports.deleteAccount = onCall(
+  { timeoutSeconds: 300, memory: "256MiB" },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw new HttpsError("unauthenticated", "Sign in to delete your data.");
+    }
+
+    const deleted = { audioFiles: 0, documents: 0 };
+
+    // Everything this user has ever had narrated lives under one prefix.
+    const [files] = await admin
+      .storage()
+      .bucket(AUDIO_BUCKET)
+      .getFiles({ prefix: `users/${uid}/` });
+
+    await Promise.all(files.map((file) => file.delete({ ignoreNotFound: true })));
+    deleted.audioFiles = files.length;
+
+    const db = admin.firestore();
+    const userDoc = db.collection("users").doc(uid);
+
+    // recursiveDelete walks the subcollections too — a plain delete() on the
+    // user document would orphan every story under it, which is the classic
+    // way a "deleted" account keeps its data.
+    const stories = await userDoc.collection("stories").count().get();
+    deleted.documents = stories.data().count + 1;
+    await db.recursiveDelete(userDoc);
+
+    await admin.auth().deleteUser(uid);
+
+    logger.info("Account deleted", { uid, ...deleted });
+    return deleted;
+  },
+);

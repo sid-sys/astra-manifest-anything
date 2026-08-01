@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -16,7 +17,7 @@ import '../models/user_profile.dart';
 /// is logged and swallowed rather than surfaced, because losing the cloud copy
 /// must never cost the user their story.
 class AstraRepository {
-  AstraRepository(this._prefs, {this.uid});
+  AstraRepository(this._prefs);
 
   static const _profileKey = 'astra.profile';
   static const _storiesKey = 'astra.stories';
@@ -25,9 +26,22 @@ class AstraRepository {
 
   final SharedPreferences _prefs;
 
-  /// Null when anonymous sign-in was unavailable; the repository then skips
-  /// every cloud write and behaves as pure local storage.
-  final String? uid;
+  /// The signed-in account, read live rather than captured at construction.
+  ///
+  /// It has to be live because it changes underneath us: signing out or
+  /// deleting the account leaves any captured copy pointing at a uid that no
+  /// longer exists, and the next mirrored write would recreate the very
+  /// document the user asked to be rid of. Null means no account — either
+  /// sign-in was unavailable or the user signed out — and every cloud write
+  /// then quietly becomes a no-op.
+  String? get uid {
+    try {
+      return FirebaseAuth.instance.currentUser?.uid;
+    } catch (error) {
+      // Firebase never initialised. Local storage is the whole app then.
+      return null;
+    }
+  }
 
   DocumentReference<Map<String, dynamic>> get _userDoc =>
       FirebaseFirestore.instance.collection('users').doc(uid);
@@ -48,6 +62,17 @@ class AstraRepository {
   Future<void> saveProfile(UserProfile profile) async {
     await _prefs.setString(_profileKey, jsonEncode(profile.toMap()));
     await _mirror(() => _userDoc.set(profile.toMap(), SetOptions(merge: true)));
+  }
+
+  /// Removes everything Astra has stored on this device.
+  ///
+  /// Named keys rather than `prefs.clear()`: the preference store belongs to
+  /// the whole app, and a wipe that also took out something a plugin had put
+  /// there would be a bug nobody would think to look for here.
+  Future<void> clearLocal() async {
+    for (final key in [_profileKey, _storiesKey, _tasteKey, _avatarKey]) {
+      await _prefs.remove(key);
+    }
   }
 
   // ----------------------------------------------------------------- avatar

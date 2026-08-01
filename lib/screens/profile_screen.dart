@@ -6,6 +6,7 @@ import '../models/intention.dart';
 import '../providers.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
+import 'confirm_screen.dart';
 import 'paywall_screen.dart';
 import 'player_screen.dart';
 
@@ -183,9 +184,34 @@ class ProfileScreen extends ConsumerWidget {
             ),
             const SizedBox(height: AstraSpacing.sm),
           ],
+
+        // Last on the screen, below everything worth keeping — the two actions
+        // nobody should reach by scrolling absent-mindedly.
+        const SizedBox(height: AstraSpacing.xxl),
+        Text('Account', style: AstraTextStyles.label),
+        const SizedBox(height: AstraSpacing.sm),
+        _AccountRow(
+          icon: Icons.logout_rounded,
+          label: 'Log out',
+          detail: 'Clears this device',
+          onTap: () => _confirm(context, ConfirmKind.signOut),
+        ),
+        const SizedBox(height: AstraSpacing.sm),
+        _AccountRow(
+          icon: Icons.delete_outline_rounded,
+          label: 'Delete my data',
+          detail: 'Everything, everywhere, permanently',
+          danger: true,
+          onTap: () => _confirm(context, ConfirmKind.deleteData),
+        ),
       ],
     );
   }
+
+  static Future<void> _confirm(BuildContext context, ConfirmKind kind) =>
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => ConfirmScreen(kind: kind)),
+      );
 
   static String _formatTime(int hour, int minute) {
     final period = hour >= 12 ? 'PM' : 'AM';
@@ -275,6 +301,58 @@ Future<void> editIntentions(BuildContext context, WidgetRef ref) async {
   await ref
       .read(profileProvider.notifier)
       .update(profile.copyWith(intentions: selected));
+}
+
+/// A row in the Account block. The destructive one is tinted, but only its
+/// icon and label — a whole card in error red reads as something already
+/// broken rather than something that would break.
+class _AccountRow extends StatelessWidget {
+  const _AccountRow({
+    required this.icon,
+    required this.label,
+    required this.detail,
+    required this.onTap,
+    this.danger = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final String detail;
+  final VoidCallback onTap;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final tint = danger ? Theme.of(context).colorScheme.error : AstraColors.text;
+
+    return AstraCard(
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: tint),
+          const SizedBox(width: AstraSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: AstraTextStyles.body.copyWith(color: tint),
+                ),
+                Text(detail, style: AstraTextStyles.small),
+              ],
+            ),
+          ),
+          const Icon(
+            Icons.chevron_right_rounded,
+            size: 18,
+            color: AstraColors.dim,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _SettingRow extends StatelessWidget {

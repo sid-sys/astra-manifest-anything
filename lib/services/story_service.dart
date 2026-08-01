@@ -49,7 +49,6 @@ class StoryQuotaExceeded implements Exception {
 class StoryService {
   StoryService({
     required this.repository,
-    required this.signedIn,
     StoryGenerator? offlineGenerator,
     FirebaseFunctions? functions,
   }) : _offlineGenerator = offlineGenerator ?? StoryGenerator(),
@@ -62,7 +61,11 @@ class StoryService {
   final AstraRepository repository;
   final StoryGenerator _offlineGenerator;
   final FirebaseFunctions _functions;
-  final bool signedIn;
+
+  /// Whether there is an account to generate against. Derived from the
+  /// repository rather than passed in, so that signing out mid-session cannot
+  /// leave this service believing in a uid that is gone.
+  bool get signedIn => repository.uid != null;
 
   /// Writes the script. Returns as soon as the words exist — no audio yet.
   Future<Story> write({

@@ -10,6 +10,7 @@ import 'models/intention.dart';
 import 'models/plan.dart';
 import 'models/story.dart';
 import 'models/user_profile.dart';
+import 'services/account_service.dart';
 import 'services/affirmations.dart';
 import 'services/astra_repository.dart';
 import 'services/playback_controller.dart';
@@ -21,22 +22,34 @@ final sharedPreferencesProvider = Provider<SharedPreferences>(
   (ref) => throw UnimplementedError('sharedPreferencesProvider needs an override'),
 );
 
-/// Null when anonymous sign-in was unavailable — the app then runs local-only.
-final uidProvider = Provider<String?>((ref) => null);
-
 final repositoryProvider = Provider<AstraRepository>(
-  (ref) => AstraRepository(
-    ref.watch(sharedPreferencesProvider),
-    uid: ref.watch(uidProvider),
-  ),
+  (ref) => AstraRepository(ref.watch(sharedPreferencesProvider)),
 );
 
 final storyServiceProvider = Provider<StoryService>(
-  (ref) => StoryService(
-    repository: ref.watch(repositoryProvider),
-    signedIn: ref.watch(uidProvider) != null,
-  ),
+  (ref) => StoryService(repository: ref.watch(repositoryProvider)),
 );
+
+final accountServiceProvider = Provider<AccountService>(
+  (ref) => AccountService(ref.watch(repositoryProvider)),
+);
+
+/// Drops every trace of the current user from memory and disk.
+///
+/// The app decides what to show from `profile.isOnboarded`, so emptying the
+/// profile is also the navigation: the tree rebuilds on the onboarding screen
+/// without anyone pushing a route. Each notifier is reset explicitly rather
+/// than by invalidating the providers, because a rebuilt notifier would read
+/// the same storage it is being asked to forget.
+Future<void> forgetEverythingLocal(WidgetRef ref) async {
+  await ref.read(repositoryProvider).clearLocal();
+  ref.read(storiesProvider.notifier).forget();
+  ref.read(tasteProvider.notifier).forget();
+  ref.read(avatarProvider.notifier).forget();
+  // Profile last: it is what the app routes on, so nothing rebuilds against a
+  // half-cleared library.
+  ref.read(profileProvider.notifier).forget();
+}
 
 /// Runs a generation end to end.
 ///
@@ -122,6 +135,10 @@ class ProfileNotifier extends StateNotifier<UserProfile> {
   /// Records that the subscription screen has been offered, so it is shown
   /// once after onboarding and never ambushes the user again.
   Future<void> markPaywallSeen() => update(state.copyWith(paywallSeen: true));
+
+  /// Empties the profile without writing it back. Storage is cleared by the
+  /// caller; saving here would re-create the record being erased.
+  void forget() => state = UserProfile.empty();
 }
 
 final profileProvider = StateNotifierProvider<ProfileNotifier, UserProfile>(
@@ -179,6 +196,9 @@ class StoriesNotifier extends StateNotifier<List<Story>> {
 
   Future<void> toggleFavorite(Story story) =>
       update(story.copyWith(favorite: !story.favorite));
+
+  /// Empties the library in memory. Storage is cleared by the caller.
+  void forget() => state = const [];
 }
 
 final storiesProvider = StateNotifierProvider<StoriesNotifier, List<Story>>(
@@ -218,6 +238,9 @@ class AvatarNotifier extends StateNotifier<Uint8List?> {
     state = bytes;
     await _repository.saveAvatar(bytes == null ? null : base64Encode(bytes));
   }
+
+  /// Drops the photo from memory. Storage is cleared by the caller.
+  void forget() => state = null;
 }
 
 final avatarProvider = StateNotifierProvider<AvatarNotifier, Uint8List?>(
@@ -245,6 +268,9 @@ class TasteNotifier extends StateNotifier<AffirmationTaste> {
     state = next;
     await _repository.saveTaste(next);
   }
+
+  /// Forgets every keep and pass in memory. Storage is cleared by the caller.
+  void forget() => state = const AffirmationTaste();
 }
 
 final tasteProvider = StateNotifierProvider<TasteNotifier, AffirmationTaste>(
