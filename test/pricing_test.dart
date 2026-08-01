@@ -79,20 +79,19 @@ void _marginTests() {
   // Planning uses a 10% buffer over the $0.100 measured cost.
   const costPerStory = 0.105;
 
-  // Google Play's reduced rate, for the first $1M of annual revenue.
-  const platformFee = 0.15;
-
   const targetMargin = 0.80;
 
   // Only used to check rupee plans against a dollar-denominated cost.
   const inrPerUsd = 86.5;
 
+  /// Margin on the list price, before any store cut. Google Play's 15% (or 30%
+  /// above $1M) comes out of what is left; it is a distribution cost, not a
+  /// cost of making the story, so it is not netted off here.
   double marginOf(Plan plan) {
     final usd = plan.currencyCode == 'INR' ? plan.amount / inrPerUsd : plan.amount;
     final months = plan.period == BillingPeriod.year ? 12 : 1;
-    final net = usd * (1 - platformFee);
     final cogs = PricingCatalog.plusMonthlyStories * months * costPerStory;
-    return (net - cogs) / net;
+    return (usd - cogs) / usd;
   }
 
   group('every plan holds the margin floor at full usage', () {

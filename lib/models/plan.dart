@@ -69,24 +69,35 @@ class Plan {
 /// $0.105 to leave a 10% buffer.
 ///
 /// Every plan is priced so that a subscriber who uses their entire monthly
-/// allowance still leaves an 80% gross margin, after Google Play takes 15%:
+/// allowance still leaves an 80% gross margin on the list price:
 ///
-///     list price ≥ stories × 12 (if yearly) × $0.105 / 0.20 / 0.85
+///     list price ≥ stories × 12 (if yearly) × $0.105 / 0.20
+///
+/// which is $5.25 a month and $63.00 a year at ten stories.
+///
+/// The margin is measured *before* the store's cut, not after. Google Play's
+/// 15% (30% above $1M of annual revenue) is a distribution cost taken out of
+/// what is left, not a cost of producing the story, so it does not enter the
+/// floor. Useful to keep in view anyway: at 15% these plans land in the
+/// low-70s net of Play, and at 30% the yearly ones land around 59%.
 ///
 /// The yearly plan is what binds. A steep annual discount at a fixed
 /// allowance forces either a much higher list price or a much smaller
 /// allowance, so the discount is held at two months free rather than the ~45%
-/// it was — at the old ₹1,999 the yearly margin was 3.8%.
+/// it was — at the old ₹1,999 the yearly margin was 18% even on this looser
+/// basis, and negative once Play took its share.
 ///
-/// The 15% assumes Play's reduced rate for the first $1M of annual revenue.
-/// Above that Play takes 30% and the yearly plans fall to ~77%; raise them or
-/// drop the allowance to 8 when that happens.
+/// Current prices clear the floor with room to spare: the thinnest is the
+/// rupee yearly plan at 83.2%. That headroom is worth about one more story a
+/// month (eleven is still above 80%) or a cheaper yearly tile — spend it
+/// deliberately, in one place, rather than letting it drift.
 class PricingCatalog {
   const PricingCatalog._();
 
   /// Stories per month on Plus. Set by the margin arithmetic above, not by
-  /// feel: at $7.99 the 80% floor allows 12, and 10 leaves room for the cost
-  /// of a story to drift before the price has to move.
+  /// feel: the cheapest yearly plan supports 11 at the 80% floor, and 10
+  /// leaves room for the cost of a story to drift before the price has to
+  /// move.
   static const plusMonthlyStories = 10;
 
   static const _countryToCurrency = <String, String>{'IN': 'INR'};
@@ -95,7 +106,7 @@ class PricingCatalog {
 
   static const _plansByCurrency = <String, List<Plan>>{
     'INR': [
-      // ₹649 ≈ $7.50 → 83% margin at 10 stories.
+      // ₹649 ≈ $7.50 → 86.0% margin at 10 stories.
       Plan(
         id: 'astra_plus_monthly_inr',
         period: BillingPeriod.month,
@@ -103,7 +114,8 @@ class PricingCatalog {
         currencyCode: 'INR',
         popular: true,
       ),
-      // ₹6,499 ≈ $75.13 → 80.3% margin at 10 stories a month.
+      // ₹6,499 ≈ $75.13 → 83.2% margin at 10 stories a month. The thinnest
+      // plan in the catalogue, so the one to check when anything moves.
       Plan(
         id: 'astra_plus_yearly_inr',
         period: BillingPeriod.year,
@@ -113,7 +125,7 @@ class PricingCatalog {
       ),
     ],
     'USD': [
-      // $7.99 → 84.5% margin at 10 stories.
+      // $7.99 → 86.9% margin at 10 stories.
       Plan(
         id: 'astra_plus_monthly_usd',
         period: BillingPeriod.month,
@@ -121,7 +133,7 @@ class PricingCatalog {
         currencyCode: 'USD',
         popular: true,
       ),
-      // $79.99 → 81.5% margin at 10 stories a month.
+      // $79.99 → 84.2% margin at 10 stories a month.
       Plan(
         id: 'astra_plus_yearly_usd',
         period: BillingPeriod.year,

@@ -72,9 +72,10 @@ const DEFAULT_MOOD = "Calm";
  *
  * A five-minute story costs about $0.10 to make — narration 59%, script 37%,
  * infrastructure 4% — and every plan in `plan.dart` is priced so a subscriber
- * who uses the whole allowance still leaves 80% gross after Google Play's cut.
- * Raising a limit here without moving the price there moves the margin; the
- * two numbers are one decision.
+ * who uses the whole allowance still leaves 80% gross on the list price,
+ * before any store cut. Raising a limit here without moving the price there
+ * moves the margin; the two numbers are one decision, and `pricing_test.dart`
+ * fails if only one of them moves.
  *
  * Two trial stories costs about $0.21 per trial user, which is the real
  * acquisition cost of this app: at a 5% conversion rate it is roughly $4 of
