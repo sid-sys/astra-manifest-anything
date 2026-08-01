@@ -240,13 +240,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   enabled: !_busy,
                   onTap: () => _federated(auth.signInWithGoogle),
                 ),
-                const SizedBox(height: AstraSpacing.sm),
-                _ProviderButton(
-                  label: 'Continue with Apple',
-                  icon: Icons.apple,
-                  enabled: !_busy,
-                  onTap: () => _federated(auth.signInWithApple),
-                ),
 
                 if (!widget.asUpgrade) ...[
                   const SizedBox(height: AstraSpacing.sm),

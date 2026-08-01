@@ -53,7 +53,6 @@ void main() {
 
     expect(find.text('Log in'), findsOneWidget);
     expect(find.text('Continue with Google'), findsOneWidget);
-    expect(find.text('Continue with Apple'), findsOneWidget);
     // The one that costs the user nothing is a button like the others, not a
     // link in small grey type at the bottom.
     expect(find.text('Continue as guest'), findsOneWidget);

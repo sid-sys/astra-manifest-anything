@@ -123,8 +123,10 @@ class AuthService {
   Future<UserCredential> signInWithGoogle() =>
       _federated(GoogleAuthProvider()..addScope('email'));
 
-  Future<UserCredential> signInWithApple() =>
-      _federated(AppleAuthProvider()..addScope('email'));
+  // Sign in with Apple is not offered. If this app is ever submitted to the App
+  // Store while Google sign-in exists, Apple's guidelines require it — adding
+  // it back is `_federated(AppleAuthProvider())` plus the Service ID and key in
+  // the Apple developer portal.
 
   /// One path for every OAuth provider, on every platform.
   ///
