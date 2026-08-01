@@ -19,21 +19,26 @@ Future<void> main() async {
 
   // Firebase is used for backup and sync only. If it can't start — no network,
   // a misconfigured build — the app still runs entirely on local storage.
+  var firebaseReady = false;
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    // The uid is not held onto: everything that needs it reads FirebaseAuth
-    // directly, so signing out or deleting the account cannot leave a stale
-    // copy of it behind. This call only has to put a user in place.
-    await AuthService().signInSilently();
+    firebaseReady = true;
+    // Restores an existing session; it never creates one. A launch that
+    // silently made an anonymous account would have taken the choice the
+    // sign-in screen is about to offer.
+    AuthService().restoreSession();
   } catch (error) {
     debugPrint('Astra: Firebase unavailable, running local-only — $error');
   }
 
   runApp(
     ProviderScope(
-      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+        firebaseReadyProvider.overrideWithValue(firebaseReady),
+      ],
       child: const AstraApp(),
     ),
   );

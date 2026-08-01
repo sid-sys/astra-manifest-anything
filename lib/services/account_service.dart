@@ -8,7 +8,9 @@ import 'astra_repository.dart';
 ///
 /// Signing out leaves the cloud copy where it is; deleting removes it. Both
 /// clear the device, because a device that still holds the stories of an
-/// account nobody is signed into is the worst of both.
+/// account nobody is signed into is the worst of both. Neither signs anyone
+/// back in — the sign-in screen appears on its own the moment the auth stream
+/// reports nobody, and choosing what to do next is the user's.
 class AccountService {
   AccountService(this._repository, {FirebaseFunctions? functions})
     : _functions =
@@ -61,14 +63,4 @@ class AccountService {
     await signOut();
   }
 
-  /// Starts a fresh anonymous account so the app has somewhere to sync to
-  /// again. Failure is survivable — the app then runs local-only, exactly as it
-  /// does when sign-in is unavailable at launch.
-  Future<void> startFresh() async {
-    try {
-      await FirebaseAuth.instance.signInAnonymously();
-    } catch (error) {
-      debugPrint('Astra: could not start a new account, staying local — $error');
-    }
-  }
 }

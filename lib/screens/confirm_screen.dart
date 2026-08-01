@@ -66,7 +66,6 @@ class _ConfirmScreenState extends ConsumerState<ConfirmScreen> {
         // them believing data is gone while it sits in Firestore.
         await account.deleteEverything();
         await forgetEverythingLocal(ref);
-        await account.startFresh();
       } else {
         await account.signOut();
         await forgetEverythingLocal(ref);
@@ -92,6 +91,7 @@ class _ConfirmScreenState extends ConsumerState<ConfirmScreen> {
   Widget build(BuildContext context) {
     final stories = ref.watch(storiesProvider).length;
     final kept = ref.watch(tasteProvider).liked.length;
+    final isGuest = ref.watch(isGuestProvider);
 
     return Scaffold(
       body: Starfield(
@@ -126,12 +126,18 @@ class _ConfirmScreenState extends ConsumerState<ConfirmScreen> {
                       ? 'This removes your account and everything in it, from '
                             'this device and from Astra\'s servers. It cannot '
                             'be undone and there is no copy to restore from.'
-                      : 'Astra signs you in without a password, so there are '
-                            'no credentials to log back in with. Logging out '
-                            'leaves this device empty and the copy on our '
-                            'servers unreachable — not deleted, but not '
-                            'recoverable either. If you want it gone, delete '
-                            'it instead.',
+                      : isGuest
+                          // The warning only applies to guests. Saying it to
+                          // someone with an email would be false, and false
+                          // alarms are how real warnings stop being read.
+                          ? 'You are signed in as a guest, so there is no '
+                                'password to come back with. Logging out '
+                                'leaves this device empty and the copy on our '
+                                'servers unreachable — not deleted, but not '
+                                'recoverable either. Add an email first if you '
+                                'want to keep it.'
+                          : 'Your stories stay on our servers and come back '
+                                'when you log in again. This device is cleared.',
                   style: AstraTextStyles.bodyDim,
                 ),
                 const SizedBox(height: AstraSpacing.xl),
@@ -141,7 +147,11 @@ class _ConfirmScreenState extends ConsumerState<ConfirmScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _isDelete ? 'WHAT GOES' : 'WHAT YOU LEAVE BEHIND',
+                        _isDelete
+                            ? 'WHAT GOES'
+                            : isGuest
+                                ? 'WHAT YOU LEAVE BEHIND'
+                                : 'CLEARED FROM THIS DEVICE',
                         style: AstraTextStyles.eyebrow,
                       ),
                       const SizedBox(height: AstraSpacing.md),

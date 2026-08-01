@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,6 +13,7 @@ import 'models/story.dart';
 import 'models/user_profile.dart';
 import 'services/account_service.dart';
 import 'services/affirmations.dart';
+import 'services/auth_service.dart';
 import 'services/astra_repository.dart';
 import 'services/playback_controller.dart';
 import 'services/region_service.dart';
@@ -20,6 +22,28 @@ import 'services/story_service.dart';
 /// Overridden in `main` once the platform is ready.
 final sharedPreferencesProvider = Provider<SharedPreferences>(
   (ref) => throw UnimplementedError('sharedPreferencesProvider needs an override'),
+);
+
+/// False when Firebase could not start — no network at launch, a misconfigured
+/// build. The app then has no accounts at all and runs on local storage, so
+/// there is nothing to show a sign-in screen for. Overridden in `main`.
+final firebaseReadyProvider = Provider<bool>((ref) => false);
+
+final authServiceProvider = Provider<AuthService>((ref) => AuthService());
+
+/// Who is signed in, as a stream, so every screen reacts to a sign-out at once
+/// rather than each holding its own stale copy.
+final authStateProvider = StreamProvider<User?>((ref) {
+  if (!ref.watch(firebaseReadyProvider)) return Stream.value(null);
+  return ref.watch(authServiceProvider).authState();
+});
+
+/// Whether the current account is a guest. Used to decide whether to offer the
+/// upgrade prompt, never to withhold a feature — a guest is a full user.
+final isGuestProvider = Provider<bool>(
+  (ref) =>
+      ref.watch(authStateProvider).valueOrNull?.isAnonymous ??
+      false,
 );
 
 final repositoryProvider = Provider<AstraRepository>(

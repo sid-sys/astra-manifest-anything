@@ -4,8 +4,10 @@ import 'package:intl/intl.dart';
 
 import '../models/intention.dart';
 import '../providers.dart';
+import '../services/auth_service.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
+import 'auth_screen.dart';
 import 'confirm_screen.dart';
 import 'paywall_screen.dart';
 import 'player_screen.dart';
@@ -190,6 +192,32 @@ class ProfileScreen extends ConsumerWidget {
         const SizedBox(height: AstraSpacing.xxl),
         Text('Account', style: AstraTextStyles.label),
         const SizedBox(height: AstraSpacing.sm),
+
+        if (ref.watch(isGuestProvider)) ...[
+          // Offered, never enforced. A guest account is a full account; this
+          // is about not losing it with the phone.
+          _AccountRow(
+            icon: Icons.mark_email_read_outlined,
+            label: 'Add an email',
+            detail: 'Keeps your stories if you change phones',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<bool>(
+                builder: (_) => const AuthScreen(asUpgrade: true),
+              ),
+            ),
+          ),
+          const SizedBox(height: AstraSpacing.sm),
+        ] else ...[
+          _AccountRow(
+            icon: Icons.alternate_email_rounded,
+            label: ref.watch(authStateProvider).valueOrNull?.email ??
+                'Signed in',
+            detail: 'Send a link to change your password',
+            onTap: () => _resetPassword(context, ref),
+          ),
+          const SizedBox(height: AstraSpacing.sm),
+        ],
+
         _AccountRow(
           icon: Icons.logout_rounded,
           label: 'Log out',
@@ -206,6 +234,25 @@ class ProfileScreen extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  /// Changing a password by email rather than in a form.
+  ///
+  /// `updatePassword` needs a recent sign-in and fails with
+  /// `requires-recent-login` for anyone who has been signed in a while, which
+  /// makes it a button that works on the test device and not on a real one.
+  /// The email round trip also proves the address still belongs to whoever is
+  /// holding the phone.
+  static Future<void> _resetPassword(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(authServiceProvider).sendPasswordResetForCurrentUser();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Check your email for the link.')),
+      );
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(authErrorMessage(error))));
+    }
   }
 
   static Future<void> _confirm(BuildContext context, ConfirmKind kind) =>

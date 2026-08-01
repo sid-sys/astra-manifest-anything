@@ -11,12 +11,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Worth a test rather than a look: the whole value of the typed confirmation
 /// is that it is impossible to trigger by accident, and "impossible by
 /// accident" is exactly the property a screenshot cannot demonstrate.
-Future<Widget> _bootstrap(ConfirmKind kind) async {
+Future<Widget> _bootstrap(ConfirmKind kind, {bool isGuest = false}) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
 
   return ProviderScope(
-    overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+    overrides: [
+      sharedPreferencesProvider.overrideWithValue(prefs),
+      isGuestProvider.overrideWithValue(isGuest),
+    ],
     child: MaterialApp(
       theme: buildAstraTheme(),
       home: ConfirmScreen(kind: kind),
@@ -70,14 +73,25 @@ void main() {
     expect(_armed(tester, 'Log out'), isTrue);
   });
 
-  testWidgets('logging out says the account cannot be signed back into', (
+  testWidgets('a guest is warned that logging out is one-way', (tester) async {
+    await tester.pumpWidget(
+      await _bootstrap(ConfirmKind.signOut, isGuest: true),
+    );
+
+    // The single most important sentence on the screen: a guest account has no
+    // password, so logging out is not the reversible thing the word implies.
+    expect(find.textContaining('no password to come back with'), findsOneWidget);
+  });
+
+  testWidgets('someone with an account is told their stories come back', (
     tester,
   ) async {
     await tester.pumpWidget(await _bootstrap(ConfirmKind.signOut));
 
-    // The single most important sentence on the screen: Astra signs people in
-    // anonymously, so logging out is not the reversible thing the word implies.
-    expect(find.textContaining('no credentials to log back in'), findsOneWidget);
+    // The same warning shown here would be false, and false alarms are how
+    // real warnings stop being read.
+    expect(find.textContaining('no password to come back with'), findsNothing);
+    expect(find.textContaining('come back when you log in again'), findsOneWidget);
   });
 
   testWidgets('both screens offer a way out that keeps the data', (
