@@ -12,7 +12,7 @@ class UserProfile {
     this.trialStartedAt,
     this.reminderHour = 21,
     this.reminderMinute = 0,
-    this.countryOverride,
+    this.paywallSeen = false,
   });
 
   final String name;
@@ -31,8 +31,8 @@ class UserProfile {
   final int reminderHour;
   final int reminderMinute;
 
-  /// Set when the user picks a region manually in Settings.
-  final String? countryOverride;
+  /// Whether the subscription screen has been shown once after onboarding.
+  final bool paywallSeen;
 
   static UserProfile empty() => UserProfile(
     name: '',
@@ -63,7 +63,7 @@ class UserProfile {
     DateTime? trialStartedAt,
     int? reminderHour,
     int? reminderMinute,
-    String? countryOverride,
+    bool? paywallSeen,
   }) => UserProfile(
     name: name ?? this.name,
     intentions: intentions ?? this.intentions,
@@ -74,7 +74,7 @@ class UserProfile {
     trialStartedAt: trialStartedAt ?? this.trialStartedAt,
     reminderHour: reminderHour ?? this.reminderHour,
     reminderMinute: reminderMinute ?? this.reminderMinute,
-    countryOverride: countryOverride ?? this.countryOverride,
+    paywallSeen: paywallSeen ?? this.paywallSeen,
   );
 
   Map<String, dynamic> toMap() => {
@@ -87,7 +87,7 @@ class UserProfile {
     'trialStartedAt': trialStartedAt?.toIso8601String(),
     'reminderHour': reminderHour,
     'reminderMinute': reminderMinute,
-    'countryOverride': countryOverride,
+    'paywallSeen': paywallSeen,
   };
 
   factory UserProfile.fromMap(Map<String, dynamic> map) => UserProfile(
@@ -103,6 +103,6 @@ class UserProfile {
     trialStartedAt: DateTime.tryParse(map['trialStartedAt'] as String? ?? ''),
     reminderHour: (map['reminderHour'] as num?)?.toInt() ?? 21,
     reminderMinute: (map['reminderMinute'] as num?)?.toInt() ?? 0,
-    countryOverride: map['countryOverride'] as String?,
+    paywallSeen: map['paywallSeen'] as bool? ?? false,
   );
 }

@@ -93,21 +93,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     ),
                   ),
                 ),
-                Row(
-                  children: [
-                    const Icon(Icons.check_circle_outline,
-                        size: 15, color: AstraColors.good),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Your first day is free — before any payment screen.',
-                        style: AstraTextStyles.small
-                            .copyWith(color: AstraColors.good),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AstraSpacing.md),
                 AstraButton(
                   label: _step == _stepCount - 1 ? 'Begin' : 'Continue',
                   onPressed: _canAdvance ? _advance : null,

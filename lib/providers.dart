@@ -117,6 +117,10 @@ class ProfileNotifier extends StateNotifier<UserProfile> {
   );
 
   Future<void> subscribe() => update(state.copyWith(isSubscribed: true));
+
+  /// Records that the subscription screen has been offered, so it is shown
+  /// once after onboarding and never ambushes the user again.
+  Future<void> markPaywallSeen() => update(state.copyWith(paywallSeen: true));
 }
 
 final profileProvider = StateNotifierProvider<ProfileNotifier, UserProfile>(
@@ -229,13 +233,9 @@ final favouriteStoriesProvider = Provider<List<Story>>(
 
 // ------------------------------------------------------------------- region
 
-/// Rebuilds when the user overrides their region in Settings.
-final regionServiceProvider = Provider<RegionService>((ref) {
-  final override = ref.watch(
-    profileProvider.select((profile) => profile.countryOverride),
-  );
-  return RegionService(overrideCountryCode: override);
-});
+/// Region is resolved from the device locale alone — there is nothing to
+/// configure, so nothing to rebuild on.
+final regionServiceProvider = Provider<RegionService>((ref) => RegionService());
 
 final plansProvider = Provider<List<Plan>>(
   (ref) => ref.watch(regionServiceProvider).plans,
@@ -281,6 +281,24 @@ final daysPractisedThisMonthProvider = Provider<int>((ref) {
   return days
       .where((d) => d.year == now.year && d.month == now.month)
       .length;
+});
+
+/// Monday to Sunday of the current week: true where a story was made.
+///
+/// Days still ahead read as false and the UI draws them as empty rather than
+/// missed — a week that starts by showing four failures is a discouraging way
+/// to open an app about how things are already going well.
+final weekActivityProvider = Provider<List<bool>>((ref) {
+  final days = <DateTime>{
+    for (final story in ref.watch(storiesProvider)) _dayOf(story.createdAt),
+  };
+
+  final today = _dayOf(DateTime.now());
+  final monday = today.subtract(Duration(days: today.weekday - 1));
+
+  return [
+    for (var i = 0; i < 7; i++) days.contains(monday.add(Duration(days: i))),
+  ];
 });
 
 final minutesListenedProvider = Provider<int>((ref) {

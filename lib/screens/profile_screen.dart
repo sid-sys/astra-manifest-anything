@@ -16,7 +16,6 @@ class ProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(profileProvider);
-    final region = ref.watch(regionServiceProvider);
     final favouriteStories = ref.watch(favouriteStoriesProvider);
     final keptLines = ref.watch(tasteProvider).liked.toList();
     final practised = ref.watch(daysPractisedThisMonthProvider);
@@ -59,11 +58,6 @@ class ProfileScreen extends ConsumerWidget {
           label: 'Daily reminder',
           value: _formatTime(profile.reminderHour, profile.reminderMinute),
           onTap: () => _pickReminder(context, ref),
-        ),
-        _SettingRow(
-          label: 'Region & currency',
-          value: '${region.countryCode} · ${region.currencyCode}',
-          onTap: () => _pickRegion(context, ref),
         ),
         AstraCard(
           onTap: profile.isSubscribed
@@ -216,53 +210,6 @@ class ProfileScreen extends ConsumerWidget {
             reminderMinute: picked.minute,
           ),
         );
-  }
-
-  /// Lets someone travelling, on a VPN, or living away from their SIM's
-  /// country correct what the device guessed.
-  Future<void> _pickRegion(BuildContext context, WidgetRef ref) async {
-    final profile = ref.read(profileProvider);
-
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: AstraColors.inkRaised,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
-              child: Text('Region', style: AstraTextStyles.display(20)),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-              child: Text(
-                'Sets the currency your plans are priced in.',
-                style: AstraTextStyles.bodyDim,
-              ),
-            ),
-            ListTile(
-              title: Text('India — ₹ INR', style: AstraTextStyles.body),
-              onTap: () => Navigator.of(sheetContext).pop('IN'),
-            ),
-            ListTile(
-              title: Text('Rest of world — \$ USD', style: AstraTextStyles.body),
-              onTap: () => Navigator.of(sheetContext).pop('US'),
-            ),
-            const SizedBox(height: AstraSpacing.sm),
-          ],
-        ),
-      ),
-    );
-
-    if (picked == null) return;
-    await ref
-        .read(profileProvider.notifier)
-        .update(profile.copyWith(countryOverride: picked));
   }
 
   Future<void> _editIntentions(BuildContext context, WidgetRef ref) async {

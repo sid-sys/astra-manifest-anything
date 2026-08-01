@@ -6,7 +6,7 @@ import '../theme/astra_theme.dart';
 /// daily pick are all keyed on these.
 enum Intention {
   career('Career', '✦', Color(0xFFE4B454)),
-  abundance('Abundance', '✧', Color(0xFF8F7BF0)),
+  abundance('Abundance', '✧', AstraColors.violet),
   love('Love', '♡', Color(0xFFE88FA8)),
   health('Health', '☘', AstraColors.good),
   confidence('Confidence', '△', Color(0xFF7FB8E8)),

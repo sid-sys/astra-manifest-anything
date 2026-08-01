@@ -7,20 +7,16 @@ import '../models/plan.dart';
 
 /// Where the user is, for pricing purposes.
 ///
-/// Resolution order:
-///   1. an override the user picked in Settings (respects VPN/expat cases),
-///   2. the device locale's country (`en_IN` → `IN`),
-///   3. `US` as the last resort.
+/// Read from the device locale (`en_IN` → `IN`), falling back to `US`. There
+/// is no manual override: asking someone to pick their own currency is asking
+/// them to do the app's job, and the locale is right for almost everyone.
 ///
 /// Deliberately does not use IP geolocation: it needs no network, no extra
 /// permission, and no personal data leaves the device.
 class RegionService {
-  RegionService({String? overrideCountryCode})
-    : _override = overrideCountryCode?.toUpperCase();
+  const RegionService();
 
-  final String? _override;
-
-  String get countryCode => _override ?? _deviceCountryCode();
+  String get countryCode => _deviceCountryCode();
 
   String get currencyCode => PricingCatalog.currencyForCountry(countryCode);
 

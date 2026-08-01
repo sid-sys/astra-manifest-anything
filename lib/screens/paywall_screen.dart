@@ -29,6 +29,11 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     final selected = _chosen ??
         plans.firstWhere((p) => p.popular, orElse: () => plans.first);
 
+    // The same screen is shown once after onboarding and again when the free
+    // day runs out. Announcing a day that is already spent would read as a
+    // bait, so the headline follows the clock.
+    final trialSpent = !ref.watch(profileProvider).trialActive;
+
     return Scaffold(
       body: Starfield(
         child: SafeArea(
@@ -41,8 +46,19 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                 const Wordmark('Astra Plus'),
                 const SizedBox(height: AstraSpacing.xl),
                 Text(
-                  "You've had your free day. No card asked for, as promised.",
+                  trialSpent
+                      ? "You've had your free day. No card asked for, as promised."
+                      : 'Your first day is free.',
                   style: AstraTextStyles.display(26),
+                ),
+                const SizedBox(height: AstraSpacing.sm),
+                Text(
+                  trialSpent
+                      ? 'Pick a plan to keep writing them.'
+                      : 'Three stories, today, without paying anything. Start '
+                            'a plan whenever you are ready — or skip this and '
+                            'go straight to your first story.',
+                  style: AstraTextStyles.bodyDim,
                 ),
                 const SizedBox(height: AstraSpacing.xl),
 
@@ -57,8 +73,8 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
 
                 const SizedBox(height: AstraSpacing.sm),
                 Text(
-                  '15 stories a month · unlimited listening · all voices · offline '
-                  'downloads · journal insights',
+                  '15 stories a month · unlimited listening · all voices · '
+                  'everything you keep, kept',
                   style: AstraTextStyles.small,
                 ),
                 const SizedBox(height: AstraSpacing.sm),
@@ -91,7 +107,9 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                 ),
                 const SizedBox(height: AstraSpacing.sm),
                 AstraGhostButton(
-                  label: 'Keep the free plan',
+                  // The way out is always visible, and it is worded as the
+                  // thing the user actually gets rather than as a refusal.
+                  label: trialSpent ? 'Keep the free plan' : 'Start my free day',
                   onPressed: () => Navigator.of(context).pop(false),
                 ),
                 const SizedBox(height: AstraSpacing.lg),

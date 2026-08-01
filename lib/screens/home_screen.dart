@@ -8,6 +8,7 @@ import '../services/affirmations.dart';
 import '../services/wish_prompts.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
+import '../widgets/streak_card.dart';
 import 'create_screen.dart';
 import 'player_screen.dart';
 import 'story_flow.dart';
@@ -78,13 +79,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
       children: [
-        Row(
-          children: [
-            Expanded(child: Wordmark('Astra', align: TextAlign.left)),
-            if (streak > 0)
-              TagChip(label: '🔥  $streak-day streak', selected: true),
-          ],
-        ),
+        Wordmark('Astra', align: TextAlign.left),
         const SizedBox(height: AstraSpacing.lg),
         Text(
           "Let's manifest, ${profile.name}",
@@ -198,6 +193,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ],
           ),
+        ),
+
+        const SizedBox(height: AstraSpacing.md),
+        StreakCard(
+          streak: streak,
+          week: ref.watch(weekActivityProvider),
+          name: profile.name,
         ),
 
         const SizedBox(height: AstraSpacing.md),

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../providers.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/starfield.dart';
 import 'affirmations_screen.dart';
 import 'create_screen.dart';
 import 'home_screen.dart';
 import 'library_screen.dart';
+import 'paywall_screen.dart';
 import 'profile_screen.dart';
 
 /// The four-tab frame.
@@ -23,6 +25,30 @@ class ShellScreen extends ConsumerStatefulWidget {
 
 class _ShellScreenState extends ConsumerState<ShellScreen> {
   int _tab = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _offerPlus());
+  }
+
+  /// Shows the plans once, immediately after onboarding.
+  ///
+  /// It is a route the user can dismiss, not a gate: the free day is the whole
+  /// answer to the complaint that the app it is modelled on asked for money
+  /// before anyone had heard anything. The seen flag is written before the
+  /// screen opens, so a crash or a fast back-press cannot make it reappear.
+  Future<void> _offerPlus() async {
+    final profile = ref.read(profileProvider);
+    if (profile.paywallSeen || profile.isSubscribed) return;
+
+    await ref.read(profileProvider.notifier).markPaywallSeen();
+    if (!mounted) return;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute<bool>(builder: (_) => const PaywallScreen()),
+    );
+  }
 
   void _goTo(int tab) => setState(() => _tab = tab);
 

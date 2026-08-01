@@ -15,7 +15,10 @@ class AstraColors {
   static const dim = Color(0xFF9AA0C2);
   static const gold = Color(0xFFE4B454);
   static const goldDeep = Color(0xFFB8892F);
-  static const violet = Color(0xFF8F7BF0);
+  /// Lightened from #8F7BF0, which cleared AA against [ink] but not AAA at
+  /// 5.7:1. This sits at 7.4:1 and is near-indistinguishable beside it, so
+  /// nothing rendered in violet is borderline any more.
+  static const violet = Color(0xFFA594F5);
   static const good = Color(0xFF6FCF97);
 
   static const goldGradient = LinearGradient(

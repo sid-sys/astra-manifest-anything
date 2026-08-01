@@ -26,15 +26,16 @@ void main() {
     expect(find.text('What should Astra call you?'), findsOneWidget);
   });
 
-  testWidgets('the free-day promise is visible before anything is asked', (
+  testWidgets('onboarding asks for nothing but the three questions', (
     tester,
   ) async {
     await tester.pumpWidget(await _bootstrap());
 
-    expect(
-      find.text('Your first day is free — before any payment screen.'),
-      findsOneWidget,
-    );
+    // No pricing, no plans, no card — the money conversation happens after
+    // onboarding, on its own screen, and never inside these three steps.
+    expect(find.textContaining('free'), findsNothing);
+    expect(find.textContaining('₹'), findsNothing);
+    expect(find.textContaining(r'$'), findsNothing);
   });
 
   testWidgets('continue stays disabled until a name is entered', (
