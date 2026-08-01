@@ -68,14 +68,17 @@ const DEFAULT_MOOD = "Calm";
  * story answered that, but a day lets someone try more than one intention and
  * find out whether the thing is for them.
  *
- * These caps are the margin.
+ * The monthly cap is a bound on the outlier, not a budget for the typical
+ * subscriber. A five-minute story costs about $0.10 to make — narration 59%,
+ * script 37%, infrastructure 4% — and the plans in `plan.dart` clear 80% gross
+ * at the six stories a month a subscriber is assumed to actually use. Someone
+ * who runs all twenty is served at about 67%, which is accepted: heavy users
+ * are rare and they are the ones who renew. What this number does is make the
+ * worst case knowable, so an automated client cannot run the margin negative.
  *
- * A five-minute story costs about $0.10 to make — narration 59%, script 37%,
- * infrastructure 4% — and every plan in `plan.dart` is priced so a subscriber
- * who uses the whole allowance still leaves 80% gross on the list price,
- * before any store cut. Raising a limit here without moving the price there
- * moves the margin; the two numbers are one decision, and `pricing_test.dart`
- * fails if only one of them moves.
+ * The two constants are one decision. `pricing_test.dart` asserts 80% at
+ * expected usage and a 65% floor at this cap, so raising it without moving the
+ * price fails the build rather than the business.
  *
  * Two trial stories costs about $0.21 per trial user, which is the real
  * acquisition cost of this app: at a 5% conversion rate it is roughly $4 of
@@ -83,7 +86,7 @@ const DEFAULT_MOOD = "Calm";
  */
 const TRIAL_HOURS = 24;
 const TRIAL_STORY_LIMIT = 2;
-const PLUS_MONTHLY_LIMIT = 10;
+const PLUS_MONTHLY_LIMIT = 20;
 
 /**
  * Narration pace, in words per minute, used to size the script.

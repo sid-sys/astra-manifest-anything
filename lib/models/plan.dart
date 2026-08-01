@@ -68,37 +68,62 @@ class Plan {
 /// ($25 per million output tokens), infrastructure the rest. Planning uses
 /// $0.105 to leave a 10% buffer.
 ///
-/// Every plan is priced so that a subscriber who uses their entire monthly
-/// allowance still leaves an 80% gross margin on the list price:
+/// The margin target is 80% on the list price, measured *before* the store's
+/// cut. Google Play's 15% (30% above $1M of annual revenue) is a distribution
+/// cost taken out of what is left, not a cost of producing the story, so it
+/// does not enter the floor. Worth keeping in view anyway: net of Play's 15%,
+/// these plans run about 12 points lower than the numbers below.
 ///
-///     list price ≥ stories × 12 (if yearly) × $0.105 / 0.20
+/// ## The allowance is a ceiling, not a forecast
 ///
-/// which is $5.25 a month and $63.00 a year at ten stories.
+/// Twenty stories a month is deliberately more than anyone is expected to
+/// use. It is set against a competitor that caps *listening* at three plays a
+/// day while advertising unlimited generation — the opposite of where the
+/// cost actually is, since replaying a file that already exists is free and
+/// making a new one is not. Capping the expensive half and leaving the free
+/// half alone is both cheaper to honour and easier to explain.
 ///
-/// The margin is measured *before* the store's cut, not after. Google Play's
-/// 15% (30% above $1M of annual revenue) is a distribution cost taken out of
-/// what is left, not a cost of producing the story, so it does not enter the
-/// floor. Useful to keep in view anyway: at 15% these plans land in the
-/// low-70s net of Play, and at 30% the yearly ones land around 59%.
+/// This means the 80% target is measured at *expected* usage, not at the cap:
 ///
-/// The yearly plan is what binds. A steep annual discount at a fixed
-/// allowance forces either a much higher list price or a much smaller
-/// allowance, so the discount is held at two months free rather than the ~45%
-/// it was — at the old ₹1,999 the yearly margin was 18% even on this looser
-/// basis, and negative once Play took its share.
+///     margin at n stories = (price − n × 12 (if yearly) × $0.105) / price
 ///
-/// Current prices clear the floor with room to spare: the thinnest is the
-/// rupee yearly plan at 83.2%. That headroom is worth about one more story a
-/// month (eleven is still above 80%) or a cheaper yearly tile — spend it
-/// deliberately, in one place, rather than letting it drift.
+/// | stories/month | $7.99 mo | $79.99 yr | ₹649 mo | ₹6,499 yr |
+/// |---------------|----------|-----------|---------|-----------|
+/// | 6 (expected)  |    92.1% |     90.5% |   91.6% |     89.9% |
+/// | 12            |    84.2% |     81.1% |   83.2% |     79.9% |
+/// | 20 (the cap)  |    73.7% |     68.5% |   72.0% |     66.5% |
+///
+/// So a subscriber who maxes out every month is served at ~67% rather than
+/// 80%, and that is accepted rather than overlooked: heavy users are rare,
+/// they are the ones who renew, and the cap bounds the loss. What the cap buys
+/// is a known worst case — without one, a single automated client could run
+/// the margin negative.
+///
+/// If the median subscriber turns out to use more than twelve a month, this
+/// stops being true and the price has to move: $10.99 / ₹949 monthly and
+/// $129.99 / ₹11,499 yearly hold 80% at the full twenty. Check real usage
+/// before assuming; the test below encodes the assumption so it fails loudly
+/// if the constant is edited without the price.
+///
+/// The yearly plan always binds — a 12× cost against a 10× price — which is
+/// why the annual discount is two months free rather than the ~45% it was. At
+/// the old ₹1,999 the yearly margin was negative once Play took its share.
 class PricingCatalog {
   const PricingCatalog._();
 
-  /// Stories per month on Plus. Set by the margin arithmetic above, not by
-  /// feel: the cheapest yearly plan supports 11 at the 80% floor, and 10
-  /// leaves room for the cost of a story to drift before the price has to
-  /// move.
-  static const plusMonthlyStories = 10;
+  /// Stories per month on Plus — a ceiling on the heaviest user, not a
+  /// forecast of the typical one. See the derivation above before changing it:
+  /// past twelve, the yearly plans stop clearing 80% at expected usage and the
+  /// price has to move with it.
+  static const plusMonthlyStories = 20;
+
+  /// What a subscriber is assumed to actually use in a month.
+  ///
+  /// A guess, not a measurement — there is no usage data yet. It exists so the
+  /// assumption is written down and testable instead of living in someone's
+  /// head, and so the margin test fails the day it stops being defensible.
+  /// Replace it with the real median once there is one.
+  static const expectedMonthlyStories = 6;
 
   static const _countryToCurrency = <String, String>{'IN': 'INR'};
 
@@ -106,7 +131,7 @@ class PricingCatalog {
 
   static const _plansByCurrency = <String, List<Plan>>{
     'INR': [
-      // ₹649 ≈ $7.50 → 86.0% margin at 10 stories.
+      // ₹649 ≈ $7.50 → 91.6% expected, 72.0% at the cap.
       Plan(
         id: 'astra_plus_monthly_inr',
         period: BillingPeriod.month,
@@ -114,8 +139,8 @@ class PricingCatalog {
         currencyCode: 'INR',
         popular: true,
       ),
-      // ₹6,499 ≈ $75.13 → 83.2% margin at 10 stories a month. The thinnest
-      // plan in the catalogue, so the one to check when anything moves.
+      // ₹6,499 ≈ $75.13 → 89.9% expected, 66.5% at the cap. The thinnest plan
+      // in the catalogue, so the one to check when anything moves.
       Plan(
         id: 'astra_plus_yearly_inr',
         period: BillingPeriod.year,
@@ -125,7 +150,7 @@ class PricingCatalog {
       ),
     ],
     'USD': [
-      // $7.99 → 86.9% margin at 10 stories.
+      // $7.99 → 92.1% expected, 73.7% at the cap.
       Plan(
         id: 'astra_plus_monthly_usd',
         period: BillingPeriod.month,
@@ -133,7 +158,7 @@ class PricingCatalog {
         currencyCode: 'USD',
         popular: true,
       ),
-      // $79.99 → 84.2% margin at 10 stories a month.
+      // $79.99 → 90.5% expected, 68.5% at the cap.
       Plan(
         id: 'astra_plus_yearly_usd',
         period: BillingPeriod.year,
