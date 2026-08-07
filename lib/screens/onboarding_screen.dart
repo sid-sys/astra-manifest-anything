@@ -6,7 +6,7 @@ import '../models/user_profile.dart';
 import '../providers.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
-import '../widgets/starfield.dart';
+import '../widgets/aura_background.dart';
 
 /// Three questions, then the app. The free-story promise is stated on every
 /// step so nobody hands over personal details without knowing what they get
@@ -57,7 +57,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Starfield(
+      body: AuraBackground(
         child: SafeArea(
           child: Padding(
             padding: AstraSpacing.screenPadding,
@@ -130,7 +130,7 @@ class _NameStep extends StatelessWidget {
           onChanged: (_) => onChanged(),
           textCapitalization: TextCapitalization.words,
           style: AstraTextStyles.body.copyWith(fontSize: 16),
-          cursorColor: AstraColors.gold,
+          cursorColor: AstraColors.accent,
           decoration: InputDecoration(
             border: InputBorder.none,
             isDense: true,
@@ -203,7 +203,7 @@ class _AspirationStep extends StatelessWidget {
           controller: controller,
           maxLines: 5,
           style: AstraTextStyles.body,
-          cursorColor: AstraColors.gold,
+          cursorColor: AstraColors.accent,
           decoration: InputDecoration(
             border: InputBorder.none,
             isDense: true,

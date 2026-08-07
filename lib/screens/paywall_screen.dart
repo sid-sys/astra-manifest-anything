@@ -5,7 +5,7 @@ import '../models/plan.dart';
 import '../providers.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
-import '../widgets/starfield.dart';
+import '../widgets/aura_background.dart';
 
 /// Shown only after the user has heard a full story, never before.
 ///
@@ -35,7 +35,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     final trialSpent = !ref.watch(profileProvider).trialActive;
 
     return Scaffold(
-      body: Starfield(
+      body: AuraBackground(
         child: SafeArea(
           child: Padding(
             padding: AstraSpacing.screenPadding,
@@ -119,7 +119,7 @@ class _PlanTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) => AstraCard(
     onTap: onTap,
-    borderColor: selected ? AstraColors.gold : AstraColors.line,
+    borderColor: selected ? AstraColors.accent : AstraColors.line,
     child: Row(
       children: [
         Expanded(

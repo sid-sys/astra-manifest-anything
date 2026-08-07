@@ -10,7 +10,7 @@ import '../services/story_service.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
 import '../widgets/script_view.dart';
-import '../widgets/starfield.dart';
+import '../widgets/aura_background.dart';
 
 /// Full-screen playback.
 ///
@@ -51,7 +51,7 @@ class PlayerScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      body: Starfield(
+      body: AuraBackground(
         child: SafeArea(
           child: Column(
             children: [
@@ -157,7 +157,7 @@ class _Header extends StatelessWidget {
       IconButton(
         icon: Icon(
           story.favorite ? Icons.favorite : Icons.favorite_border,
-          color: story.favorite ? AstraColors.gold : AstraColors.dim,
+          color: story.favorite ? AstraColors.accent : AstraColors.dim,
         ),
         onPressed: onFavorite,
         tooltip: story.favorite ? 'Remove from favourites' : 'Add to favourites',
@@ -178,11 +178,15 @@ class _Orb extends StatelessWidget {
     alignment: Alignment.center,
     decoration: BoxDecoration(
       shape: BoxShape.circle,
-      border: Border.all(color: AstraColors.line),
+      // The orb catches the light from the top-left, same as everything else
+      // on the wash — a flat disc here would be the only object in the app
+      // that is not lit.
       gradient: const RadialGradient(
-        center: Alignment(-0.3, -0.4),
-        colors: [Color(0xFF2A3160), AstraColors.inkRaised],
+        center: Alignment(-0.35, -0.45),
+        radius: 0.95,
+        colors: [Colors.white, AstraColors.auraTop],
       ),
+      boxShadow: AstraColors.liftedShadow,
     ),
     child: Text(
       story.intention.glyph,
@@ -207,7 +211,7 @@ class _Transport extends StatelessWidget {
   @override
   Widget build(BuildContext context) => DecoratedBox(
     decoration: const BoxDecoration(
-      color: AstraColors.inkRaised,
+      color: AstraColors.canvasRaised,
       border: Border(top: BorderSide(color: AstraColors.line)),
     ),
     child: Padding(
@@ -219,10 +223,10 @@ class _Transport extends StatelessWidget {
           SliderTheme(
             data: SliderTheme.of(context).copyWith(
               trackHeight: 3,
-              activeTrackColor: AstraColors.gold,
+              activeTrackColor: AstraColors.accent,
               inactiveTrackColor: AstraColors.line,
-              thumbColor: AstraColors.gold,
-              overlayColor: AstraColors.gold.withValues(alpha: 0.12),
+              thumbColor: AstraColors.accent,
+              overlayColor: AstraColors.accent.withValues(alpha: 0.12),
               thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
             ),
             child: Slider(
@@ -330,16 +334,16 @@ class _IconToggle extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: active
-                ? AstraColors.gold.withValues(alpha: 0.16)
+                ? AstraColors.accent.withValues(alpha: 0.16)
                 : Colors.transparent,
             border: Border.all(
-              color: active ? AstraColors.gold : Colors.transparent,
+              color: active ? AstraColors.accent : Colors.transparent,
             ),
           ),
           child: Icon(
             icon,
             size: 21,
-            color: active ? AstraColors.gold : AstraColors.dim,
+            color: active ? AstraColors.accent : AstraColors.dim,
           ),
         ),
       ),
@@ -369,16 +373,16 @@ class _SpeedButton extends StatelessWidget {
           shape: BoxShape.circle,
           color: speed == 1.0
               ? Colors.transparent
-              : AstraColors.gold.withValues(alpha: 0.16),
+              : AstraColors.accent.withValues(alpha: 0.16),
           border: Border.all(
-            color: speed == 1.0 ? Colors.transparent : AstraColors.gold,
+            color: speed == 1.0 ? Colors.transparent : AstraColors.accent,
           ),
         ),
         child: Text(
           _rate(speed),
           style: AstraTextStyles.label.copyWith(
             fontSize: 13,
-            color: speed == 1.0 ? AstraColors.dim : AstraColors.gold,
+            color: speed == 1.0 ? AstraColors.dim : AstraColors.accent,
           ),
         ),
       ),
@@ -422,7 +426,7 @@ class _PlayButton extends StatelessWidget {
           alignment: Alignment.center,
           decoration: const BoxDecoration(
             shape: BoxShape.circle,
-            gradient: AstraColors.goldGradient,
+            gradient: AstraColors.accentGradient,
           ),
           child: recording
               ? const SizedBox(
@@ -430,13 +434,13 @@ class _PlayButton extends StatelessWidget {
                   height: 22,
                   child: CircularProgressIndicator(
                     strokeWidth: 2.4,
-                    color: Color(0xFF14101F),
+                    color: AstraColors.onAccent,
                   ),
                 )
               : Icon(
                   playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
                   size: 30,
-                  color: const Color(0xFF14101F),
+                  color: AstraColors.onAccent,
                 ),
         ),
       ),
@@ -470,7 +474,7 @@ class _ControlButton extends StatelessWidget {
           color: AstraColors.cardRaised,
           border: Border.all(color: AstraColors.line),
         ),
-        child: Icon(icon, size: 21, color: AstraColors.gold),
+        child: Icon(icon, size: 21, color: AstraColors.accent),
       ),
     ),
   );
@@ -508,7 +512,7 @@ class _Waveform extends StatelessWidget {
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: i < litUpTo
-                          ? AstraColors.gold
+                          ? AstraColors.accent
                           : AstraColors.violet.withValues(alpha: 0.42),
                       borderRadius: BorderRadius.circular(2),
                     ),

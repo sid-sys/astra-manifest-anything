@@ -142,7 +142,7 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                   const Icon(
                     Icons.play_circle_outline_rounded,
-                    color: AstraColors.gold,
+                    color: AstraColors.accent,
                     size: 24,
                   ),
                 ],
@@ -175,7 +175,7 @@ class ProfileScreen extends ConsumerWidget {
                     icon: const Icon(
                       Icons.favorite,
                       size: 17,
-                      color: AstraColors.gold,
+                      color: AstraColors.accent,
                     ),
                     tooltip: 'Remove',
                     onPressed: () =>
@@ -299,7 +299,7 @@ Future<void> editIntentions(BuildContext context, WidgetRef ref) async {
 
   final saved = await showModalBottomSheet<bool>(
     context: context,
-    backgroundColor: AstraColors.inkRaised,
+    backgroundColor: AstraColors.canvasRaised,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
     ),

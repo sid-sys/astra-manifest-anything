@@ -62,16 +62,16 @@ class StreakCard extends StatelessWidget {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AstraColors.gold.withValues(alpha: 0.10),
+                color: AstraColors.accent.withValues(alpha: 0.10),
                 border: Border.all(
-                  color: AstraColors.gold.withValues(alpha: 0.45),
+                  color: AstraColors.accent.withValues(alpha: 0.45),
                   width: 2,
                 ),
               ),
               child: const Icon(
                 Icons.local_fire_department_rounded,
                 size: 42,
-                color: AstraColors.gold,
+                color: AstraColors.accent,
               ),
             ),
             const SizedBox(height: AstraSpacing.md),
@@ -133,10 +133,10 @@ class _DayDot extends StatelessWidget {
   Widget build(BuildContext context) {
     final (background, border, icon, iconColor) = switch ((done, missed)) {
       (true, _) => (
-        AstraColors.gold.withValues(alpha: 0.14),
-        AstraColors.gold,
+        AstraColors.accent.withValues(alpha: 0.14),
+        AstraColors.accent,
         Icons.local_fire_department_rounded,
-        AstraColors.gold,
+        AstraColors.accent,
       ),
       (false, true) => (
         Colors.transparent,
@@ -168,7 +168,7 @@ class _DayDot extends StatelessWidget {
               shape: BoxShape.circle,
               color: background,
               border: Border.all(
-                color: isToday && !done ? AstraColors.gold : border,
+                color: isToday && !done ? AstraColors.accent : border,
                 width: isToday ? 1.6 : 1,
               ),
             ),

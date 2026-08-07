@@ -325,7 +325,7 @@ class _HeaderIcon extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: AstraColors.card,
-            border: Border.all(color: AstraColors.line),
+            boxShadow: AstraColors.softShadow,
           ),
           child: Icon(icon, size: 16, color: AstraColors.text),
         ),
@@ -346,18 +346,17 @@ class _Question extends StatelessWidget {
   Widget build(BuildContext context) => Text.rich(
     TextSpan(
       children: [
-        TextSpan(text: name.isEmpty ? 'What do you want to ' : '$name, what do you want to '),
         TextSpan(
-          text: 'manifest',
-          style: AstraTextStyles.display(
-            26,
-          ).copyWith(fontStyle: FontStyle.italic, color: AstraColors.gold),
+          text: name.isEmpty
+              ? 'What do you want to '
+              : '$name, what do you want to ',
         ),
+        TextSpan(text: 'manifest', style: AstraTextStyles.displayItalic(30)),
         const TextSpan(text: '?'),
       ],
     ),
     textAlign: TextAlign.center,
-    style: AstraTextStyles.display(26),
+    style: AstraTextStyles.display(30),
   );
 }
 
@@ -392,7 +391,7 @@ class _WishBarState extends State<_WishBar> {
       padding: const EdgeInsets.fromLTRB(18, 6, 6, 6),
       decoration: BoxDecoration(
         color: AstraColors.card,
-        border: Border.all(color: AstraColors.line),
+        boxShadow: AstraColors.softShadow,
         borderRadius: BorderRadius.circular(AstraSpacing.pillRadius),
       ),
       child: Row(
@@ -401,7 +400,7 @@ class _WishBarState extends State<_WishBar> {
             child: TextField(
               controller: widget.controller,
               style: AstraTextStyles.body,
-              cursorColor: AstraColors.gold,
+              cursorColor: AstraColors.accent,
               minLines: 1,
               maxLines: 3,
               textInputAction: TextInputAction.send,
@@ -434,7 +433,7 @@ class _WishBarState extends State<_WishBar> {
                   alignment: Alignment.center,
                   decoration: const BoxDecoration(
                     shape: BoxShape.circle,
-                    gradient: AstraColors.goldGradient,
+                    gradient: AstraColors.accentGradient,
                   ),
                   child: widget.busy
                       ? const SizedBox(
@@ -442,13 +441,13 @@ class _WishBarState extends State<_WishBar> {
                           height: 18,
                           child: CircularProgressIndicator(
                             strokeWidth: 2.2,
-                            color: Color(0xFF14101F),
+                            color: AstraColors.onAccent,
                           ),
                         )
                       : const Icon(
                           Icons.arrow_upward_rounded,
                           size: 20,
-                          color: Color(0xFF14101F),
+                          color: AstraColors.onAccent,
                         ),
                 ),
               ),
@@ -483,13 +482,13 @@ class _PillButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: AstraColors.card,
-          border: Border.all(color: AstraColors.line),
+          boxShadow: AstraColors.softShadow,
           borderRadius: BorderRadius.circular(AstraSpacing.pillRadius),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: AstraColors.gold),
+            Icon(icon, size: 14, color: AstraColors.accent),
             const SizedBox(width: 6),
             Text(
               label,
@@ -558,7 +557,7 @@ class _StoryCard extends StatelessWidget {
                         const Icon(
                           Icons.favorite,
                           size: 13,
-                          color: AstraColors.gold,
+                          color: AstraColors.accent,
                         ),
                     ],
                   ),
@@ -575,7 +574,7 @@ class _StoryCard extends StatelessWidget {
                       const Icon(
                         Icons.play_circle_fill_rounded,
                         size: 26,
-                        color: AstraColors.gold,
+                        color: AstraColors.accent,
                       ),
                       const SizedBox(width: 8),
                       Text('Listen', style: AstraTextStyles.small),
@@ -609,7 +608,7 @@ class _SeeAllCard extends StatelessWidget {
         child: Ink(
           decoration: BoxDecoration(
             color: AstraColors.card,
-            border: Border.all(color: AstraColors.line),
+            boxShadow: AstraColors.softShadow,
             borderRadius: BorderRadius.circular(18),
           ),
           child: Column(
@@ -617,7 +616,7 @@ class _SeeAllCard extends StatelessWidget {
             children: [
               const Icon(
                 Icons.library_music_outlined,
-                color: AstraColors.gold,
+                color: AstraColors.accent,
                 size: 24,
               ),
               const SizedBox(height: AstraSpacing.sm),

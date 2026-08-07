@@ -6,7 +6,7 @@ import 'screens/auth_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/shell_screen.dart';
 import 'theme/astra_theme.dart';
-import 'widgets/starfield.dart';
+import 'widgets/aura_background.dart';
 
 /// Which of the three screens the app opens on.
 ///
@@ -56,14 +56,14 @@ class _Waiting extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const Scaffold(
-    body: Starfield(
+    body: AuraBackground(
       child: Center(
         child: SizedBox(
           width: 26,
           height: 26,
           child: CircularProgressIndicator(
             strokeWidth: 2.2,
-            color: AstraColors.gold,
+            color: AstraColors.accent,
           ),
         ),
       ),

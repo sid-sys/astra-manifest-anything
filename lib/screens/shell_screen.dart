@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers.dart';
 import '../theme/astra_theme.dart';
-import '../widgets/starfield.dart';
+import '../widgets/aura_background.dart';
 import 'affirmations_screen.dart';
 import 'create_screen.dart';
 import 'home_screen.dart';
@@ -72,7 +72,7 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
     ];
 
     return Scaffold(
-      body: Starfield(
+      body: AuraBackground(
         child: SafeArea(
           bottom: false,
           child: IndexedStack(index: _tab, children: screens),
@@ -82,14 +82,17 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           DecoratedBox(
-            decoration: const BoxDecoration(
-              color: AstraColors.inkRaised,
-              border: Border(top: BorderSide(color: AstraColors.line)),
+            // White, floating on the wash by shadow rather than divided from
+            // it by a rule. A hairline across the bottom of a gradient reads
+            // as a seam.
+            decoration: BoxDecoration(
+              color: AstraColors.card,
+              boxShadow: AstraColors.liftedShadow,
             ),
             child: NavigationBarTheme(
               data: NavigationBarThemeData(
                 backgroundColor: Colors.transparent,
-                indicatorColor: AstraColors.gold.withValues(alpha: 0.12),
+                indicatorColor: AstraColors.accent.withValues(alpha: 0.12),
                 labelTextStyle: WidgetStateProperty.resolveWith(
                   (states) => TextStyle(
                     fontSize: 10.5,
@@ -98,7 +101,7 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                         ? FontWeight.w600
                         : FontWeight.w400,
                     color: states.contains(WidgetState.selected)
-                        ? AstraColors.gold
+                        ? AstraColors.accent
                         : AstraColors.dim,
                   ),
                 ),
@@ -106,7 +109,7 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
                   (states) => IconThemeData(
                     size: 21,
                     color: states.contains(WidgetState.selected)
-                        ? AstraColors.gold
+                        ? AstraColors.accent
                         : AstraColors.dim,
                   ),
                 ),

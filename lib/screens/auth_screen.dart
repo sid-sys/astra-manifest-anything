@@ -5,7 +5,7 @@ import '../providers.dart';
 import '../services/auth_service.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
-import '../widgets/starfield.dart';
+import '../widgets/aura_background.dart';
 import 'forgot_password_screen.dart';
 
 /// The door.
@@ -104,7 +104,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     final auth = ref.read(authServiceProvider);
 
     return Scaffold(
-      body: Starfield(
+      body: AuraBackground(
         child: SafeArea(
           child: Padding(
             padding: AstraSpacing.screenPadding,
@@ -206,7 +206,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       child: Text(
                         'Forgot password?',
                         style: AstraTextStyles.small.copyWith(
-                          color: AstraColors.gold,
+                          color: AstraColors.accent,
                         ),
                       ),
                     ),
@@ -279,7 +279,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                           TextSpan(
                             text: _creating ? 'Log in' : 'Make one',
                             style: AstraTextStyles.small.copyWith(
-                              color: AstraColors.gold,
+                              color: AstraColors.accent,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -338,7 +338,7 @@ class _Field extends StatelessWidget {
         autocorrect: false,
         enableSuggestions: false,
         style: AstraTextStyles.body,
-        cursorColor: AstraColors.gold,
+        cursorColor: AstraColors.accent,
         onChanged: (_) => onChanged(),
         onSubmitted: onSubmitted == null ? null : (_) => onSubmitted!(),
         decoration: InputDecoration(
@@ -355,7 +355,7 @@ class _Field extends StatelessWidget {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(AstraSpacing.cardRadius),
-            borderSide: const BorderSide(color: AstraColors.gold),
+            borderSide: const BorderSide(color: AstraColors.accent),
           ),
         ),
       ),

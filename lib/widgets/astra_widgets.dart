@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 import '../theme/astra_theme.dart';
 
 /// The wordmark, used as a lightweight screen header.
+///
+/// Set in the headline serif at its natural case. It used to be tracked-out
+/// small caps, which is how you set a *label*; a product's name is set like a
+/// name.
 class Wordmark extends StatelessWidget {
   const Wordmark(this.text, {super.key, this.align = TextAlign.center});
 
@@ -12,11 +16,7 @@ class Wordmark extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SizedBox(
     width: double.infinity,
-    child: Text(
-      text.toUpperCase(),
-      textAlign: align,
-      style: AstraTextStyles.wordmark,
-    ),
+    child: Text(text, textAlign: align, style: AstraTextStyles.wordmark),
   );
 }
 
@@ -44,17 +44,14 @@ class AstraCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // White paper on a coloured wash. Borders are opt-in now rather than
+    // default: on a gradient, an outlined box reads as a hole cut in the
+    // background, while a shadow reads as something resting on it.
     final decoration = BoxDecoration(
-      color: raised ? null : AstraColors.card,
-      gradient: raised
-          ? const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [AstraColors.cardRaised, AstraColors.card],
-            )
-          : null,
-      border: Border.all(color: borderColor ?? AstraColors.line),
+      color: raised ? AstraColors.cardRaised : AstraColors.card,
+      border: borderColor == null ? null : Border.all(color: borderColor!, width: 1.5),
       borderRadius: BorderRadius.circular(AstraSpacing.cardRadius),
+      boxShadow: raised ? AstraColors.liftedShadow : AstraColors.softShadow,
     );
 
     final content = Padding(padding: padding, child: child);
@@ -74,7 +71,7 @@ class AstraCard extends StatelessWidget {
   }
 }
 
-/// Primary action. Gold, pill-shaped, one per screen.
+/// Primary action. Aubergine, pill-shaped, one per screen.
 class AstraButton extends StatelessWidget {
   const AstraButton({
     super.key,
@@ -106,11 +103,12 @@ class AstraButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(AstraSpacing.pillRadius),
             child: Ink(
               decoration: BoxDecoration(
-                gradient: AstraColors.goldGradient,
+                gradient: AstraColors.accentGradient,
                 borderRadius: BorderRadius.circular(AstraSpacing.pillRadius),
+                boxShadow: enabled ? AstraColors.liftedShadow : null,
               ),
               child: Container(
-                height: 50,
+                height: 54,
                 alignment: Alignment.center,
                 child: busy
                     ? const SizedBox(
@@ -118,22 +116,24 @@ class AstraButton extends StatelessWidget {
                         height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2.2,
-                          color: Color(0xFF14101F),
+                          color: AstraColors.onAccent,
                         ),
                       )
                     : Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           if (icon != null) ...[
-                            Icon(icon, size: 18, color: const Color(0xFF14101F)),
+                            const SizedBox(width: 2),
+                            Icon(icon, size: 18, color: AstraColors.onAccent),
                             const SizedBox(width: 8),
                           ],
                           Text(
                             label,
-                            style: const TextStyle(
-                              color: Color(0xFF14101F),
+                            style: TextStyle(
+                              color: AstraColors.onAccent,
                               fontWeight: FontWeight.w600,
                               fontSize: 15,
+                              letterSpacing: 0.1,
                             ),
                           ),
                         ],
@@ -165,13 +165,17 @@ class AstraGhostButton extends StatelessWidget {
       onTap: onPressed,
       borderRadius: BorderRadius.circular(AstraSpacing.pillRadius),
       child: Container(
-        height: 46,
+        height: 50,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          border: Border.all(color: AstraColors.line),
+          color: AstraColors.card,
           borderRadius: BorderRadius.circular(AstraSpacing.pillRadius),
+          boxShadow: AstraColors.softShadow,
         ),
-        child: Text(label, style: AstraTextStyles.bodyDim),
+        child: Text(
+          label,
+          style: AstraTextStyles.body.copyWith(fontWeight: FontWeight.w500),
+        ),
       ),
     ),
   );
@@ -194,22 +198,26 @@ class TagChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = accent ?? AstraColors.gold;
+    final color = accent ?? AstraColors.accent;
 
+    // Unselected chips are white paper, not outlines. On the wash a row of
+    // outlined pills disappears; a row of little white tablets does not, and
+    // selection then only has to change one thing — the fill — rather than
+    // inventing contrast the resting state never had.
     final pill = AnimatedContainer(
       duration: const Duration(milliseconds: 160),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
       decoration: BoxDecoration(
-        color: selected ? color.withValues(alpha: 0.09) : Colors.transparent,
-        border: Border.all(color: selected ? color : AstraColors.line),
+        color: selected ? color : AstraColors.card,
         borderRadius: BorderRadius.circular(AstraSpacing.pillRadius),
+        boxShadow: AstraColors.softShadow,
       ),
       child: Text(
         label,
         style: TextStyle(
           fontSize: 12.5,
-          color: selected ? color : AstraColors.dim,
-          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+          color: selected ? AstraColors.onAccent : AstraColors.text,
+          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
         ),
       ),
     );
@@ -242,7 +250,7 @@ class AstraProgressBar extends StatelessWidget {
       value: value.clamp(0.0, 1.0),
       minHeight: height,
       backgroundColor: AstraColors.line,
-      valueColor: const AlwaysStoppedAnimation(AstraColors.gold),
+      valueColor: const AlwaysStoppedAnimation(AstraColors.accent),
     ),
   );
 }
@@ -253,7 +261,7 @@ class GlyphDot extends StatelessWidget {
     super.key,
     required this.glyph,
     this.size = 38,
-    this.color = AstraColors.gold,
+    this.color = AstraColors.accent,
     this.background,
   });
 
@@ -268,9 +276,9 @@ class GlyphDot extends StatelessWidget {
     height: size,
     alignment: Alignment.center,
     decoration: BoxDecoration(
-      color: background ?? AstraColors.cardRaised,
+      color: background ?? AstraColors.card,
       shape: BoxShape.circle,
-      border: Border.all(color: AstraColors.line),
+      boxShadow: AstraColors.softShadow,
     ),
     child: Text(
       glyph,

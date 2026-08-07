@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
-import '../widgets/starfield.dart';
+import '../widgets/aura_background.dart';
 
 /// What the user is about to do, and how hard it should be to do by accident.
 enum ConfirmKind {
@@ -94,7 +94,7 @@ class _ConfirmScreenState extends ConsumerState<ConfirmScreen> {
     final isGuest = ref.watch(isGuestProvider);
 
     return Scaffold(
-      body: Starfield(
+      body: AuraBackground(
         child: SafeArea(
           child: Padding(
             padding: AstraSpacing.screenPadding,
@@ -194,7 +194,7 @@ class _ConfirmScreenState extends ConsumerState<ConfirmScreen> {
                     textCapitalization: TextCapitalization.characters,
                     inputFormatters: [LengthLimitingTextInputFormatter(12)],
                     style: AstraTextStyles.body,
-                    cursorColor: AstraColors.gold,
+                    cursorColor: AstraColors.accent,
                     onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(
                       hintText: _phrase,
@@ -211,7 +211,7 @@ class _ConfirmScreenState extends ConsumerState<ConfirmScreen> {
                         borderRadius: BorderRadius.circular(
                           AstraSpacing.cardRadius,
                         ),
-                        borderSide: const BorderSide(color: AstraColors.gold),
+                        borderSide: const BorderSide(color: AstraColors.accent),
                       ),
                     ),
                   ),

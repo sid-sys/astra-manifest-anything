@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/astra_theme.dart';
-import '../widgets/starfield.dart';
+import '../widgets/aura_background.dart';
 
 /// Shown while a story is being written and narrated.
 ///
@@ -19,7 +19,7 @@ class GeneratingScreen extends StatelessWidget {
     // out and a story to lose.
     canPop: false,
     child: Scaffold(
-      body: Starfield(
+      body: AuraBackground(
         child: SafeArea(
           child: Center(
             child: Padding(
@@ -32,7 +32,7 @@ class GeneratingScreen extends StatelessWidget {
                     height: 44,
                     child: CircularProgressIndicator(
                       strokeWidth: 2.4,
-                      color: AstraColors.gold,
+                      color: AstraColors.accent,
                     ),
                   ),
                   const SizedBox(height: AstraSpacing.xl),

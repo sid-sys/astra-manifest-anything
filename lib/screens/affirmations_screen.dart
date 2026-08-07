@@ -96,7 +96,7 @@ class _AffirmationsScreenState extends ConsumerState<AffirmationsScreen>
                 const SizedBox(width: AstraSpacing.xl),
                 _DecisionButton(
                   icon: Icons.favorite_rounded,
-                  color: AstraColors.gold,
+                  color: AstraColors.accent,
                   tooltip: 'Keep',
                   onTap: () => _decide(deck.first.line, liked: true),
                 ),
@@ -191,7 +191,7 @@ class _Card extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent = switch (verdict) {
-      _Verdict.keep => AstraColors.gold,
+      _Verdict.keep => AstraColors.accent,
       _Verdict.pass => AstraColors.dim,
       null => card.intention.accent.withValues(alpha: 0.35),
     };
@@ -228,7 +228,7 @@ class _Card extends StatelessWidget {
                         verdict == _Verdict.keep ? 'KEEP' : 'PASS',
                         style: AstraTextStyles.eyebrow.copyWith(
                           color: verdict == _Verdict.keep
-                              ? AstraColors.gold
+                              ? AstraColors.accent
                               : AstraColors.dim,
                           fontSize: 15,
                         ),
@@ -271,7 +271,7 @@ class _DeckEmpty extends StatelessWidget {
     child: Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text('✦', style: TextStyle(fontSize: 34, color: AstraColors.gold)),
+        Text('✦', style: TextStyle(fontSize: 34, color: AstraColors.accent)),
         const SizedBox(height: AstraSpacing.lg),
         Text(
           kept == 0 ? 'Nothing kept yet' : 'You have been through them all',

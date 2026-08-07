@@ -5,7 +5,7 @@ import '../providers.dart';
 import '../services/auth_service.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
-import '../widgets/starfield.dart';
+import '../widgets/aura_background.dart';
 
 /// Sends the reset link, then says so without saying too much.
 ///
@@ -69,7 +69,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    body: Starfield(
+    body: AuraBackground(
       child: SafeArea(
         child: Padding(
           padding: AstraSpacing.screenPadding,
@@ -114,7 +114,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                   enableSuggestions: false,
                   autofillHints: const [AutofillHints.email],
                   style: AstraTextStyles.body,
-                  cursorColor: AstraColors.gold,
+                  cursorColor: AstraColors.accent,
                   onChanged: (_) => setState(() {}),
                   onSubmitted: (_) => _send(),
                   decoration: InputDecoration(
@@ -138,7 +138,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                       borderRadius: BorderRadius.circular(
                         AstraSpacing.cardRadius,
                       ),
-                      borderSide: const BorderSide(color: AstraColors.gold),
+                      borderSide: const BorderSide(color: AstraColors.accent),
                     ),
                   ),
                 ),

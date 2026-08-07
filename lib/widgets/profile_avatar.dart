@@ -82,7 +82,7 @@ class _ProfileAvatarState extends ConsumerState<ProfileAvatar> {
                   shape: BoxShape.circle,
                   color: AstraColors.cardRaised,
                   border: Border.all(
-                    color: AstraColors.gold.withValues(alpha: 0.5),
+                    color: AstraColors.accent.withValues(alpha: 0.5),
                     width: 1.5,
                   ),
                 ),
@@ -91,7 +91,7 @@ class _ProfileAvatarState extends ConsumerState<ProfileAvatar> {
                         initial,
                         style: AstraTextStyles.display(
                           widget.size * 0.38,
-                          color: AstraColors.gold,
+                          color: AstraColors.accent,
                         ),
                       )
                     : Image.memory(
@@ -111,7 +111,7 @@ class _ProfileAvatarState extends ConsumerState<ProfileAvatar> {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: AstraColors.inkRaised,
+                    color: AstraColors.canvasRaised,
                     border: Border.all(color: AstraColors.line),
                   ),
                   child: _picking
@@ -120,13 +120,13 @@ class _ProfileAvatarState extends ConsumerState<ProfileAvatar> {
                           height: badge * 0.42,
                           child: const CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: AstraColors.gold,
+                            color: AstraColors.accent,
                           ),
                         )
                       : Icon(
                           Icons.photo_camera_rounded,
                           size: badge * 0.52,
-                          color: AstraColors.gold,
+                          color: AstraColors.accent,
                         ),
                 ),
               ),

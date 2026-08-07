@@ -7,7 +7,7 @@ import '../providers.dart';
 import '../services/wish_prompts.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
-import '../widgets/starfield.dart';
+import '../widgets/aura_background.dart';
 import 'story_flow.dart';
 
 /// Where a story gets made.
@@ -183,7 +183,7 @@ class WishField extends StatelessWidget {
                   child: Icon(
                     Icons.refresh_rounded,
                     size: 18,
-                    color: AstraColors.gold,
+                    color: AstraColors.accent,
                   ),
                 ),
               ),
@@ -195,7 +195,7 @@ class WishField extends StatelessWidget {
           minLines: 2,
           maxLines: 4,
           style: AstraTextStyles.body,
-          cursorColor: AstraColors.gold,
+          cursorColor: AstraColors.accent,
           decoration: InputDecoration(
             border: InputBorder.none,
             isDense: true,
@@ -214,7 +214,7 @@ class CreateRoute extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    body: Starfield(
+    body: AuraBackground(
       child: SafeArea(
         child: Column(
           children: [
