@@ -54,10 +54,39 @@ class TrendingManifestations {
       'I want to stop checking my balance before I buy food',
       Intention.abundance,
     ),
-    TrendingWish('Marry her', 'I want to marry her', Intention.love),
+    TrendingWish(
+      '\$10k a month',
+      'I want to be earning \$10,000 every month from my own work',
+      Intention.abundance,
+    ),
+    TrendingWish(
+      'The first big client',
+      'I want to sign a client who pays six figures a year',
+      Intention.abundance,
+    ),
+    TrendingWish(
+      'Marry the one I love',
+      'I want to marry the person I love',
+      Intention.love,
+    ),
     TrendingWish(
       'Glad I came home',
       'I want someone who is glad I came home',
+      Intention.love,
+    ),
+    TrendingWish(
+      'They come back',
+      'I want the person I miss to reach out first',
+      Intention.love,
+    ),
+    TrendingWish(
+      'Chosen out loud',
+      'I want to be chosen in front of everyone, not in private',
+      Intention.love,
+    ),
+    TrendingWish(
+      'A wedding in December',
+      'I want us engaged by December and married the year after',
       Intention.love,
     ),
     TrendingWish(

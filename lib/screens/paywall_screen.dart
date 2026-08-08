@@ -29,10 +29,13 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     final selected = _chosen ??
         plans.firstWhere((p) => p.popular, orElse: () => plans.first);
 
-    // The same screen is shown once after onboarding and again when the free
-    // day runs out. Announcing a day that is already spent would read as a
-    // bait, so the headline follows the clock.
-    final trialSpent = !ref.watch(profileProvider).trialActive;
+    final profile = ref.watch(profileProvider);
+
+    // Three states, not two: the free day is on offer, running, or spent.
+    // Announcing a day that is already gone reads as bait, and announcing one
+    // that is already running reads as an app that lost count.
+    final trialOffered = !profile.trialStarted;
+    final trialSpent = profile.trialStarted && !profile.trialActive;
 
     return Scaffold(
       body: AuraBackground(
@@ -48,16 +51,21 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                 Text(
                   trialSpent
                       ? "You've had your free day. No card asked for, as promised."
-                      : 'Your first day is free.',
+                      : trialOffered
+                          ? 'Take a free day first.'
+                          : 'Your free day is running.',
                   style: AstraTextStyles.display(26),
                 ),
                 const SizedBox(height: AstraSpacing.sm),
                 Text(
                   trialSpent
                       ? 'Pick a plan to keep writing them.'
-                      : 'Two stories, today, without paying anything. Start '
-                            'a plan whenever you are ready — or skip this and '
-                            'go straight to your first story.',
+                      : trialOffered
+                          ? '${PricingCatalog.trialStories} more stories over '
+                                'the next 24 hours, free, with no card and no '
+                                'account. The day only starts when you say so.'
+                          : '${_hoursLeft(profile.trialRemaining)} left on your '
+                                'free day.',
                   style: AstraTextStyles.bodyDim,
                 ),
                 const SizedBox(height: AstraSpacing.xl),
@@ -92,8 +100,24 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                 AstraGhostButton(
                   // The way out is always visible, and it is worded as the
                   // thing the user actually gets rather than as a refusal.
-                  label: trialSpent ? 'Keep the free plan' : 'Start my free day',
-                  onPressed: () => Navigator.of(context).pop(false),
+                  //
+                  // When the free day is still on offer this is the button
+                  // most people should press, and pressing it returns true —
+                  // it unlocks the generation they were trying to start, so
+                  // starting the trial and using it are one tap, not two.
+                  label: trialOffered
+                      ? 'Start my free day'
+                      : trialSpent
+                          ? 'Maybe later'
+                          : 'Keep going on my free day',
+                  onPressed: () async {
+                    if (trialOffered) {
+                      await ref.read(profileProvider.notifier).startTrial();
+                    }
+                    if (context.mounted) {
+                      Navigator.of(context).pop(trialOffered || !trialSpent);
+                    }
+                  },
                 ),
                 const SizedBox(height: AstraSpacing.lg),
               ],
@@ -103,6 +127,16 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
       ),
     );
   }
+}
+
+/// "18 hours" / "40 minutes" — whichever is the honest unit for what is left.
+String _hoursLeft(Duration remaining) {
+  if (remaining.inHours >= 1) {
+    final hours = remaining.inHours;
+    return '$hours ${hours == 1 ? 'hour' : 'hours'}';
+  }
+  final minutes = remaining.inMinutes;
+  return '$minutes ${minutes == 1 ? 'minute' : 'minutes'}';
 }
 
 class _PlanTile extends StatelessWidget {

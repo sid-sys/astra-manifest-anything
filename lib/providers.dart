@@ -99,8 +99,10 @@ class StoryComposer {
           scene: scene,
         );
 
+    // The trial clock is not touched here. Generating used to start it, which
+    // meant the free first story silently spent the free day it was supposed
+    // to precede.
     await _ref.read(storiesProvider.notifier).add(story);
-    await _ref.read(profileProvider.notifier).noteTrialStarted();
     return story;
   }
 
@@ -137,11 +139,13 @@ class ProfileNotifier extends StateNotifier<UserProfile> {
     await _repository.saveProfile(profile);
   }
 
-  /// Starts the free-day clock locally on the first successful generation.
+  /// Starts the free day, on purpose, from the paywall.
   ///
-  /// The server stamps its own copy and is the one that counts; this only keeps
-  /// the on-screen copy honest between launches.
-  Future<void> noteTrialStarted() async {
+  /// Written through [update], so it lands in the mirrored profile document
+  /// that the generator reads — the server checks that copy, not this one, and
+  /// still holds the clock. A device that rewinds its own storage gets nothing
+  /// back but a shorter day.
+  Future<void> startTrial() async {
     if (state.trialStartedAt != null) return;
     await update(state.copyWith(trialStartedAt: DateTime.now()));
   }
@@ -384,7 +388,117 @@ final weekActivityProvider = Provider<List<bool>>((ref) {
   ];
 });
 
-final minutesListenedProvider = Provider<int>((ref) {
+// -------------------------------------------------------------------- usage
+
+/// What the user has spent this month, and what they have left.
+///
+/// This existed nowhere before: the server enforced a quota the app never
+/// showed, so the first time anyone learned there was a limit was the moment
+/// they hit it. A limit worth enforcing is worth displaying.
+class Usage {
+  const Usage({
+    required this.storiesThisMonth,
+    required this.limit,
+    required this.plan,
+    required this.detail,
+  });
+
+  final int storiesThisMonth;
+
+  /// Null when there is no monthly cap to speak of — the free tier is bounded
+  /// by the trial clock, not by a month.
+  final int? limit;
+
+  /// 'Astra Plus', 'Free day', 'Free'.
+  final String plan;
+
+  /// The sentence under the meter, in whatever unit actually binds.
+  final String detail;
+
+  double get fraction =>
+      limit == null || limit == 0 ? 0 : (storiesThisMonth / limit!).clamp(0, 1);
+}
+
+final usageProvider = Provider<Usage>((ref) {
+  final profile = ref.watch(profileProvider);
+  final stories = ref.watch(storiesProvider);
+
+  final now = DateTime.now();
+  final monthStart = DateTime(now.year, now.month);
+  final thisMonth = stories
+      .where((story) => !story.createdAt.isBefore(monthStart))
+      .length;
+
+  if (profile.isSubscribed) {
+    final left = PricingCatalog.plusMonthlyStories - thisMonth;
+    return Usage(
+      storiesThisMonth: thisMonth,
+      limit: PricingCatalog.plusMonthlyStories,
+      plan: 'Astra Plus',
+      detail: left > 0
+          ? '$left left this month · unlimited listening'
+          : 'Used up for this month · your library still replays',
+    );
+  }
+
+  if (stories.isEmpty) {
+    return const Usage(
+      storiesThisMonth: 0,
+      limit: 1,
+      plan: 'Free',
+      detail: 'Your first story is free — no card, no account',
+    );
+  }
+
+  if (!profile.trialStarted) {
+    return Usage(
+      storiesThisMonth: thisMonth,
+      limit: 1,
+      plan: 'Free',
+      detail: 'Free story used · start your free day for '
+          '${PricingCatalog.trialStories} more',
+    );
+  }
+
+  if (profile.trialActive) {
+    final since = profile.trialStartedAt!;
+    final duringTrial = stories
+        .where((story) => !story.createdAt.isBefore(since))
+        .length;
+    final left = PricingCatalog.trialStories - duringTrial;
+    return Usage(
+      storiesThisMonth: thisMonth,
+      limit: PricingCatalog.trialStories,
+      plan: 'Free day',
+      detail: left > 0
+          ? '$left left, and ${_hoursOf(profile.trialRemaining)} on the clock'
+          : 'Free day used up · your library still replays',
+    );
+  }
+
+  return Usage(
+    storiesThisMonth: thisMonth,
+    limit: null,
+    plan: 'Free',
+    detail: 'Free day finished · Astra Plus writes '
+        '${PricingCatalog.plusMonthlyStories} a month',
+  );
+});
+
+String _hoursOf(Duration remaining) {
+  if (remaining.inHours >= 1) {
+    final hours = remaining.inHours;
+    return '$hours ${hours == 1 ? 'hour' : 'hours'}';
+  }
+  return '${remaining.inMinutes} minutes';
+}
+
+/// Minutes of audio in the library.
+///
+/// Named for what it counts. It was called "minutes listened" and shown under
+/// that label, while actually summing the length of every story whether or not
+/// a second of it had ever been played.
+final minutesInLibraryProvider = Provider<int>((ref) {
   final total = ref
       .watch(storiesProvider)
       .fold<int>(0, (sum, story) => sum + story.duration.inMinutes);

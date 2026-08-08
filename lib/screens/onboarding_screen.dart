@@ -4,13 +4,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/intention.dart';
 import '../models/user_profile.dart';
 import '../providers.dart';
+import '../services/trending_manifestations.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
 import '../widgets/aura_background.dart';
+import 'story_flow.dart';
 
-/// Three questions, then the app. The free-story promise is stated on every
-/// step so nobody hands over personal details without knowing what they get
-/// before any payment screen appears.
+/// Name, then what you are calling in, then the wish — and then the story.
+///
+/// The last step used to save the wish and drop the user on the home screen
+/// with an empty box, so the first thing the app did with the sentence someone
+/// had just typed was forget it. Onboarding now ends in the thing it was
+/// selling: the wish goes straight into a story, free, before any price is
+/// mentioned.
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -22,22 +28,23 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   static const _stepCount = 3;
 
   final _nameController = TextEditingController();
-  final _aspirationController = TextEditingController();
-  final _selected = <Intention>{};
+  final _wishController = TextEditingController();
 
+  Intention? _intention;
   int _step = 0;
+  bool _weaving = false;
 
   @override
   void dispose() {
     _nameController.dispose();
-    _aspirationController.dispose();
+    _wishController.dispose();
     super.dispose();
   }
 
   bool get _canAdvance => switch (_step) {
     0 => _nameController.text.trim().isNotEmpty,
-    1 => _selected.isNotEmpty,
-    _ => true,
+    1 => _intention != null,
+    _ => _wishController.text.trim().length > 3 && !_weaving,
   };
 
   Future<void> _advance() async {
@@ -46,12 +53,34 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       return;
     }
 
-    final profile = UserProfile.empty().copyWith(
-      name: _nameController.text.trim(),
-      intentions: _selected,
-      aspiration: _aspirationController.text.trim(),
+    // Captured before the profile is saved: saving flips `isOnboarded`, which
+    // rebuilds the app onto the shell and takes this widget's context with it.
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final intention = _intention ?? Intention.career;
+    final wish = _wishController.text.trim();
+
+    setState(() => _weaving = true);
+
+    await ref
+        .read(profileProvider.notifier)
+        .update(
+          UserProfile.empty().copyWith(
+            name: _nameController.text.trim(),
+            intentions: {intention},
+            // The wish is the profile's aspiration too — it is the one line
+            // that makes every later story sound like this person.
+            aspiration: wish,
+          ),
+        );
+
+    await weaveStory(
+      navigator,
+      messenger,
+      ref,
+      intention: intention,
+      scene: wish,
     );
-    await ref.read(profileProvider.notifier).update(profile);
   }
 
   @override
@@ -75,28 +104,40 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     child: SingleChildScrollView(
                       key: ValueKey(_step),
                       child: switch (_step) {
-                        0 => _NameStep(controller: _nameController,
-                            onChanged: () => setState(() {})),
+                        0 => _NameStep(
+                          controller: _nameController,
+                          onChanged: () => setState(() {}),
+                        ),
                         1 => _IntentionStep(
-                            selected: _selected,
-                            onToggle: (intention) => setState(() {
-                              _selected.contains(intention)
-                                  ? _selected.remove(intention)
-                                  : _selected.add(intention);
-                            }),
-                          ),
-                        _ => _AspirationStep(
-                            controller: _aspirationController,
-                            name: _nameController.text.trim(),
-                          ),
+                          selected: _intention,
+                          onPick: (intention) =>
+                              setState(() => _intention = intention),
+                        ),
+                        _ => _WishStep(
+                          controller: _wishController,
+                          name: _nameController.text.trim(),
+                          intention: _intention ?? Intention.career,
+                          onChanged: () => setState(() {}),
+                        ),
                       },
                     ),
                   ),
                 ),
                 AstraButton(
-                  label: _step == _stepCount - 1 ? 'Begin' : 'Continue',
+                  label: _step == _stepCount - 1
+                      ? 'Write my first story'
+                      : 'Continue',
+                  busy: _weaving,
                   onPressed: _canAdvance ? _advance : null,
                 ),
+                if (_step == _stepCount - 1) ...[
+                  const SizedBox(height: AstraSpacing.sm),
+                  Text(
+                    'Free. No card, no account needed.',
+                    textAlign: TextAlign.center,
+                    style: AstraTextStyles.small,
+                  ),
+                ],
                 const SizedBox(height: AstraSpacing.lg),
               ],
             ),
@@ -117,7 +158,7 @@ class _NameStep extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text('What should Astra call you?', style: AstraTextStyles.display(28)),
+      Text('What should Astra call you?', style: AstraTextStyles.display(30)),
       const SizedBox(height: AstraSpacing.sm),
       Text(
         'Your name is spoken inside your stories, so they land as yours.',
@@ -143,20 +184,26 @@ class _NameStep extends StatelessWidget {
   );
 }
 
+/// One choice, not several.
+///
+/// It used to take a set, which made the next step's examples ambiguous — show
+/// the ones for love, or for money, or a shuffle of both? A single pick makes
+/// the third step obvious, and more intentions can be added later from Edit
+/// desires without anyone having to decide about it here.
 class _IntentionStep extends StatelessWidget {
-  const _IntentionStep({required this.selected, required this.onToggle});
+  const _IntentionStep({required this.selected, required this.onPick});
 
-  final Set<Intention> selected;
-  final ValueChanged<Intention> onToggle;
+  final Intention? selected;
+  final ValueChanged<Intention> onPick;
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text('What are you calling in?', style: AstraTextStyles.display(28)),
+      Text('What are you calling in?', style: AstraTextStyles.display(30)),
       const SizedBox(height: AstraSpacing.sm),
       Text(
-        'Pick what matters most right now. Your stories are written around it.',
+        'Pick the one that matters most right now. You can add more later.',
         style: AstraTextStyles.bodyDim,
       ),
       const SizedBox(height: AstraSpacing.xl),
@@ -167,9 +214,9 @@ class _IntentionStep extends StatelessWidget {
           for (final intention in Intention.values)
             TagChip(
               label: '${intention.glyph}  ${intention.label}',
-              selected: selected.contains(intention),
+              selected: intention == selected,
               accent: intention.accent,
-              onTap: () => onToggle(intention),
+              onTap: () => onPick(intention),
             ),
         ],
       ),
@@ -177,42 +224,125 @@ class _IntentionStep extends StatelessWidget {
   );
 }
 
-class _AspirationStep extends StatelessWidget {
-  const _AspirationStep({required this.controller, required this.name});
+/// The wish, with worked examples for the chosen intention and the one piece
+/// of advice that changes the output more than anything else.
+class _WishStep extends StatelessWidget {
+  const _WishStep({
+    required this.controller,
+    required this.name,
+    required this.intention,
+    required this.onChanged,
+  });
 
   final TextEditingController controller;
   final String name;
+  final Intention intention;
+  final VoidCallback onChanged;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        name.isEmpty ? 'In your own words' : 'In your own words, $name',
-        style: AstraTextStyles.display(28),
-      ),
-      const SizedBox(height: AstraSpacing.sm),
-      Text(
-        'The more specific you are, the more your stories will sound like '
-        'your actual life. You can change this any time.',
-        style: AstraTextStyles.bodyDim,
-      ),
-      const SizedBox(height: AstraSpacing.xl),
-      AstraCard(
-        child: TextField(
-          controller: controller,
-          maxLines: 5,
-          style: AstraTextStyles.body,
-          cursorColor: AstraColors.accent,
-          decoration: InputDecoration(
-            border: InputBorder.none,
-            isDense: true,
-            hintText:
-                'I want to lead my own design studio and feel calm about money…',
-            hintStyle: AstraTextStyles.bodyDim,
+  Widget build(BuildContext context) {
+    final examples = TrendingManifestations.all
+        .where((wish) => wish.intention == intention)
+        .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          name.isEmpty ? 'In your own words' : 'In your own words, $name',
+          style: AstraTextStyles.display(30),
+        ),
+        const SizedBox(height: AstraSpacing.sm),
+        Text(
+          'Say what you want as if it has already happened. This becomes your '
+          'first story.',
+          style: AstraTextStyles.bodyDim,
+        ),
+        const SizedBox(height: AstraSpacing.lg),
+
+        AstraCard(
+          child: TextField(
+            controller: controller,
+            onChanged: (_) => onChanged(),
+            maxLines: 4,
+            style: AstraTextStyles.body,
+            cursorColor: AstraColors.accent,
+            decoration: InputDecoration(
+              border: InputBorder.none,
+              isDense: true,
+              hintText: examples.isEmpty
+                  ? 'I want to lead my own design studio…'
+                  : examples.first.wish,
+              hintStyle: AstraTextStyles.bodyDim,
+            ),
           ),
         ),
-      ),
-    ],
-  );
+        const SizedBox(height: AstraSpacing.md),
+
+        // The single highest-leverage instruction in the app. A generator can
+        // only be as specific as the sentence it was given, and "more money"
+        // produces a story about nothing.
+        AstraCard(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(
+                Icons.lightbulb_outline_rounded,
+                size: 18,
+                color: AstraColors.accent,
+              ),
+              const SizedBox(width: AstraSpacing.md),
+              Expanded(
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'Be specific. ',
+                        style: AstraTextStyles.body.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const TextSpan(
+                        text:
+                            'Amounts, places, names, models, dates. '
+                            '“₹4 lakh a month from my studio in Goa by March” '
+                            'writes a story you can picture. “More money” '
+                            'writes one about nobody.',
+                      ),
+                    ],
+                  ),
+                  style: AstraTextStyles.bodyDim,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        if (examples.isNotEmpty) ...[
+          const SizedBox(height: AstraSpacing.lg),
+          Text(
+            'POPULAR IN ${intention.label.toUpperCase()}',
+            style: AstraTextStyles.eyebrow,
+          ),
+          const SizedBox(height: AstraSpacing.sm),
+          Wrap(
+            spacing: AstraSpacing.sm,
+            runSpacing: AstraSpacing.sm,
+            children: [
+              for (final example in examples)
+                TagChip(
+                  label: example.label,
+                  accent: intention.accent,
+                  selected: controller.text == example.wish,
+                  onTap: () {
+                    controller.text = example.wish;
+                    onChanged();
+                  },
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
 }

@@ -22,6 +22,8 @@ class ProfileScreen extends ConsumerWidget {
     final favouriteStories = ref.watch(favouriteStoriesProvider);
     final keptLines = ref.watch(tasteProvider).liked.toList();
     final practised = ref.watch(daysPractisedThisMonthProvider);
+    final usage = ref.watch(usageProvider);
+    final minutes = ref.watch(minutesInLibraryProvider);
     final daysInMonth = DateUtils.getDaysInMonth(
       DateTime.now().year,
       DateTime.now().month,
@@ -57,11 +59,9 @@ class ProfileScreen extends ConsumerWidget {
           value: profile.intentions.map((i) => i.label).join(', '),
           onTap: () => editIntentions(context, ref),
         ),
-        _SettingRow(
-          label: 'Daily reminder',
-          value: _formatTime(profile.reminderHour, profile.reminderMinute),
-          onTap: () => _pickReminder(context, ref),
-        ),
+        // The plan, what it allows, and how much of it is gone — in one place,
+        // because a quota the app never showed meant the first news of a limit
+        // was being refused by it.
         AstraCard(
           onTap: profile.isSubscribed
               ? null
@@ -70,13 +70,31 @@ class ProfileScreen extends ConsumerWidget {
                       builder: (_) => const PaywallScreen(),
                     ),
                   ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: Text('Subscription', style: AstraTextStyles.body)),
-              TagChip(
-                label: profile.isSubscribed ? 'Plus' : 'Free',
-                selected: profile.isSubscribed,
+              Row(
+                children: [
+                  Expanded(
+                    child: Text('Your plan', style: AstraTextStyles.small),
+                  ),
+                  TagChip(
+                    label: usage.plan,
+                    selected: profile.isSubscribed || profile.trialActive,
+                  ),
+                ],
               ),
+              const SizedBox(height: AstraSpacing.md),
+              if (usage.limit != null) ...[
+                Text(
+                  '${usage.storiesThisMonth} of ${usage.limit} stories written',
+                  style: AstraTextStyles.label,
+                ),
+                const SizedBox(height: AstraSpacing.sm),
+                AstraProgressBar(value: usage.fraction),
+                const SizedBox(height: AstraSpacing.sm),
+              ],
+              Text(usage.detail, style: AstraTextStyles.small),
             ],
           ),
         ),
@@ -91,7 +109,8 @@ class ProfileScreen extends ConsumerWidget {
               AstraProgressBar(value: practised / daysInMonth),
               const SizedBox(height: AstraSpacing.sm),
               Text(
-                '$practised of $daysInMonth days practised',
+                '$practised of $daysInMonth days practised · '
+                '$minutes minutes in your library',
                 style: AstraTextStyles.small,
               ),
             ],
@@ -259,31 +278,6 @@ class ProfileScreen extends ConsumerWidget {
       Navigator.of(context).push(
         MaterialPageRoute<void>(builder: (_) => ConfirmScreen(kind: kind)),
       );
-
-  static String _formatTime(int hour, int minute) {
-    final period = hour >= 12 ? 'PM' : 'AM';
-    final displayHour = hour % 12 == 0 ? 12 : hour % 12;
-    return '$displayHour:${minute.toString().padLeft(2, '0')} $period';
-  }
-
-  Future<void> _pickReminder(BuildContext context, WidgetRef ref) async {
-    final profile = ref.read(profileProvider);
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay(
-        hour: profile.reminderHour,
-        minute: profile.reminderMinute,
-      ),
-    );
-    if (picked == null) return;
-
-    await ref.read(profileProvider.notifier).update(
-          profile.copyWith(
-            reminderHour: picked.hour,
-            reminderMinute: picked.minute,
-          ),
-        );
-  }
 
 }
 

@@ -10,8 +10,6 @@ class UserProfile {
     required this.joinedAt,
     this.isSubscribed = false,
     this.trialStartedAt,
-    this.reminderHour = 21,
-    this.reminderMinute = 0,
     this.paywallSeen = false,
   });
 
@@ -25,11 +23,13 @@ class UserProfile {
   final DateTime joinedAt;
   final bool isSubscribed;
 
-  /// When the free day began, stamped by the server on the first generation.
-  /// Null means the trial has not started yet.
+  /// When the free day began. Null means it has not been started.
+  ///
+  /// The user starts it deliberately, from the paywall. It used to start itself
+  /// on the first generation, which meant the clock was already running before
+  /// anyone had been told there was one — a free day nobody knows about is not
+  /// an offer, it is an expiry.
   final DateTime? trialStartedAt;
-  final int reminderHour;
-  final int reminderMinute;
 
   /// Whether the subscription screen has been shown once after onboarding.
   final bool paywallSeen;
@@ -44,15 +44,33 @@ class UserProfile {
 
   bool get isOnboarded => name.isNotEmpty && intentions.isNotEmpty;
 
+  /// Whether the free day has been started at all.
+  bool get trialStarted => trialStartedAt != null;
+
   /// Whether the free day is still running. Advisory only — the server holds
   /// the authoritative clock, because a limit a device can reset by clearing
   /// its storage is not a limit.
   bool get trialActive {
-    if (trialStartedAt == null) return true;
+    if (trialStartedAt == null) return false;
     return DateTime.now().difference(trialStartedAt!) < const Duration(hours: 24);
   }
 
-  bool get canGenerateFreely => isSubscribed || trialActive;
+  Duration get trialRemaining {
+    if (trialStartedAt == null) return const Duration(hours: 24);
+    final left =
+        const Duration(hours: 24) - DateTime.now().difference(trialStartedAt!);
+    return left.isNegative ? Duration.zero : left;
+  }
+
+  /// Whether a story can be written without paying, given how many have been
+  /// written already.
+  ///
+  /// The first story is free for everyone, with no trial started and no card
+  /// asked for. It is the whole answer to the app this one is modelled on,
+  /// which asks for money before anyone has heard anything — you cannot judge
+  /// a generated story from a description of it.
+  bool canGenerate({required int storiesWritten}) =>
+      isSubscribed || storiesWritten == 0 || trialActive;
 
   UserProfile copyWith({
     String? name,
@@ -61,8 +79,6 @@ class UserProfile {
     String? voice,
     bool? isSubscribed,
     DateTime? trialStartedAt,
-    int? reminderHour,
-    int? reminderMinute,
     bool? paywallSeen,
   }) => UserProfile(
     name: name ?? this.name,
@@ -72,8 +88,6 @@ class UserProfile {
     joinedAt: joinedAt,
     isSubscribed: isSubscribed ?? this.isSubscribed,
     trialStartedAt: trialStartedAt ?? this.trialStartedAt,
-    reminderHour: reminderHour ?? this.reminderHour,
-    reminderMinute: reminderMinute ?? this.reminderMinute,
     paywallSeen: paywallSeen ?? this.paywallSeen,
   );
 
@@ -85,8 +99,6 @@ class UserProfile {
     'joinedAt': joinedAt.toIso8601String(),
     'isSubscribed': isSubscribed,
     'trialStartedAt': trialStartedAt?.toIso8601String(),
-    'reminderHour': reminderHour,
-    'reminderMinute': reminderMinute,
     'paywallSeen': paywallSeen,
   };
 
@@ -101,8 +113,6 @@ class UserProfile {
         DateTime.tryParse(map['joinedAt'] as String? ?? '') ?? DateTime.now(),
     isSubscribed: map['isSubscribed'] as bool? ?? false,
     trialStartedAt: DateTime.tryParse(map['trialStartedAt'] as String? ?? ''),
-    reminderHour: (map['reminderHour'] as num?)?.toInt() ?? 21,
-    reminderMinute: (map['reminderMinute'] as num?)?.toInt() ?? 0,
     paywallSeen: map['paywallSeen'] as bool? ?? false,
   );
 }

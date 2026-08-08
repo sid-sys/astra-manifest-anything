@@ -12,24 +12,31 @@ import 'player_screen.dart';
 
 /// Generates a story and takes the user to it.
 ///
-/// Home and Create both start this, so the waiting screen, the paywall
-/// handoff and the error message are written once. Returns true if a story was
-/// made.
+/// Home, Create and the last step of onboarding all start this, so the waiting
+/// screen, the paywall handoff and the error message are written once. Returns
+/// true if a story was made.
+///
+/// Takes a [navigator] rather than a `BuildContext` because onboarding calls it
+/// across the moment the app decides the user is onboarded: saving the profile
+/// swaps the whole home widget out, so the context that started this is gone
+/// before the story comes back. The navigator outlives that swap; a context
+/// does not.
 Future<bool> weaveStory(
-  BuildContext context,
+  NavigatorState navigator,
+  ScaffoldMessengerState messenger,
   WidgetRef ref, {
   required Intention intention,
   required String scene,
 }) async {
-  final navigator = Navigator.of(context);
-  final messenger = ScaffoldMessenger.of(context);
-
-  // Ask for money before spending a minute of the user's time, not after.
-  if (!ref.read(profileProvider).canGenerateFreely) {
-    final subscribed = await navigator.push<bool>(
+  // Ask for money before spending a minute of the user's time, not after —
+  // and never before they have heard anything at all, which is what the first
+  // free story is for.
+  final written = ref.read(storiesProvider).length;
+  if (!ref.read(profileProvider).canGenerate(storiesWritten: written)) {
+    final unlocked = await navigator.push<bool>(
       MaterialPageRoute(builder: (_) => const PaywallScreen()),
     );
-    if (subscribed != true) return false;
+    if (unlocked != true) return false;
   }
 
   final waiting = MaterialPageRoute<void>(
@@ -47,7 +54,9 @@ Future<bool> weaveStory(
     navigator.removeRoute(waiting);
     ref.read(playbackProvider).load(story);
     unawaited(
-      navigator.push(MaterialPageRoute<void>(builder: (_) => const PlayerScreen())),
+      navigator.push(
+        MaterialPageRoute<void>(builder: (_) => const PlayerScreen()),
+      ),
     );
     unawaited(composer.narrate(story));
     return true;
@@ -55,7 +64,6 @@ Future<bool> weaveStory(
     // The server holds the real clock, so its refusal overrides whatever the
     // local profile believed a moment ago.
     navigator.removeRoute(waiting);
-    await ref.read(profileProvider.notifier).noteTrialOver();
     messenger.showSnackBar(SnackBar(content: Text(error.message)));
     await navigator.push<bool>(
       MaterialPageRoute(builder: (_) => const PaywallScreen()),
@@ -64,7 +72,9 @@ Future<bool> weaveStory(
   } catch (error) {
     navigator.removeRoute(waiting);
     messenger.showSnackBar(
-      SnackBar(content: Text("That story didn't come through. Try again — $error")),
+      SnackBar(
+        content: Text("That story didn't come through. Try again — $error"),
+      ),
     );
     return false;
   }

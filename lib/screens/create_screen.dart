@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/intention.dart';
-import '../models/plan.dart';
 import '../providers.dart';
 import '../services/wish_prompts.dart';
 import '../theme/astra_theme.dart';
@@ -56,7 +55,8 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
     setState(() => _weaving = true);
 
     final made = await weaveStory(
-      context,
+      Navigator.of(context),
+      ScaffoldMessenger.of(context),
       ref,
       intention: _activeIntention,
       scene: _sceneController.text,
@@ -120,11 +120,7 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
 
         const SizedBox(height: AstraSpacing.md),
         Text(
-          profile.canGenerateFreely
-              ? 'Five minutes, written from your own details so it sounds like '
-                  'your life and not a template. Narrated by an AI voice.'
-              : 'Astra Plus writes ${PricingCatalog.plusMonthlyStories} stories a month, and your '
-                  'library replays without limit.',
+          ref.watch(usageProvider).detail,
           style: AstraTextStyles.small,
         ),
         const SizedBox(height: AstraSpacing.xl),

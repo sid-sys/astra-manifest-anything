@@ -117,6 +117,13 @@ class PricingCatalog {
   /// price has to move with it.
   static const plusMonthlyStories = 20;
 
+  /// Stories on the free day, after the free first one.
+  ///
+  /// Mirrors `TRIAL_STORY_LIMIT` in `functions/index.js`. The server is the
+  /// one that enforces it; this exists so the screens can say the number out
+  /// loud instead of letting the user discover it by being refused.
+  static const trialStories = 2;
+
   /// What a subscriber is assumed to actually use in a month.
   ///
   /// A guess, not a measurement — there is no usage data yet. It exists so the

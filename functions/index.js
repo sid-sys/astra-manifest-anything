@@ -152,9 +152,25 @@ Keep the emotional register low and certain. No exclamation, no crescendo, no
 motivational-speaker cadence. The feeling you are aiming for is the quiet
 satisfaction of an ordinary Tuesday in a life that already worked out.
 
-Structure: open with a line that settles the body. Move into the scene. Stay
-inside one moment rather than surveying a whole future. Close by handing the
-feeling back to the listener for the day ahead.
+The wish arrived through something. Give it a door: an email that came in on a
+slow afternoon, a colleague who put my name forward, a stranger at a table who
+turned out to run the company, a message I nearly did not open. Name the
+opening and the moment I said yes to it. "I have ten thousand a month now" is
+not a scene; "the contract was on the table and I heard myself say the number
+without flinching" is. The listener should be able to point at the day it
+turned.
+
+Structure: open with a line that settles the body. Move into the scene, through
+the opening that made it real. Stay inside one moment rather than surveying a
+whole future. Close by handing the feeling back to the listener for the day
+ahead.
+
+Never assign a gender to anyone the listener names. If they mention a person by
+name or initials, that name is all you know — use it as they wrote it, and if
+you need a pronoun for that person, use "they". Guessing wrong about someone's
+partner is the fastest way to break the spell, and there is nothing to gain by
+guessing at all. The same goes for the listener: their own name tells you
+nothing about them, so never write the listener as a man or a woman.
 
 Separate paragraphs with a blank line — each one becomes a spoken beat.
 
@@ -385,21 +401,29 @@ async function storeAudio({ uid, storyId, audio }) {
 /**
  * Enforces the generation quota. Throws if the caller is over it.
  *
- * The trial clock starts on the first generation rather than at signup, and it
- * is stamped here rather than by the client — a free day that a device could
- * reset by clearing its storage is not a limit.
+ * Three tiers, in order: the first story is free for everyone, then a free day
+ * the user starts deliberately, then a subscription. The clock is read from the
+ * user's own document, which only this function and the client's own profile
+ * write to — a device that clears its storage loses its local copy but not the
+ * server's, and the server's is the one this reads.
  */
 async function assertWithinQuota(uid, profile) {
   const userDoc = admin.firestore().collection("users").doc(uid);
   const stories = userDoc.collection("stories");
 
   if (!profile.isSubscribed) {
+    const written = (await stories.count().get()).data().count;
+
+    // The first one is on the house, for everyone, before any clock starts.
+    // Nobody can judge a generated story from a description of it, and this is
+    // the cheapest possible way to let them judge.
+    if (written === 0) return;
+
     if (!profile.trialStartedAt) {
-      await userDoc.set(
-        { trialStartedAt: new Date().toISOString() },
-        { merge: true },
+      throw new HttpsError(
+        "resource-exhausted",
+        "Start your free day to keep writing, or subscribe for the full library.",
       );
-      return;
     }
 
     const startedAt = new Date(profile.trialStartedAt);

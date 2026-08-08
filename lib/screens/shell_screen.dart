@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../providers.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/aura_background.dart';
 import 'affirmations_screen.dart';
 import 'create_screen.dart';
 import 'home_screen.dart';
 import 'library_screen.dart';
-import 'paywall_screen.dart';
 import 'profile_screen.dart';
 
 /// The four-tab frame.
@@ -26,29 +24,11 @@ class ShellScreen extends ConsumerStatefulWidget {
 class _ShellScreenState extends ConsumerState<ShellScreen> {
   int _tab = 0;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _offerPlus());
-  }
-
-  /// Shows the plans once, immediately after onboarding.
-  ///
-  /// It is a route the user can dismiss, not a gate: the free day is the whole
-  /// answer to the complaint that the app it is modelled on asked for money
-  /// before anyone had heard anything. The seen flag is written before the
-  /// screen opens, so a crash or a fast back-press cannot make it reappear.
-  Future<void> _offerPlus() async {
-    final profile = ref.read(profileProvider);
-    if (profile.paywallSeen || profile.isSubscribed) return;
-
-    await ref.read(profileProvider.notifier).markPaywallSeen();
-    if (!mounted) return;
-
-    await Navigator.of(context).push(
-      MaterialPageRoute<bool>(builder: (_) => const PaywallScreen()),
-    );
-  }
+  // There is no paywall on arrival any more. It used to open here, once, right
+  // after onboarding — which put a price in front of someone who had been
+  // given a story and not yet heard it. The plans now appear at the only
+  // moment they answer a question the user is actually asking: when they go to
+  // write a second story. See `weaveStory`.
 
   void _goTo(int tab) => setState(() => _tab = tab);
 

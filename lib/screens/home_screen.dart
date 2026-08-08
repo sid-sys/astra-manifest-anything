@@ -73,7 +73,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     setState(() => _weaving = true);
 
     final made = await weaveStory(
-      context,
+      Navigator.of(context),
+      ScaffoldMessenger.of(context),
       ref,
       intention: _chipIntention ?? _intention,
       scene: wish,
@@ -103,7 +104,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final profile = ref.watch(profileProvider);
     final stories = ref.watch(storiesProvider);
     final streak = ref.watch(streakProvider);
-    final minutes = ref.watch(minutesListenedProvider);
+    final minutes = ref.watch(minutesInLibraryProvider);
     final keptCount = ref.watch(tasteProvider).liked.length;
     final trending = TrendingManifestations.forDay(
       DateTime.now(),
