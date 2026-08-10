@@ -16,23 +16,25 @@ import 'player_screen.dart';
 /// screen, the paywall handoff and the error message are written once. Returns
 /// true if a story was made.
 ///
-/// Takes a [navigator] rather than a `BuildContext` because onboarding calls it
-/// across the moment the app decides the user is onboarded: saving the profile
-/// swaps the whole home widget out, so the context that started this is gone
-/// before the story comes back. The navigator outlives that swap; a context
-/// does not.
+/// Takes a [navigator] and a [container] rather than a `BuildContext` and a
+/// `WidgetRef`, because onboarding calls this across the moment the app decides
+/// the user is onboarded: saving the profile swaps the whole home widget out,
+/// which disposes the widget that started this. A `WidgetRef` belongs to that
+/// widget and throws the instant it is gone — which is exactly what happened,
+/// silently, leaving the user on Home with no story and no error. The navigator
+/// and the container both outlive the swap.
 Future<bool> weaveStory(
   NavigatorState navigator,
   ScaffoldMessengerState messenger,
-  WidgetRef ref, {
+  ProviderContainer container, {
   required Intention intention,
   required String scene,
 }) async {
   // Ask for money before spending a minute of the user's time, not after —
   // and never before they have heard anything at all, which is what the first
   // free story is for.
-  final written = ref.read(storiesProvider).length;
-  if (!ref.read(profileProvider).canGenerate(storiesWritten: written)) {
+  final written = container.read(storiesProvider).length;
+  if (!container.read(profileProvider).canGenerate(storiesWritten: written)) {
     final unlocked = await navigator.push<bool>(
       MaterialPageRoute(builder: (_) => const PaywallScreen()),
     );
@@ -44,7 +46,7 @@ Future<bool> weaveStory(
   );
   unawaited(navigator.push(waiting));
 
-  final composer = ref.read(storyComposerProvider);
+  final composer = container.read(storyComposerProvider);
 
   try {
     final story = await composer.compose(intention: intention, scene: scene);
@@ -52,7 +54,7 @@ Future<bool> weaveStory(
     // Straight to the story the moment the words exist. The narration is still
     // recording; it attaches itself to the open player when it lands.
     navigator.removeRoute(waiting);
-    ref.read(playbackProvider).load(story);
+    container.read(playbackProvider).load(story);
     unawaited(
       navigator.push(
         MaterialPageRoute<void>(builder: (_) => const PlayerScreen()),

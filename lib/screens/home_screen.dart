@@ -75,7 +75,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final made = await weaveStory(
       Navigator.of(context),
       ScaffoldMessenger.of(context),
-      ref,
+      ProviderScope.containerOf(context),
       intention: _chipIntention ?? _intention,
       scene: wish,
     );
@@ -651,7 +651,7 @@ class _FirstStoryCard extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           'Say what you want above, or tap one of the manifestations. '
-          'Your first day is free.',
+          'Your first story is free.',
           style: AstraTextStyles.small,
         ),
         const SizedBox(height: AstraSpacing.md),

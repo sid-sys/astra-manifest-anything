@@ -54,9 +54,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     }
 
     // Captured before the profile is saved: saving flips `isOnboarded`, which
-    // rebuilds the app onto the shell and takes this widget's context with it.
+    // rebuilds the app onto the shell and disposes this widget. The container
+    // is the app's, not this widget's, so reading providers through it still
+    // works after that — `ref` would throw, and did.
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
+    final container = ProviderScope.containerOf(context);
     final intention = _intention ?? Intention.career;
     final wish = _wishController.text.trim();
 
@@ -77,7 +80,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     await weaveStory(
       navigator,
       messenger,
-      ref,
+      container,
       intention: intention,
       scene: wish,
     );

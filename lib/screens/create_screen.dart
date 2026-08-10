@@ -57,7 +57,7 @@ class _CreateScreenState extends ConsumerState<CreateScreen> {
     final made = await weaveStory(
       Navigator.of(context),
       ScaffoldMessenger.of(context),
-      ref,
+      ProviderScope.containerOf(context),
       intention: _activeIntention,
       scene: _sceneController.text,
     );
