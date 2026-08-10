@@ -126,62 +126,51 @@ smiling-voice brightness.
  * request, so paying to re-read it each time would be waste.
  */
 const SYSTEM_PROMPT = `
-You write first-person guided visualizations for a manifestation app. The
-listener plays these with their eyes closed, usually at night, and hears them
-as their own voice describing their own life.
+Write a first-person manifestation story based on the desire you are given.
 
-Write in the first person, as "I". Not "you walk in" — "I walk in". Not "your
-hands" — "my hands". The listener is saying this about themselves.
+Write it as if the desire has already happened and I am experiencing it in my
+real life.
 
-Write the scene as something that has already happened. Not "I will walk in" —
-"I walk in". They should recognize the moment, not anticipate it.
+Use simple, natural English and make the story emotionally believable. Write in
+normal paragraphs, not one sentence per line.
 
-Use simple, everyday English. Short sentences. Common words a twelve-year-old
-would know. No literary flourish, no long clauses stacked together, no words
-someone would have to stop and think about. Plain is the point: this is heard,
-not read, and the listener is half asleep.
+Include:
+  * My inner thoughts and feelings throughout the story.
+  * A realistic incident where I realize my desire has come true.
+  * Natural conversations between me and other people when relevant.
+  * Small details that make the scene feel real.
+  * My reactions, emotions, and thoughts as I experience the result.
+  * A feeling of gratitude, happiness, peace, and confidence.
+  * A short reflection at the end about how it feels to have my desire as part
+    of my life.
 
-What makes these work is specificity. Generic affirmation is worthless here.
-Use the details the listener gave you — their name, their words, the particular
-thing they are reaching for — and add the concrete sensory detail that a real
-memory would carry: what the room sounds like, what my hands are doing, who
-else is there. A detail they did not think to mention but recognize instantly
-is the entire effect.
+Use first-person language such as "I", "me", "my", and "I thought to myself".
 
-Keep the emotional register low and certain. No exclamation, no crescendo, no
-motivational-speaker cadence. The feeling you are aiming for is the quiet
-satisfaction of an ordinary Tuesday in a life that already worked out.
+Make the story feel like a memory I am describing after it has already
+happened. Do not make it sound like an affirmation list, a motivational speech,
+or a generic self-help article.
 
-The wish arrived through something. Give it a door: an email that came in on a
-slow afternoon, a colleague who put my name forward, a stranger at a table who
-turned out to run the company, a message I nearly did not open. Name the
-opening and the moment I said yes to it. "I have ten thousand a month now" is
-not a scene; "the contract was on the table and I heard myself say the number
-without flinching" is. The listener should be able to point at the day it
-turned.
+If the desire involves another person, portray the relationship as mutual,
+natural, and freely chosen by both people.
 
-Structure: open with a line that settles the body. Move into the scene, through
-the opening that made it real. Stay inside one moment rather than surveying a
-whole future. Close by handing the feeling back to the listener for the day
-ahead.
+If the desire involves money, business, career, or success, include realistic
+details such as seeing the result, checking numbers, talking to someone about
+it, and reflecting on how I achieved it.
 
-Never assign a gender to anyone the listener names. A name or a set of initials
-tells you nothing about a person, and guessing wrong about someone's partner
-breaks the spell in one word. The same goes for the listener: their own name is
-not evidence, so never write them as a man or a woman.
+Never assign a gender to anyone named in the desire. A name or a set of
+initials tells you nothing about a person, and guessing wrong about someone's
+partner breaks the spell in one word. The same goes for me: my own name is not
+evidence, so never write me as a man or a woman. Solve that by using the
+person's name rather than reaching for "they" — write "Vijayalekshmi said yes",
+not "they said yes", because singular "they" reads as a crowd in a quiet room.
+Repeat the name as often as the sentence needs it, or use what I called them:
+my partner, the person on the call, the one who runs the studio.
 
-Solve that by using the person's name, not by reaching for "they". Write
-"Vijayalekshmi said yes", not "they said yes" — singular "they" reads as a
-crowd in a quiet room, and the listener should never have to stop and work out
-who is in the scene. Repeat the name as often as the sentence needs it. Where a
-name would be clumsy three times over, use what the listener called them: my
-partner, the person on the call, the one who runs the studio.
-
-Separate paragraphs with a blank line — each one becomes a spoken beat.
-
-Never mention manifestation, the universe, energy, frequency, or vibration.
-Never reference being an AI, a script, or a recording. Write only the words to
-be spoken aloud: no headings, no stage directions, no narrator labels.
+This is read aloud, not on a page. Write only the words to be spoken: no
+headings, no stage directions, no narrator labels, no lists. Separate
+paragraphs with a blank line. Never mention manifestation, the universe,
+energy, frequency, or vibration, and never reference being an AI, a script, or
+a recording.
 `.trim();
 
 const STORY_SCHEMA = {
@@ -211,15 +200,27 @@ const STORY_SCHEMA = {
  */
 async function writeScript({ profile, intention, scene, mood, lengthMinutes }) {
   const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
-  const targetWords = Math.round(lengthMinutes * NARRATION_WPM);
+
+  // Two constraints meeting: the house style asks for 600–900 words, and the
+  // audio wants five minutes, which at the measured 183 wpm is 915. Capped at
+  // the top of the range rather than overshooting it — 900 words lands at
+  // about 4m55s, and the duration shown to the user is measured off the
+  // finished MP3 anyway, so the story is never longer than it claims.
+  const targetWords = Math.min(Math.round(lengthMinutes * NARRATION_WPM), 900);
 
   const brief = [
-    `Listener: ${profile.name || "the listener"}`,
-    `Intention: ${intention}`,
-    profile.aspiration ? `In their words: ${profile.aspiration}` : null,
-    scene ? `The moment they asked for: ${scene}` : null,
+    `Desire: ${scene || profile.aspiration || intention}`,
+    `My name: ${profile.name || "unstated — do not invent one"}`,
+    `Area of life: ${intention}`,
+    profile.aspiration && profile.aspiration !== scene
+      ? `Something else I am working toward: ${profile.aspiration}`
+      : null,
     mood ? `Mood: ${mood}` : null,
-    `Target length: about ${targetWords} words (${lengthMinutes} minutes read slowly).`,
+    // The range is the one in the house style; the number is what actually
+    // fills the audio. 183 words per minute is measured, not assumed, and a
+    // story that comes back short is the bug this app already shipped once.
+    `Length: ${targetWords} words, which is the top of the 600–900 range and ` +
+      `about ${lengthMinutes} minutes read aloud.`,
   ]
     .filter(Boolean)
     .join("\n");

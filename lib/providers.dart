@@ -401,16 +401,20 @@ final weekActivityProvider = Provider<List<bool>>((ref) {
 /// they hit it. A limit worth enforcing is worth displaying.
 class Usage {
   const Usage({
-    required this.storiesThisMonth,
+    required this.used,
     required this.limit,
     required this.plan,
     required this.detail,
   });
 
-  final int storiesThisMonth;
+  /// Stories written against [limit], counted over whatever window that limit
+  /// belongs to — the month on Plus, the free day on trial, all time on the
+  /// free story. Counting the month against a trial cap would have shown 3 of
+  /// 2 the day after a trial started.
+  final int used;
 
-  /// Null when there is no monthly cap to speak of — the free tier is bounded
-  /// by the trial clock, not by a month.
+  /// Null when nothing is left to meter: the free day is over and there is no
+  /// allowance to draw a ring around.
   final int? limit;
 
   /// 'Astra Plus', 'Free day', 'Free'.
@@ -419,8 +423,10 @@ class Usage {
   /// The sentence under the meter, in whatever unit actually binds.
   final String detail;
 
+  int get left => limit == null ? 0 : (limit! - used).clamp(0, limit!);
+
   double get fraction =>
-      limit == null || limit == 0 ? 0 : (storiesThisMonth / limit!).clamp(0, 1);
+      limit == null || limit == 0 ? 1 : (used / limit!).clamp(0, 1);
 }
 
 final usageProvider = Provider<Usage>((ref) {
@@ -436,31 +442,34 @@ final usageProvider = Provider<Usage>((ref) {
   if (profile.isSubscribed) {
     final left = PricingCatalog.plusMonthlyStories - thisMonth;
     return Usage(
-      storiesThisMonth: thisMonth,
+      used: thisMonth,
       limit: PricingCatalog.plusMonthlyStories,
       plan: 'Astra Plus',
       detail: left > 0
-          ? '$left left this month · unlimited listening'
-          : 'Used up for this month · your library still replays',
+          ? '$left left this month · unlimited listening · resets on the 1st'
+          : 'Used up this month · your library still replays',
     );
   }
 
   if (stories.isEmpty) {
-    return const Usage(
-      storiesThisMonth: 0,
+    return Usage(
+      used: 0,
       limit: 1,
       plan: 'Free',
-      detail: 'Your first story is free — no card, no account',
+      detail: 'Your first story is free · the free day adds '
+          '${PricingCatalog.trialStories} · Plus writes '
+          '${PricingCatalog.plusMonthlyStories} a month',
     );
   }
 
   if (!profile.trialStarted) {
     return Usage(
-      storiesThisMonth: thisMonth,
+      used: 1,
       limit: 1,
       plan: 'Free',
       detail: 'Free story used · start your free day for '
-          '${PricingCatalog.trialStories} more',
+          '${PricingCatalog.trialStories} more · Plus writes '
+          '${PricingCatalog.plusMonthlyStories} a month',
     );
   }
 
@@ -471,17 +480,19 @@ final usageProvider = Provider<Usage>((ref) {
         .length;
     final left = PricingCatalog.trialStories - duringTrial;
     return Usage(
-      storiesThisMonth: thisMonth,
+      used: duringTrial,
       limit: PricingCatalog.trialStories,
       plan: 'Free day',
       detail: left > 0
-          ? '$left left, and ${_hoursOf(profile.trialRemaining)} on the clock'
-          : 'Free day used up · your library still replays',
+          ? '$left left, ${_hoursOf(profile.trialRemaining)} on the clock · '
+                'Plus writes ${PricingCatalog.plusMonthlyStories} a month'
+          : 'Free day used up · Plus writes '
+                '${PricingCatalog.plusMonthlyStories} a month',
     );
   }
 
   return Usage(
-    storiesThisMonth: thisMonth,
+    used: thisMonth,
     limit: null,
     plan: 'Free',
     detail: 'Free day finished · Astra Plus writes '

@@ -6,6 +6,7 @@ import '../models/intention.dart';
 import '../providers.dart';
 import '../services/auth_service.dart';
 import '../theme/astra_theme.dart';
+import '../widgets/allowance_ring.dart';
 import '../widgets/astra_widgets.dart';
 import 'auth_screen.dart';
 import 'confirm_screen.dart';
@@ -59,10 +60,11 @@ class ProfileScreen extends ConsumerWidget {
           value: profile.intentions.map((i) => i.label).join(', '),
           onTap: () => editIntentions(context, ref),
         ),
-        // The plan, what it allows, and how much of it is gone — in one place,
-        // because a quota the app never showed meant the first news of a limit
-        // was being refused by it.
-        AstraCard(
+        // The same ring as Home, for the same reason: the number of stories
+        // left is the one fact about the plan that changes, and it should read
+        // identically wherever it is shown.
+        AllowanceCard(
+          usage: usage,
           onTap: profile.isSubscribed
               ? null
               : () => Navigator.of(context).push(
@@ -70,33 +72,6 @@ class ProfileScreen extends ConsumerWidget {
                       builder: (_) => const PaywallScreen(),
                     ),
                   ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text('Your plan', style: AstraTextStyles.small),
-                  ),
-                  TagChip(
-                    label: usage.plan,
-                    selected: profile.isSubscribed || profile.trialActive,
-                  ),
-                ],
-              ),
-              const SizedBox(height: AstraSpacing.md),
-              if (usage.limit != null) ...[
-                Text(
-                  '${usage.storiesThisMonth} of ${usage.limit} stories written',
-                  style: AstraTextStyles.label,
-                ),
-                const SizedBox(height: AstraSpacing.sm),
-                AstraProgressBar(value: usage.fraction),
-                const SizedBox(height: AstraSpacing.sm),
-              ],
-              Text(usage.detail, style: AstraTextStyles.small),
-            ],
-          ),
         ),
         const SizedBox(height: AstraSpacing.md),
 

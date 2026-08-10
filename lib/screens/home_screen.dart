@@ -8,9 +8,11 @@ import '../services/affirmations.dart';
 import '../services/trending_manifestations.dart';
 import '../services/wish_prompts.dart';
 import '../theme/astra_theme.dart';
+import '../widgets/allowance_ring.dart';
 import '../widgets/astra_widgets.dart';
 import '../widgets/profile_avatar.dart';
 import '../widgets/streak_card.dart';
+import 'paywall_screen.dart';
 import 'player_screen.dart';
 import 'profile_screen.dart';
 import 'story_flow.dart';
@@ -139,16 +141,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onSubmit: _weaveFromWish,
           ),
         ),
-        const SizedBox(height: AstraSpacing.sm),
+        const SizedBox(height: AstraSpacing.md),
 
         // What is left, under the box that spends it. Without this the free
         // tier reads as unlimited right up until the moment it refuses, which
-        // is the worst possible place to learn there was a limit.
+        // is the worst possible place to learn there was a limit. Tapping it
+        // opens the plans, because "how many do I get" and "what would more
+        // cost" are the same question.
         _Inset(
-          child: Text(
-            ref.watch(usageProvider).detail,
-            textAlign: TextAlign.center,
-            style: AstraTextStyles.small,
+          child: AllowanceCard(
+            usage: ref.watch(usageProvider),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<bool>(builder: (_) => const PaywallScreen()),
+            ),
           ),
         ),
         const SizedBox(height: AstraSpacing.lg),
