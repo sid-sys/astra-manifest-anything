@@ -70,6 +70,34 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                 ),
                 const SizedBox(height: AstraSpacing.xl),
 
+                // The free day, given the same weight as a plan.
+                //
+                // It was a sentence of body copy above a wall of prices, which
+                // is where the eye does not go. Anyone landing here is asking
+                // "what does this cost" — the honest first answer is "nothing
+                // today", and that answer should look like an option, not like
+                // a footnote.
+                if (trialOffered) ...[
+                  _FreeDayTile(stories: PricingCatalog.trialStories),
+                  const SizedBox(height: AstraSpacing.md),
+                  Row(
+                    children: [
+                      const Expanded(child: Divider(color: AstraColors.line)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AstraSpacing.md,
+                        ),
+                        child: Text(
+                          'or subscribe now',
+                          style: AstraTextStyles.small,
+                        ),
+                      ),
+                      const Expanded(child: Divider(color: AstraColors.line)),
+                    ],
+                  ),
+                  const SizedBox(height: AstraSpacing.md),
+                ],
+
                 for (final plan in plans) ...[
                   _PlanTile(
                     plan: plan,
@@ -127,6 +155,41 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
       ),
     );
   }
+}
+
+/// The free day, drawn as an offer rather than as small print.
+class _FreeDayTile extends StatelessWidget {
+  const _FreeDayTile({required this.stories});
+
+  final int stories;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    decoration: BoxDecoration(
+      color: AstraColors.accentWash,
+      border: Border.all(color: AstraColors.accent, width: 1.5),
+      borderRadius: BorderRadius.circular(AstraSpacing.cardRadius),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Free for 24 hours', style: AstraTextStyles.price),
+              const SizedBox(height: 2),
+              Text(
+                '$stories stories · no card · cancel nothing',
+                style: AstraTextStyles.small,
+              ),
+            ],
+          ),
+        ),
+        const TagChip(label: 'Free trial', selected: true),
+      ],
+    ),
+  );
 }
 
 /// "18 hours" / "40 minutes" — whichever is the honest unit for what is left.

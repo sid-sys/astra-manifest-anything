@@ -28,6 +28,14 @@ void main() {
     expect(usage.fraction, 0.5);
   });
 
+  test('the month starts when the subscription does', () {
+    // Subscribing on the 20th after using the free story and the free day
+    // used to hand over an allowance that was already three deep. The stories
+    // that sold the plan are not stories the plan paid for.
+    const usage = Usage(used: 0, limit: 20, plan: 'Astra Plus', detail: '');
+    expect(usage.left, 20);
+  });
+
   test('no limit means nothing left to meter', () {
     // The free day is over and no plan has been bought. The ring draws empty
     // rather than full: there is no allowance, not an untouched one.

@@ -162,7 +162,11 @@ class ProfileNotifier extends StateNotifier<UserProfile> {
     ),
   );
 
-  Future<void> subscribe() => update(state.copyWith(isSubscribed: true));
+  /// Stamps the start date alongside the flag: the monthly allowance counts
+  /// from the moment someone paid, not from the first of the month.
+  Future<void> subscribe() => update(
+    state.copyWith(isSubscribed: true, subscribedAt: DateTime.now()),
+  );
 
   /// Records that the subscription screen has been offered, so it is shown
   /// once after onboarding and never ambushes the user again.
@@ -440,9 +444,21 @@ final usageProvider = Provider<Usage>((ref) {
       .length;
 
   if (profile.isSubscribed) {
-    final left = PricingCatalog.plusMonthlyStories - thisMonth;
+    // Count from whichever is later: the start of the month, or the moment
+    // they subscribed. Someone who used the free story and the free day and
+    // then paid on the same day was being billed a month's allowance for the
+    // stories that convinced them to pay.
+    final since = profile.subscribedAt == null
+        ? monthStart
+        : (profile.subscribedAt!.isAfter(monthStart)
+              ? profile.subscribedAt!
+              : monthStart);
+    final onPlan = stories
+        .where((story) => !story.createdAt.isBefore(since))
+        .length;
+    final left = PricingCatalog.plusMonthlyStories - onPlan;
     return Usage(
-      used: thisMonth,
+      used: onPlan,
       limit: PricingCatalog.plusMonthlyStories,
       plan: 'Astra Plus',
       detail: left > 0

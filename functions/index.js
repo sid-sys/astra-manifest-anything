@@ -484,8 +484,18 @@ async function assertWithinQuota(uid, profile) {
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
 
+  // Whichever is later: the start of the month, or the moment they paid. A
+  // story written on the free tier is not one the subscription paid for, and
+  // billing the month's allowance for the stories that sold the subscription
+  // is the wrong way round.
+  const subscribedAt = profile.subscribedAt
+    ? new Date(profile.subscribedAt)
+    : null;
+  const since =
+    subscribedAt && subscribedAt > monthStart ? subscribedAt : monthStart;
+
   const thisMonth = await stories
-    .where("createdAt", ">=", monthStart.toISOString())
+    .where("createdAt", ">=", since.toISOString())
     .count()
     .get();
 

@@ -9,6 +9,7 @@ class UserProfile {
     required this.voice,
     required this.joinedAt,
     this.isSubscribed = false,
+    this.subscribedAt,
     this.trialStartedAt,
     this.paywallSeen = false,
   });
@@ -22,6 +23,14 @@ class UserProfile {
   final String voice;
   final DateTime joinedAt;
   final bool isSubscribed;
+
+  /// When the subscription started.
+  ///
+  /// The monthly allowance is counted from this date, not from the first of
+  /// the month, because a story written before anyone paid is not something
+  /// they paid for. Without it, subscribing on the 20th silently handed over
+  /// an allowance already spent by the free tier.
+  final DateTime? subscribedAt;
 
   /// When the free day began. Null means it has not been started.
   ///
@@ -78,6 +87,7 @@ class UserProfile {
     String? aspiration,
     String? voice,
     bool? isSubscribed,
+    DateTime? subscribedAt,
     DateTime? trialStartedAt,
     bool? paywallSeen,
   }) => UserProfile(
@@ -87,6 +97,7 @@ class UserProfile {
     voice: voice ?? this.voice,
     joinedAt: joinedAt,
     isSubscribed: isSubscribed ?? this.isSubscribed,
+    subscribedAt: subscribedAt ?? this.subscribedAt,
     trialStartedAt: trialStartedAt ?? this.trialStartedAt,
     paywallSeen: paywallSeen ?? this.paywallSeen,
   );
@@ -98,6 +109,7 @@ class UserProfile {
     'voice': voice,
     'joinedAt': joinedAt.toIso8601String(),
     'isSubscribed': isSubscribed,
+    'subscribedAt': subscribedAt?.toIso8601String(),
     'trialStartedAt': trialStartedAt?.toIso8601String(),
     'paywallSeen': paywallSeen,
   };
@@ -112,6 +124,7 @@ class UserProfile {
     joinedAt:
         DateTime.tryParse(map['joinedAt'] as String? ?? '') ?? DateTime.now(),
     isSubscribed: map['isSubscribed'] as bool? ?? false,
+    subscribedAt: DateTime.tryParse(map['subscribedAt'] as String? ?? ''),
     trialStartedAt: DateTime.tryParse(map['trialStartedAt'] as String? ?? ''),
     paywallSeen: map['paywallSeen'] as bool? ?? false,
   );
