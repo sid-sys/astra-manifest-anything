@@ -117,12 +117,18 @@ class PricingCatalog {
   /// price has to move with it.
   static const plusMonthlyStories = 20;
 
-  /// Stories on the free day, after the free first one.
+  /// Stories anyone gets without paying, ever. No clock, no card, no account.
   ///
-  /// Mirrors `TRIAL_STORY_LIMIT` in `functions/index.js`. The server is the
-  /// one that enforces it; this exists so the screens can say the number out
-  /// loud instead of letting the user discover it by being refused.
-  static const trialStories = 2;
+  /// There is no trial. A time-boxed trial with an uncapped generator is an
+  /// unbounded cost — three days of a motivated user is tens of stories at ten
+  /// cents each — and a time-boxed trial *with* a cap is just this number
+  /// wearing a countdown. Three costs 32 cents to honour and is the whole
+  /// acquisition budget per signup.
+  ///
+  /// Mirrors `FREE_STORY_LIMIT` in `functions/index.js`. The server enforces
+  /// it; this exists so the screens can say the number out loud instead of
+  /// letting the user discover it by being refused.
+  static const freeStories = 3;
 
   /// What a subscriber is assumed to actually use in a month.
   ///

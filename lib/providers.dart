@@ -78,7 +78,7 @@ Future<void> forgetEverythingLocal(WidgetRef ref) async {
 /// Runs a generation end to end.
 ///
 /// Home and Create both make stories and both have to do the same three things
-/// afterwards — store it, start the trial clock, keep the library in sync. This
+/// afterwards — store it and keep the library in sync. This
 /// exists so neither screen owns that sequence privately and they cannot drift.
 class StoryComposer {
   StoryComposer(this._ref);
@@ -103,9 +103,6 @@ class StoryComposer {
           scene: scene,
         );
 
-    // The trial clock is not touched here. Generating used to start it, which
-    // meant the free first story silently spent the free day it was supposed
-    // to precede.
     await _ref.read(storiesProvider.notifier).add(story);
     return story;
   }
@@ -142,25 +139,6 @@ class ProfileNotifier extends StateNotifier<UserProfile> {
     state = profile;
     await _repository.saveProfile(profile);
   }
-
-  /// Starts the free day, on purpose, from the paywall.
-  ///
-  /// Written through [update], so it lands in the mirrored profile document
-  /// that the generator reads — the server checks that copy, not this one, and
-  /// still holds the clock. A device that rewinds its own storage gets nothing
-  /// back but a shorter day.
-  Future<void> startTrial() async {
-    if (state.trialStartedAt != null) return;
-    await update(state.copyWith(trialStartedAt: DateTime.now()));
-  }
-
-  /// Backdates the clock so the UI stops offering a trial the server has
-  /// already refused. Called when generation comes back resource-exhausted.
-  Future<void> noteTrialOver() => update(
-    state.copyWith(
-      trialStartedAt: DateTime.now().subtract(const Duration(hours: 24)),
-    ),
-  );
 
   /// Stamps the start date alongside the flag: the monthly allowance counts
   /// from the moment someone paid, not from the first of the month.
@@ -412,9 +390,9 @@ class Usage {
   });
 
   /// Stories written against [limit], counted over whatever window that limit
-  /// belongs to — the month on Plus, the free day on trial, all time on the
-  /// free story. Counting the month against a trial cap would have shown 3 of
-  /// 2 the day after a trial started.
+  /// belongs to — the month on Plus, all time on the free tier. Counting a
+  /// month against a lifetime cap would report the wrong number every time a
+  /// month rolled over.
   final int used;
 
   /// Null when nothing is left to meter: the free day is over and there is no
@@ -439,15 +417,12 @@ final usageProvider = Provider<Usage>((ref) {
 
   final now = DateTime.now();
   final monthStart = DateTime(now.year, now.month);
-  final thisMonth = stories
-      .where((story) => !story.createdAt.isBefore(monthStart))
-      .length;
 
   if (profile.isSubscribed) {
     // Count from whichever is later: the start of the month, or the moment
-    // they subscribed. Someone who used the free story and the free day and
-    // then paid on the same day was being billed a month's allowance for the
-    // stories that convinced them to pay.
+    // they subscribed. Someone who used their free stories and then paid on
+    // the same day was being billed a month's allowance for the stories that
+    // convinced them to pay.
     final since = profile.subscribedAt == null
         ? monthStart
         : (profile.subscribedAt!.isAfter(monthStart)
@@ -467,62 +442,24 @@ final usageProvider = Provider<Usage>((ref) {
     );
   }
 
-  if (stories.isEmpty) {
-    return Usage(
-      used: 0,
-      limit: 1,
-      plan: 'Free',
-      detail: 'Your first story is free · the free day adds '
-          '${PricingCatalog.trialStories} · Plus writes '
-          '${PricingCatalog.plusMonthlyStories} a month',
-    );
-  }
-
-  if (!profile.trialStarted) {
-    return Usage(
-      used: 1,
-      limit: 1,
-      plan: 'Free',
-      detail: 'Free story used · start your free day for '
-          '${PricingCatalog.trialStories} more · Plus writes '
-          '${PricingCatalog.plusMonthlyStories} a month',
-    );
-  }
-
-  if (profile.trialActive) {
-    final since = profile.trialStartedAt!;
-    final duringTrial = stories
-        .where((story) => !story.createdAt.isBefore(since))
-        .length;
-    final left = PricingCatalog.trialStories - duringTrial;
-    return Usage(
-      used: duringTrial,
-      limit: PricingCatalog.trialStories,
-      plan: 'Free day',
-      detail: left > 0
-          ? '$left left, ${_hoursOf(profile.trialRemaining)} on the clock · '
-                'Plus writes ${PricingCatalog.plusMonthlyStories} a month'
-          : 'Free day used up · Plus writes '
-                '${PricingCatalog.plusMonthlyStories} a month',
-    );
-  }
+  // The free tier is a lifetime count, not a window: three stories, ever, and
+  // then a plan. Nothing expires, so there is no clock to display and no way
+  // to be caught out by one.
+  final free = PricingCatalog.freeStories;
+  final left = free - stories.length;
 
   return Usage(
-    used: thisMonth,
-    limit: null,
+    used: stories.length.clamp(0, free),
+    limit: free,
     plan: 'Free',
-    detail: 'Free day finished · Astra Plus writes '
-        '${PricingCatalog.plusMonthlyStories} a month',
+    detail: left > 0
+        ? '$left free ${left == 1 ? 'story' : 'stories'} left · Plus writes '
+              '${PricingCatalog.plusMonthlyStories} a month'
+        : 'Free stories used · Plus writes '
+              '${PricingCatalog.plusMonthlyStories} a month, and your library '
+              'replays without limit',
   );
 });
-
-String _hoursOf(Duration remaining) {
-  if (remaining.inHours >= 1) {
-    final hours = remaining.inHours;
-    return '$hours ${hours == 1 ? 'hour' : 'hours'}';
-  }
-  return '${remaining.inMinutes} minutes';
-}
 
 /// Minutes of audio in the library.
 ///

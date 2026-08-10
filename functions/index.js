@@ -63,10 +63,17 @@ const DEFAULT_MOOD = "Calm";
  * nothing once the audio exists, so the limit belongs on the expensive half of
  * the operation only.
  *
- * The free tier is a day, not a story. The app this one is modelled on was
- * criticised hardest for paywalling before anyone had heard anything; a single
- * story answered that, but a day lets someone try more than one intention and
- * find out whether the thing is for them.
+ * The free tier is a count, not a clock. The app this one is modelled on was
+ * criticised hardest for paywalling before anyone had heard anything, and
+ * three stories is enough to judge whether this is for you across more than
+ * one intention.
+ *
+ * It is deliberately not a trial. A time-boxed trial in front of an uncapped
+ * generator has no ceiling — three days of a motivated user is tens of stories
+ * at ten cents each — and a time-boxed trial *with* a cap is this number
+ * wearing a countdown. Three stories costs about $0.32 to honour, which is the
+ * entire acquisition budget per signup: at a 5% conversion rate, roughly $6 of
+ * production per subscriber won.
  *
  * The monthly cap is a bound on the outlier, not a budget for the typical
  * subscriber. A five-minute story costs about $0.10 to make — narration 59%,
@@ -80,12 +87,12 @@ const DEFAULT_MOOD = "Calm";
  * expected usage and a 65% floor at this cap, so raising it without moving the
  * price fails the build rather than the business.
  *
- * Two trial stories costs about $0.21 per trial user, which is the real
- * acquisition cost of this app: at a 5% conversion rate it is roughly $4 of
- * production spent per subscriber won.
+ * The free stories are not deducted from the paid allowance. Someone who
+ * subscribes gets the full twenty from the day they pay — see the `since`
+ * calculation below — because charging the plan for the stories that sold it
+ * is the wrong way round.
  */
-const TRIAL_HOURS = 24;
-const TRIAL_STORY_LIMIT = 2;
+const FREE_STORY_LIMIT = 3;
 const PLUS_MONTHLY_LIMIT = 20;
 
 /**
@@ -442,39 +449,15 @@ async function assertWithinQuota(uid, profile) {
   const stories = userDoc.collection("stories");
 
   if (!profile.isSubscribed) {
+    // A lifetime count, not a window. Three stories on the house — enough to
+    // judge the thing, which nobody can do from a description — and then a
+    // plan. No clock to expire and none to game.
     const written = (await stories.count().get()).data().count;
 
-    // The first one is on the house, for everyone, before any clock starts.
-    // Nobody can judge a generated story from a description of it, and this is
-    // the cheapest possible way to let them judge.
-    if (written === 0) return;
-
-    if (!profile.trialStartedAt) {
+    if (written >= FREE_STORY_LIMIT) {
       throw new HttpsError(
         "resource-exhausted",
-        "Start your free day to keep writing, or subscribe for the full library.",
-      );
-    }
-
-    const startedAt = new Date(profile.trialStartedAt);
-    const hoursElapsed = (Date.now() - startedAt.getTime()) / 3600000;
-
-    if (hoursElapsed >= TRIAL_HOURS) {
-      throw new HttpsError(
-        "resource-exhausted",
-        "Your free day has ended. Astra Plus keeps writing them.",
-      );
-    }
-
-    const duringTrial = await stories
-      .where("createdAt", ">=", startedAt.toISOString())
-      .count()
-      .get();
-
-    if (duringTrial.data().count >= TRIAL_STORY_LIMIT) {
-      throw new HttpsError(
-        "resource-exhausted",
-        `You've written ${TRIAL_STORY_LIMIT} stories on your free day. They replay as often as you like, and Astra Plus lifts the limit.`,
+        `You've used your ${FREE_STORY_LIMIT} free stories. They replay as often as you like, and Astra Plus writes ${PLUS_MONTHLY_LIMIT} a month.`,
       );
     }
     return;
