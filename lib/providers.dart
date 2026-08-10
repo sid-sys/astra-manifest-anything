@@ -87,14 +87,18 @@ class StoryComposer {
 
   /// Writes the script and stores it. Returns before any audio exists, so the
   /// story can be on screen in about twenty seconds instead of a hundred.
+  /// [profile] overrides the stored one. Onboarding needs that: it generates
+  /// its first story before it commits the profile to state, because
+  /// committing is what tears its own screen down.
   Future<Story> compose({
     required Intention intention,
     required String scene,
+    UserProfile? profile,
   }) async {
     final story = await _ref
         .read(storyServiceProvider)
         .write(
-          profile: _ref.read(profileProvider),
+          profile: profile ?? _ref.read(profileProvider),
           intention: intention,
           scene: scene,
         );

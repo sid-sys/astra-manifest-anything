@@ -139,6 +139,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onSubmit: _weaveFromWish,
           ),
         ),
+        const SizedBox(height: AstraSpacing.sm),
+
+        // What is left, under the box that spends it. Without this the free
+        // tier reads as unlimited right up until the moment it refuses, which
+        // is the worst possible place to learn there was a limit.
+        _Inset(
+          child: Text(
+            ref.watch(usageProvider).detail,
+            textAlign: TextAlign.center,
+            style: AstraTextStyles.small,
+          ),
+        ),
         const SizedBox(height: AstraSpacing.lg),
 
         _Inset(

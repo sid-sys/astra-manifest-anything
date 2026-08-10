@@ -53,37 +53,49 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       return;
     }
 
-    // Captured before the profile is saved: saving flips `isOnboarded`, which
-    // rebuilds the app onto the shell and disposes this widget. The container
-    // is the app's, not this widget's, so reading providers through it still
-    // works after that — `ref` would throw, and did.
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
     final container = ProviderScope.containerOf(context);
     final intention = _intention ?? Intention.career;
     final wish = _wishController.text.trim();
 
+    final profile = UserProfile.empty().copyWith(
+      name: _nameController.text.trim(),
+      intentions: {intention},
+      // The wish is the profile's aspiration too — it is the one line that
+      // makes every later story sound like this person.
+      aspiration: wish,
+    );
+
     setState(() => _weaving = true);
 
-    await ref
-        .read(profileProvider.notifier)
-        .update(
-          UserProfile.empty().copyWith(
-            name: _nameController.text.trim(),
-            intentions: {intention},
-            // The wish is the profile's aspiration too — it is the one line
-            // that makes every later story sound like this person.
-            aspiration: wish,
-          ),
-        );
+    // Order matters, and it is the whole bug this went through twice.
+    //
+    // Putting the profile into state is what flips `isOnboarded`, which
+    // rebuilds the app onto the shell and tears this screen down mid-flight.
+    // So the profile is written to storage first — that is all the generator
+    // needs, since the server reads the mirrored document — and the state is
+    // only committed once the story is home. Until then this widget stays
+    // mounted and owns the flow, the way every other caller does.
+    await container.read(repositoryProvider).saveProfile(profile);
 
-    await weaveStory(
-      navigator,
-      messenger,
-      container,
-      intention: intention,
-      scene: wish,
-    );
+    try {
+      await weaveStory(
+        navigator,
+        messenger,
+        container,
+        intention: intention,
+        scene: wish,
+        // The provider is still empty; hand the generator the profile
+        // directly rather than letting it read one that has not landed.
+        profile: profile,
+      );
+    } finally {
+      // Even if the story failed, the answers were given and saved — sending
+      // the user back through three questions to try again would be a second
+      // insult.
+      await container.read(profileProvider.notifier).update(profile);
+    }
   }
 
   @override

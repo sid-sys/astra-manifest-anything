@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/intention.dart';
+import '../models/user_profile.dart';
 import '../providers.dart';
 import '../services/story_service.dart';
 import 'generating_screen.dart';
@@ -29,12 +30,14 @@ Future<bool> weaveStory(
   ProviderContainer container, {
   required Intention intention,
   required String scene,
+  UserProfile? profile,
 }) async {
   // Ask for money before spending a minute of the user's time, not after —
   // and never before they have heard anything at all, which is what the first
   // free story is for.
   final written = container.read(storiesProvider).length;
-  if (!container.read(profileProvider).canGenerate(storiesWritten: written)) {
+  final UserProfile who = profile ?? container.read(profileProvider);
+  if (!who.canGenerate(storiesWritten: written)) {
     final unlocked = await navigator.push<bool>(
       MaterialPageRoute(builder: (_) => const PaywallScreen()),
     );
@@ -49,7 +52,11 @@ Future<bool> weaveStory(
   final composer = container.read(storyComposerProvider);
 
   try {
-    final story = await composer.compose(intention: intention, scene: scene);
+    final story = await composer.compose(
+      intention: intention,
+      scene: scene,
+      profile: profile,
+    );
 
     // Straight to the story the moment the words exist. The narration is still
     // recording; it attaches itself to the open player when it lands.
