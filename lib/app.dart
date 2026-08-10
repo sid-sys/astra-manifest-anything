@@ -5,12 +5,15 @@ import 'providers.dart';
 import 'screens/auth_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/shell_screen.dart';
+import 'screens/verify_email_screen.dart';
+import 'services/auth_service.dart';
 import 'theme/astra_theme.dart';
 import 'widgets/aura_background.dart';
 
-/// Which of the three screens the app opens on.
+/// Which screen the app opens on.
 ///
-/// Two questions, in order: is there an account, and has it been set up. The
+/// Three questions, in order: is there an account, has its address been
+/// proved, and has it been set up. The
 /// sign-in screen comes first because everything after it writes to a uid —
 /// onboarding included, since the name and intentions it collects are the
 /// first thing mirrored to Firestore.
@@ -43,9 +46,15 @@ class AstraApp extends ConsumerWidget {
               error: (_, _) => const AuthScreen(),
               data: (user) => user == null
                   ? const AuthScreen()
-                  : onboarded
-                      ? const ShellScreen()
-                      : const OnboardingScreen(),
+                  // An address nobody has proved is not an account yet: it
+                  // could be a stranger's, and a password reset would go to
+                  // them. Only password sign-ups land here — Google hands back
+                  // an address it already verified, and a guest has none.
+                  : AuthService.needsVerification(user)
+                      ? const VerifyEmailScreen()
+                      : onboarded
+                          ? const ShellScreen()
+                          : const OnboardingScreen(),
             ),
     );
   }

@@ -405,6 +405,30 @@ async function storeAudio({ uid, storyId, audio }) {
 }
 
 /**
+ * Refuses callers whose email address has never been proved.
+ *
+ * The app already holds them at a "check your inbox" screen, but that screen
+ * is on the caller's device and anything on the caller's device is a
+ * suggestion. This reads the `email_verified` claim out of the verified token,
+ * which only Firebase can set.
+ *
+ * Scoped to password sign-ups on purpose: Google returns an address it has
+ * already verified, and an anonymous guest has no address to verify. Refusing
+ * either would be refusing a user who did nothing wrong.
+ */
+function assertVerified(request) {
+  const token = request.auth?.token ?? {};
+  const provider = token.firebase?.sign_in_provider;
+
+  if (provider === "password" && token.email_verified !== true) {
+    throw new HttpsError(
+      "permission-denied",
+      "Confirm your email address first — the link is in your inbox.",
+    );
+  }
+}
+
+/**
  * Enforces the generation quota. Throws if the caller is over it.
  *
  * Three tiers, in order: the first story is free for everyone, then a free day
@@ -495,6 +519,7 @@ exports.writeStory = onCall(
     if (!uid) {
       throw new HttpsError("unauthenticated", "Sign in to write a story.");
     }
+    assertVerified(request);
 
     const { intention = "career", scene = "" } = request.data ?? {};
 
@@ -556,6 +581,7 @@ exports.narrateStory = onCall(
     if (!uid) {
       throw new HttpsError("unauthenticated", "Sign in to narrate a story.");
     }
+    assertVerified(request);
 
     const { storyId } = request.data ?? {};
     if (!storyId) {

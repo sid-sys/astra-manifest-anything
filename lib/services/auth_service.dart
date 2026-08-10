@@ -29,6 +29,46 @@ class AuthService {
   /// to sign back in with.
   bool get isGuest => _auth.currentUser?.isAnonymous ?? false;
 
+  /// Whether this account is waiting on an unclicked verification link.
+  ///
+  /// Only password accounts are ever in this state. Google hands back an
+  /// address it has already verified, and a guest has no address at all —
+  /// holding either of them at a "check your inbox" screen would be asking
+  /// them to confirm something nobody doubts.
+  static bool needsVerification(User? user) {
+    if (user == null || user.isAnonymous || user.emailVerified) return false;
+    return user.providerData.any((info) => info.providerId == 'password');
+  }
+
+  bool get isVerificationPending => needsVerification(_auth.currentUser);
+
+  /// Sends the verification link. Safe to call again — Firebase rate-limits it
+  /// itself, which is what the `too-many-requests` message is for.
+  Future<void> sendVerificationEmail() async {
+    final user = _auth.currentUser;
+    if (user == null || user.emailVerified) return;
+    await user.sendEmailVerification();
+  }
+
+  /// Re-reads the account from the server and returns true once the link has
+  /// been clicked.
+  ///
+  /// `emailVerified` is a property of the cached user object, so it stays false
+  /// on this device until something asks. The token is force-refreshed on
+  /// success because the server checks the `email_verified` claim inside it,
+  /// and a stale token would keep saying no long after the user said yes.
+  Future<bool> refreshVerification() async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+
+    await user.reload();
+    final refreshed = _auth.currentUser;
+    if (refreshed == null || !refreshed.emailVerified) return false;
+
+    await refreshed.getIdToken(true);
+    return true;
+  }
+
   /// Restores an existing session without creating one.
   ///
   /// Deliberately not signing anyone in: the sign-in screen is the first thing
@@ -58,7 +98,17 @@ class AuthService {
 
   /// Creates an account, upgrading the current guest in place when there is
   /// one so nothing they already made is stranded under an abandoned uid.
+  ///
+  /// Sends the verification link on the way out. The address is unproven until
+  /// someone clicks it, and an unproven address is a password reset sent to a
+  /// stranger's inbox.
   Future<UserCredential> signUpWithEmail(String email, String password) async {
+    final result = await _createOrLink(email, password);
+    await sendVerificationEmail();
+    return result;
+  }
+
+  Future<UserCredential> _createOrLink(String email, String password) async {
     final credential = EmailAuthProvider.credential(
       email: email.trim(),
       password: password,
@@ -190,6 +240,8 @@ String authErrorMessage(Object error) {
       'Sign-in was cancelled.',
     'operation-not-allowed' =>
       'That sign-in method is not enabled for this app yet.',
+    'unverified-email' =>
+      'Check your inbox and click the link before signing in.',
     _ => 'Something went wrong. Please try again.',
   };
 }

@@ -143,9 +143,12 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 Text(
                   widget.asUpgrade
                       ? 'Adding an email keeps everything you have already '
-                            'written and lets you sign in on another phone.'
+                            'written and lets you sign in on another phone. '
+                            'You will confirm the address by email before '
+                            'writing anything new.'
                       : _creating
-                          ? 'Six characters or more. Your stories sync to this '
+                          ? 'Six characters or more. We send a link to confirm '
+                                'the address — your stories sync to this '
                                 'account and follow you between devices.'
                           : 'Sign in and your library comes with you.',
                   textAlign: TextAlign.center,
