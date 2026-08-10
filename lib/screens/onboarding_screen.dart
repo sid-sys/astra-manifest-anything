@@ -9,6 +9,8 @@ import '../services/trending_manifestations.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
 import '../widgets/aura_background.dart';
+import 'paywall_screen.dart';
+import 'proof_screen.dart';
 import 'story_flow.dart';
 
 /// Name, then what you are calling in, then the wish — and then the story.
@@ -28,6 +30,11 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   static const _stepCount = 4;
 
+  /// What each step is called, shown above the bar. The plans are not in here
+  /// because they are not a question — they appear between step three and step
+  /// four and ask nothing of anyone who says "Not now".
+  static const _stepNames = ['YOUR NAME', 'ABOUT YOU', 'YOUR FOCUS', 'YOUR WISH'];
+
   final _nameController = TextEditingController();
   final _ageController = TextEditingController();
   final _wishController = TextEditingController();
@@ -45,6 +52,32 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     super.dispose();
   }
 
+  /// The step the plans follow. Named rather than written as `2` in the middle
+  /// of a conditional, because the order of these steps has changed twice.
+  static const _intentionStep = 2;
+
+  /// Shows the reviews, if there are any, and then the plans.
+  ///
+  /// Nothing is read from the result. Subscribing writes the profile itself,
+  /// and "Not now" is a valid answer that continues to the free story — so
+  /// this is an offer in the middle of a flow rather than a fork in it.
+  Future<void> _offerPlans() async {
+    final navigator = Navigator.of(context);
+
+    if (ProofScreen.hasProof) {
+      await navigator.push(
+        MaterialPageRoute<void>(
+          builder: (_) => ProofScreen(onContinue: () => navigator.pop()),
+        ),
+      );
+      if (!mounted) return;
+    }
+
+    await navigator.push(
+      MaterialPageRoute<bool>(builder: (_) => const PaywallScreen()),
+    );
+  }
+
   bool get _canAdvance => switch (_step) {
     0 => _nameController.text.trim().isNotEmpty,
     // Age and gender are both skippable. They make a story fit better, but
@@ -57,6 +90,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   Future<void> _advance() async {
     if (_step < _stepCount - 1) {
+      // The plans sit between choosing an area of life and writing the wish.
+      // By this point the user has told the app what they want out of it and
+      // has not yet spent anything, which is the moment the offer is about
+      // them rather than about us — and "Not now" carries straight on to the
+      // free story either way.
+      if (_step == _intentionStep) await _offerPlans();
+      if (!mounted) return;
       setState(() => _step++);
       return;
     }
@@ -67,11 +107,19 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final intention = _intention ?? Intention.career;
     final wish = _wishController.text.trim();
 
+    // Anything the paywall already wrote — a subscription taken two steps ago
+    // — lives on the stored profile. Building this one from `empty()` without
+    // carrying it would silently un-subscribe someone who had just paid.
+    final existing = container.read(profileProvider);
+
     final profile = UserProfile.empty().copyWith(
       name: _nameController.text.trim(),
       intentions: {intention},
       age: int.tryParse(_ageController.text.trim()),
       gender: _gender,
+      isSubscribed: existing.isSubscribed,
+      subscribedAt: existing.subscribedAt,
+      paywallSeen: true,
       // The wish is the profile's aspiration too — it is the one line that
       // makes every later story sound like this person.
       aspiration: wish,
@@ -121,7 +169,28 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 const SizedBox(height: AstraSpacing.lg),
                 const Wordmark('Astra'),
                 const SizedBox(height: AstraSpacing.xl),
-                AstraProgressBar(value: (_step + 1) / _stepCount),
+
+                // A bar on its own says "some of the way through". Naming the
+                // step and counting it says how much is left, which is the
+                // only question anyone actually has during a form.
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _stepNames[_step],
+                        style: AstraTextStyles.eyebrow,
+                      ),
+                    ),
+                    Text(
+                      'STEP ${_step + 1} OF $_stepCount',
+                      style: AstraTextStyles.eyebrow.copyWith(
+                        color: AstraColors.dim,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AstraSpacing.sm),
+                AstraProgressBar(value: (_step + 1) / _stepCount, height: 6),
                 const SizedBox(height: AstraSpacing.xl),
                 Expanded(
                   child: AnimatedSwitcher(

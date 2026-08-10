@@ -26,16 +26,24 @@ void main() {
     expect(find.text('What should Astra call you?'), findsOneWidget);
   });
 
-  testWidgets('onboarding asks for nothing but the three questions', (
-    tester,
-  ) async {
+  testWidgets('onboarding says where you are in it', (tester) async {
     await tester.pumpWidget(await _bootstrap());
 
-    // No pricing, no plans, no card — the money conversation happens after
-    // onboarding, on its own screen, and never inside these three steps.
-    expect(find.textContaining('free'), findsNothing);
+    // A bar alone says "partway". The count is what answers the only question
+    // anyone has while filling in a form.
+    expect(find.text('STEP 1 OF 4'), findsOneWidget);
+    expect(find.text('YOUR NAME'), findsOneWidget);
+  });
+
+  testWidgets('the questions themselves never mention money', (tester) async {
+    await tester.pumpWidget(await _bootstrap());
+
+    // The plans are a route of their own, shown between the third and fourth
+    // questions. What must not happen is a price appearing inside a step,
+    // beside a field someone is being asked to fill in.
     expect(find.textContaining('₹'), findsNothing);
     expect(find.textContaining(r'$'), findsNothing);
+    expect(find.textContaining('month'), findsNothing);
   });
 
   testWidgets('continue stays disabled until a name is entered', (

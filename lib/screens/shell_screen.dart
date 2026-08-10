@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../providers.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/aura_background.dart';
 import 'affirmations_screen.dart';
 import 'create_screen.dart';
 import 'home_screen.dart';
 import 'library_screen.dart';
-import 'paywall_screen.dart';
-import 'proof_screen.dart';
 import 'profile_screen.dart';
 
 /// The four-tab frame.
@@ -27,56 +24,12 @@ class ShellScreen extends ConsumerStatefulWidget {
 class _ShellScreenState extends ConsumerState<ShellScreen> {
   int _tab = 0;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _offerPlus());
-  }
-
-  /// Shows the plans once, after the first story rather than before it.
-  ///
-  /// The timing is the whole point. Onboarding ends inside the player, so this
-  /// waits until that route is closed — pushing a price over a story someone
-  /// is still reading is how the app this one is modelled on earned its
-  /// reviews. Once they are back on Home, they have heard the thing and the
-  /// question "is this worth paying for" is one they are actually asking.
-  ///
-  /// It is a route, not a gate: "Not now" keeps the free plan and the
-  /// remaining free stories. The seen flag is written before the screen opens,
-  /// so a crash or a fast back-press cannot make it reappear.
-  Future<void> _offerPlus() async {
-    if (!mounted) return;
-
-    final profile = ref.read(profileProvider);
-    if (profile.paywallSeen || profile.isSubscribed) return;
-
-    // Nothing to sell to someone who has not seen what it makes yet.
-    if (ref.read(storiesProvider).isEmpty) return;
-
-    // The player is still open on top of the shell. Try again when it closes.
-    final route = ModalRoute.of(context);
-    if (route == null || !route.isCurrent) {
-      await Future<void>.delayed(const Duration(milliseconds: 600));
-      return _offerPlus();
-    }
-
-    await ref.read(profileProvider.notifier).markPaywallSeen();
-    if (!mounted) return;
-
-    final navigator = Navigator.of(context);
-    if (ProofScreen.hasProof) {
-      await navigator.push(
-        MaterialPageRoute<void>(
-          builder: (_) => ProofScreen(onContinue: () => navigator.pop()),
-        ),
-      );
-      if (!mounted) return;
-    }
-
-    await navigator.push(
-      MaterialPageRoute<bool>(builder: (_) => const PaywallScreen()),
-    );
-  }
+  // Nothing offers the plans here. Onboarding shows them itself, between
+  // choosing an area of life and writing the first wish, and marks them seen
+  // on the way past. Opening them again on arrival would be the second price
+  // screen in a minute — and the app already knows the answer, because "Not
+  // now" was one tap ago. After that the plans appear where they answer a
+  // question: on the allowance card, and when the free stories run out.
 
   void _goTo(int tab) => setState(() => _tab = tab);
 
