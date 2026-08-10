@@ -9,6 +9,8 @@ class UserProfile {
     required this.aspiration,
     required this.voice,
     required this.joinedAt,
+    this.age,
+    this.gender = '',
     this.isSubscribed = false,
     this.subscribedAt,
     this.paywallSeen = false,
@@ -16,6 +18,13 @@ class UserProfile {
 
   final String name;
   final Set<Intention> intentions;
+
+  /// Optional, and stated rather than inferred. The story generator writes in
+  /// the listener's own voice, so knowing "27, female" lets it write a life
+  /// that fits — but both fields can be skipped, and an empty value means the
+  /// stories simply never mention it. Nothing in the app guesses either one.
+  final int? age;
+  final String gender;
 
   /// The user's goal in their own words — the raw material that makes a story
   /// feel specific rather than generic.
@@ -64,6 +73,8 @@ class UserProfile {
     Set<Intention>? intentions,
     String? aspiration,
     String? voice,
+    int? age,
+    String? gender,
     bool? isSubscribed,
     DateTime? subscribedAt,
     bool? paywallSeen,
@@ -72,6 +83,8 @@ class UserProfile {
     intentions: intentions ?? this.intentions,
     aspiration: aspiration ?? this.aspiration,
     voice: voice ?? this.voice,
+    age: age ?? this.age,
+    gender: gender ?? this.gender,
     joinedAt: joinedAt,
     isSubscribed: isSubscribed ?? this.isSubscribed,
     subscribedAt: subscribedAt ?? this.subscribedAt,
@@ -83,6 +96,8 @@ class UserProfile {
     'intentions': intentions.map((i) => i.name).toList(),
     'aspiration': aspiration,
     'voice': voice,
+    'age': age,
+    'gender': gender,
     'joinedAt': joinedAt.toIso8601String(),
     'isSubscribed': isSubscribed,
     'subscribedAt': subscribedAt?.toIso8601String(),
@@ -96,6 +111,8 @@ class UserProfile {
         .toSet(),
     aspiration: map['aspiration'] as String? ?? '',
     voice: map['voice'] as String? ?? 'marin',
+    age: (map['age'] as num?)?.toInt(),
+    gender: map['gender'] as String? ?? '',
     joinedAt:
         DateTime.tryParse(map['joinedAt'] as String? ?? '') ?? DateTime.now(),
     isSubscribed: map['isSubscribed'] as bool? ?? false,

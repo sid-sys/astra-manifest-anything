@@ -98,8 +98,9 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                 _sent
                     ? 'If there is an account for ${_email.text.trim()}, a '
                           'link to set a new password is on its way. It '
-                          'expires in an hour. Check spam if it has not '
-                          'arrived in a few minutes.'
+                          'expires in an hour. Check your spam or junk folder '
+                          'if it has not arrived in a few minutes — these '
+                          'land there more often than they should.'
                     : 'Enter the email you signed up with and we will send a '
                           'link to set a new one.',
                 style: AstraTextStyles.bodyDim,

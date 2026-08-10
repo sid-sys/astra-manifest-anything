@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/intention.dart';
@@ -25,25 +26,32 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 }
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
-  static const _stepCount = 3;
+  static const _stepCount = 4;
 
   final _nameController = TextEditingController();
+  final _ageController = TextEditingController();
   final _wishController = TextEditingController();
 
   Intention? _intention;
+  String _gender = '';
   int _step = 0;
   bool _weaving = false;
 
   @override
   void dispose() {
     _nameController.dispose();
+    _ageController.dispose();
     _wishController.dispose();
     super.dispose();
   }
 
   bool get _canAdvance => switch (_step) {
     0 => _nameController.text.trim().isNotEmpty,
-    1 => _intention != null,
+    // Age and gender are both skippable. They make a story fit better, but
+    // they are not worth losing a user over, and an app that will not let you
+    // past a gender question is an app people close.
+    1 => true,
+    2 => _intention != null,
     _ => _wishController.text.trim().length > 3 && !_weaving,
   };
 
@@ -62,6 +70,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final profile = UserProfile.empty().copyWith(
       name: _nameController.text.trim(),
       intentions: {intention},
+      age: int.tryParse(_ageController.text.trim()),
+      gender: _gender,
       // The wish is the profile's aspiration too — it is the one line that
       // makes every later story sound like this person.
       aspiration: wish,
@@ -123,7 +133,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                           controller: _nameController,
                           onChanged: () => setState(() {}),
                         ),
-                        1 => _IntentionStep(
+                        1 => _AboutStep(
+                          ageController: _ageController,
+                          gender: _gender,
+                          name: _nameController.text.trim(),
+                          onGender: (value) => setState(
+                            () => _gender = _gender == value ? '' : value,
+                          ),
+                        ),
+                        2 => _IntentionStep(
                           selected: _intention,
                           onPick: (intention) =>
                               setState(() => _intention = intention),
@@ -194,6 +212,87 @@ class _NameStep extends StatelessWidget {
             hintStyle: AstraTextStyles.bodyDim,
           ),
         ),
+      ),
+    ],
+  );
+}
+
+/// Age and gender, both optional and both stated rather than guessed.
+///
+/// This exists because the app got it wrong from a name: "Sid" was read as a
+/// man and the person in the wish as another man, and the story fell apart in
+/// one pronoun. Asking is the fix — but asking is only better than guessing if
+/// skipping is genuinely allowed, so Continue is enabled from the moment this
+/// step opens and an empty answer simply means the stories never mention it.
+class _AboutStep extends StatelessWidget {
+  const _AboutStep({
+    required this.ageController,
+    required this.gender,
+    required this.name,
+    required this.onGender,
+  });
+
+  final TextEditingController ageController;
+  final String gender;
+  final String name;
+  final ValueChanged<String> onGender;
+
+  static const _options = ['Woman', 'Man', 'Non-binary'];
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        name.isEmpty ? 'A little about you' : 'A little about you, $name',
+        style: AstraTextStyles.display(30),
+      ),
+      const SizedBox(height: AstraSpacing.sm),
+      Text(
+        'Your stories are written in your own voice, so this helps them sound '
+        'like your life. Skip either one — nothing is guessed from your name.',
+        style: AstraTextStyles.bodyDim,
+      ),
+      const SizedBox(height: AstraSpacing.xl),
+
+      Text('AGE', style: AstraTextStyles.eyebrow),
+      const SizedBox(height: AstraSpacing.sm),
+      AstraCard(
+        child: TextField(
+          controller: ageController,
+          keyboardType: TextInputType.number,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(3),
+          ],
+          style: AstraTextStyles.body.copyWith(fontSize: 16),
+          cursorColor: AstraColors.accent,
+          decoration: InputDecoration(
+            border: InputBorder.none,
+            isDense: true,
+            hintText: 'Optional',
+            hintStyle: AstraTextStyles.bodyDim,
+          ),
+        ),
+      ),
+      const SizedBox(height: AstraSpacing.lg),
+
+      Text('GENDER', style: AstraTextStyles.eyebrow),
+      const SizedBox(height: AstraSpacing.sm),
+      Wrap(
+        spacing: AstraSpacing.sm,
+        runSpacing: AstraSpacing.sm,
+        children: [
+          for (final option in _options)
+            TagChip(
+              label: option,
+              selected: gender == option,
+              // Tapping the selected one clears it, so "prefer not to say" is
+              // the absence of an answer rather than a fourth chip that reads
+              // like an answer.
+              onTap: () => onGender(option),
+            ),
+        ],
       ),
     ],
   );

@@ -52,6 +52,24 @@ void main() {
     await tester.tap(find.text('Continue'));
     await tester.pumpAndSettle();
 
+    expect(find.text('A little about you, Sana'), findsOneWidget);
+  });
+
+  testWidgets('age and gender can both be skipped', (tester) async {
+    await tester.pumpWidget(await _bootstrap());
+
+    await tester.enterText(find.byType(TextField), 'Sana');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    // Straight past without touching either field. An app that will not let
+    // you past a gender question is an app people close, and the whole reason
+    // for asking is that guessing was worse — a refusal to answer is a valid
+    // answer.
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
     expect(find.text('What are you calling in?'), findsOneWidget);
   });
 }

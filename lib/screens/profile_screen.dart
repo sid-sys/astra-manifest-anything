@@ -242,7 +242,12 @@ class ProfileScreen extends ConsumerWidget {
     try {
       await ref.read(authServiceProvider).sendPasswordResetForCurrentUser();
       messenger.showSnackBar(
-        const SnackBar(content: Text('Check your email for the link.')),
+        const SnackBar(
+          content: Text(
+            'Link sent. Check your inbox, and your spam folder if it is not '
+            'there in a few minutes.',
+          ),
+        ),
       );
     } catch (error) {
       messenger.showSnackBar(SnackBar(content: Text(authErrorMessage(error))));

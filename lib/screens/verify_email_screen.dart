@@ -80,7 +80,11 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
 
     try {
       await ref.read(authServiceProvider).sendVerificationEmail();
-      if (mounted) setState(() => _note = 'Sent. Give it a minute.');
+      if (mounted) {
+        setState(
+          () => _note = 'Sent. Give it a minute, and check your spam folder.',
+        );
+      }
     } catch (error) {
       if (mounted) setState(() => _error = authErrorMessage(error));
     } finally {
