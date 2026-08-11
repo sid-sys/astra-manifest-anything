@@ -1,86 +1,90 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// The Astra palette.
+/// The Astra palette: ink on paper.
 ///
-/// The app used to live in a dark cosmic world. It now sits in daylight: a
-/// pink-to-peach wash with white cards floating on it and deep plum type. The
-/// reason is not fashion. A manifestation app is asking someone to picture a
-/// better morning, and a black screen is the colour of the thing they are
-/// trying to leave — soft light does the persuading before a word is read.
+/// Monochrome, and deliberately so. The pink version was a copy of a
+/// competitor's screenshot, which meant every judgement call had already been
+/// made by someone else — and a colour scheme borrowed wholesale is the part
+/// users notice first and trust least. Black and white makes the type and the
+/// spacing do the work, which is the part that is actually ours.
 ///
-/// There is still no light/dark switch. One committed world, rendered well,
-/// beats two rendered adequately.
+/// It also survives contact with content. Six intention colours had to be
+/// re-picked every time the background moved; a greyscale system has nothing
+/// to clash with, and a photograph or a piece of artwork dropped into a card
+/// later becomes the only colour on the screen.
+///
+/// There is no light/dark switch. One committed world, rendered well, beats
+/// two rendered adequately.
 class AstraColors {
   const AstraColors._();
 
-  /// Page background. The wash in [AuraBackground] sits on top of it; this is
-  /// what shows where the gradient has faded out.
-  static const canvas = Color(0xFFFDF4F8);
+  /// Page background — warm off-white rather than pure white, which glares on
+  /// an OLED phone at night, and this is an app people open in bed.
+  static const canvas = Color(0xFFF7F7F6);
   static const canvasRaised = Color(0xFFFFFFFF);
 
-  /// The three stops of the wash, top to bottom: blossom, lilac, peach.
-  static const auraTop = Color(0xFFF9C8DF);
-  static const auraMid = Color(0xFFE9C9F2);
-  static const auraBottom = Color(0xFFFBDCC6);
+  /// The wash: three barely-there greys. Almost flat, but not quite — a dead
+  /// flat background makes white cards vanish into it.
+  static const auraTop = Color(0xFFEDEDEB);
+  static const auraMid = Color(0xFFF4F4F3);
+  static const auraBottom = Color(0xFFE9E9E7);
 
-  /// Cards are white and lean on shadow rather than borders. On a coloured
-  /// wash a border reads as a cut-out; a shadow reads as paper.
+  /// Cards are white and lean on shadow rather than borders.
   static const card = Color(0xFFFFFFFF);
-  static const cardRaised = Color(0xFFFFFBFD);
+  static const cardRaised = Color(0xFFFFFFFF);
 
-  /// Hairline, used where a shape needs definition without a shadow — chips,
-  /// inputs, dividers.
-  static const line = Color(0xFFF0DCE7);
+  /// Hairline, for shapes that need definition without a shadow.
+  static const line = Color(0xFFE2E2DF);
 
-  /// Deep plum rather than black. Pure black on a pink wash reads as a
-  /// printing error; this shares the background's hue and still clears 14:1.
-  static const text = Color(0xFF2B1B27);
+  /// Near-black, not pure black. #000 against white is a harsh edge that
+  /// reads as unrendered; this is soft enough to look printed and still
+  /// clears 17:1.
+  static const text = Color(0xFF121212);
 
-  /// Secondary type. Chosen against the *wash*, not against white: subtitles
-  /// sit directly on the gradient, and the obvious lighter plum cleared AA on
-  /// a card at 6.2:1 while failing it at 4.2:1 on lilac — which is exactly
-  /// where most of this app's secondary text lives. This clears 4.9:1 there
-  /// and 7.3:1 on white.
-  static const dim = Color(0xFF665060);
+  /// Secondary type. Picked against the *darkest* stop of the wash, not
+  /// against white: the obvious mid-grey cleared 5.4:1 on a card and failed at
+  /// 4.46:1 on the bottom of the gradient, which is exactly where the small
+  /// print under a button sits. This clears 4.9:1 there and 5.9:1 on paper.
+  static const dim = Color(0xFF646462);
 
-  /// The accent: aubergine. Carries the primary button, the active nav item
-  /// and every "this is the thing to press".
-  static const accent = Color(0xFF6D2E4F);
-  static const accentDeep = Color(0xFF4C1E37);
+  /// The accent is the ink. Buttons, the active nav item, every "press this".
+  static const accent = Color(0xFF121212);
+  static const accentDeep = Color(0xFF000000);
 
-  /// What sits on top of [accent]. White, at 9.4:1.
   static const onAccent = Color(0xFFFFFFFF);
 
-  /// A tint of the accent for selected chips and quiet fills.
-  static const accentWash = Color(0xFFFBEAF2);
+  /// A tint for selected chips and quiet fills.
+  static const accentWash = Color(0xFFEFEFED);
 
-  /// Secondary accent, for anything that should read as distinct from the
-  /// primary action. Darkened from the wash's own lilac so it can hold text.
-  static const violet = Color(0xFF7B4BB0);
-  static const good = Color(0xFF2F7D5B);
+  /// Kept because widgets reference them, and mapped into the greyscale: a
+  /// second colour would be the whole point of this palette, undone.
+  static const violet = Color(0xFF3A3A38);
+  static const good = Color(0xFF2E2E2C);
 
+  /// Flat ink. Buttons used to carry a gradient; in monochrome a gradient
+  /// reads as a rendering artefact rather than as depth.
   static const accentGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF7E3A5C), accent],
+    colors: [accent, accent],
   );
 
-  /// The shadow every card and button shares. Tinted plum rather than black,
-  /// so it sits in the wash instead of dirtying it.
+  /// Neutral shadow. The plum tint existed to sit inside a pink wash; on grey
+  /// it would just look like dirt.
   static List<BoxShadow> get softShadow => [
     BoxShadow(
-      color: const Color(0xFF6D2E4F).withValues(alpha: 0.07),
-      blurRadius: 18,
-      offset: const Offset(0, 6),
+      color: Colors.black.withValues(alpha: 0.05),
+      blurRadius: 16,
+      offset: const Offset(0, 4),
     ),
   ];
 
   static List<BoxShadow> get liftedShadow => [
     BoxShadow(
-      color: const Color(0xFF6D2E4F).withValues(alpha: 0.13),
-      blurRadius: 26,
-      offset: const Offset(0, 10),
+      color: Colors.black.withValues(alpha: 0.10),
+      blurRadius: 24,
+      offset: const Offset(0, 8),
     ),
   ];
 }
@@ -95,9 +99,9 @@ class AstraSpacing {
   static const xl = 24.0;
   static const xxl = 32.0;
 
-  /// Rounder than before. The reference language is soft-cornered throughout,
-  /// and a 14px radius beside a 999px pill looks like two design systems.
-  static const cardRadius = 22.0;
+  /// Soft-cornered throughout: a 14px radius beside a 999px pill looks like
+  /// two design systems. Everything round, nothing sharp.
+  static const cardRadius = 24.0;
   static const pillRadius = 999.0;
   static const screenPadding = EdgeInsets.symmetric(horizontal: 20);
 }
@@ -108,12 +112,16 @@ class AstraTextStyles {
   /// Headlines are serif, and the app leans on one trick: the emphasised word
   /// in a heading goes italic. It is the whole reason the type has personality
   /// without a second family.
+  ///
+  /// Heavier than it was. With the colour gone, weight is what makes a heading
+  /// read as a heading — the pink version could lean on an accent hue to do
+  /// that, and this one cannot.
   static TextStyle display(double size, {Color color = AstraColors.text}) =>
       GoogleFonts.playfairDisplay(
         fontSize: size,
-        fontWeight: FontWeight.w600,
-        height: 1.18,
-        letterSpacing: -0.2,
+        fontWeight: FontWeight.w700,
+        height: 1.16,
+        letterSpacing: -0.4,
         color: color,
       );
 
@@ -125,8 +133,8 @@ class AstraTextStyles {
   /// caps. "Astra" in serif is a logo; "A S T R A" in a small sans is a label.
   static TextStyle get wordmark => GoogleFonts.playfairDisplay(
     fontSize: 24,
-    fontWeight: FontWeight.w600,
-    letterSpacing: 0,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.3,
     color: AstraColors.text,
   );
 

@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../theme/astra_theme.dart';
 
-/// The wash every screen sits on: blossom at the top, lilac through the
-/// middle, peach at the bottom.
+/// The wash every screen sits on: a near-flat sweep of greys with light
+/// falling from the top right.
 ///
-/// Two gradients rather than one. A single three-stop linear ramp reads as a
-/// flat swatch; laying a soft off-centre lilac bloom over a vertical ramp gives
-/// the light somewhere to come from, which is the entire difference between
-/// "gradient background" and "morning".
+/// Two gradients rather than one. A single ramp reads as a flat swatch; a soft
+/// off-centre bloom over a vertical ramp gives the light somewhere to come
+/// from. In greyscale that matters more, not less — the difference between
+/// "paper" and "the renderer forgot the background" is entirely in the
+/// gradient.
 ///
 /// [intensity] fades the whole thing toward white. Screens that are mostly
 /// cards — a settings list, the library — turn it down so the paper reads as

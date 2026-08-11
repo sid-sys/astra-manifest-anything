@@ -8,6 +8,7 @@ import '../services/auth_service.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/allowance_ring.dart';
 import '../widgets/astra_widgets.dart';
+import '../widgets/profile_avatar.dart';
 import 'auth_screen.dart';
 import 'confirm_screen.dart';
 import 'paywall_screen.dart';
@@ -38,13 +39,12 @@ class ProfileScreen extends ConsumerWidget {
         Center(
           child: Column(
             children: [
-              GlyphDot(
-                glyph: profile.name.isEmpty
-                    ? '✦'
-                    : profile.name.characters.first.toUpperCase(),
-                size: 68,
-              ),
-              const SizedBox(height: AstraSpacing.sm),
+              // The photo is edited here now, which is the only place anyone
+              // would look for it. Home used to carry a tappable avatar in the
+              // middle of the screen, where a camera badge sat next to the
+              // question and competed with it.
+              ProfileAvatar(name: profile.name, size: 88),
+              const SizedBox(height: AstraSpacing.md),
               Text(profile.name, style: AstraTextStyles.label.copyWith(fontSize: 16)),
               Text(
                 'Manifesting since ${DateFormat('MMMM yyyy').format(profile.joinedAt)}',

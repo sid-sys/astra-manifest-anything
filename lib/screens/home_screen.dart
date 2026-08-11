@@ -10,7 +10,6 @@ import '../services/wish_prompts.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/allowance_ring.dart';
 import '../widgets/astra_widgets.dart';
-import '../widgets/profile_avatar.dart';
 import '../widgets/streak_card.dart';
 import 'paywall_screen.dart';
 import 'player_screen.dart';
@@ -19,10 +18,10 @@ import 'story_flow.dart';
 
 /// The daily ritual, arranged as one question.
 ///
-/// Everything above the fold serves a single ask — your face, your name, the
-/// question, the box, and a row of things other people are asking for. The
-/// library, the streak and the stats live below it, because they are evidence
-/// that the practice is working rather than the thing you came to do.
+/// Everything above the fold serves a single ask — the question, the box, and
+/// a row of things other people are asking for. The library, the streak and
+/// the stats live below it, because they are evidence that the practice is
+/// working rather than the thing you came to do.
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({
     super.key,
@@ -119,16 +118,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return ListView(
       padding: const EdgeInsets.only(top: 4, bottom: 32),
       children: [
-        _Inset(
-          child: _HomeHeader(
-            onFavourites: widget.onProfile,
-            onHistory: widget.onLibrary,
-          ),
-        ),
-        const SizedBox(height: AstraSpacing.xl),
-
-        Center(child: ProfileAvatar(name: profile.name)),
-        const SizedBox(height: AstraSpacing.lg),
+        // Wordmark alone. The avatar and the two icons that were here — a
+        // heart to favourites, a clock to the library — all pointed at places
+        // the nav bar and the Profile tab already reach. Three ways to the
+        // same screen is not three features.
+        const _Inset(child: Wordmark('Astra', align: TextAlign.left)),
+        const SizedBox(height: AstraSpacing.xxl),
 
         _Inset(child: _Question(name: profile.name)),
         const SizedBox(height: AstraSpacing.lg),
@@ -289,67 +284,6 @@ class _Inset extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       Padding(padding: AstraSpacing.screenPadding, child: child);
-}
-
-class _HomeHeader extends StatelessWidget {
-  const _HomeHeader({required this.onFavourites, required this.onHistory});
-
-  final VoidCallback onFavourites;
-  final VoidCallback onHistory;
-
-  @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      Expanded(child: Wordmark('Astra', align: TextAlign.left)),
-      _HeaderIcon(
-        icon: Icons.favorite_border,
-        tooltip: 'Saved',
-        onTap: onFavourites,
-      ),
-      const SizedBox(width: AstraSpacing.sm),
-      _HeaderIcon(
-        icon: Icons.history_rounded,
-        tooltip: 'Your library',
-        onTap: onHistory,
-      ),
-    ],
-  );
-}
-
-class _HeaderIcon extends StatelessWidget {
-  const _HeaderIcon({
-    required this.icon,
-    required this.tooltip,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Tooltip(
-    message: tooltip,
-    child: Semantics(
-      button: true,
-      label: tooltip,
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: Container(
-          width: 34,
-          height: 34,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: AstraColors.card,
-            boxShadow: AstraColors.softShadow,
-          ),
-          child: Icon(icon, size: 16, color: AstraColors.text),
-        ),
-      ),
-    ),
-  );
 }
 
 /// "Sid, what do you want to manifest?" — the verb set in italic serif, which
@@ -521,10 +455,10 @@ class _PillButton extends StatelessWidget {
 
 /// A story in the "For you" row.
 ///
-/// No artwork: the app has no images and inventing stock photography for a
-/// story about the user's own life would be a worse lie than a colour. The
-/// intention's accent carries it instead, so the row still reads as distinct
-/// cards at a glance.
+/// White card, black type, one glyph. It used to be tinted with the
+/// intention's colour, which was carrying the whole job of telling the cards
+/// apart — with the palette gone that job falls to the title, which is what
+/// anyone was actually reading anyway.
 class _StoryCard extends StatelessWidget {
   const _StoryCard({required this.story, required this.onTap});
 
@@ -533,27 +467,18 @@ class _StoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = story.intention.accent;
-
     return SizedBox(
       width: 208,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(AstraSpacing.cardRadius),
           child: Ink(
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  accent.withValues(alpha: 0.22),
-                  AstraColors.card,
-                ],
-              ),
-              border: Border.all(color: accent.withValues(alpha: 0.35)),
-              borderRadius: BorderRadius.circular(18),
+              color: AstraColors.card,
+              borderRadius: BorderRadius.circular(AstraSpacing.cardRadius),
+              boxShadow: AstraColors.softShadow,
             ),
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -564,9 +489,12 @@ class _StoryCard extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
+                          '${story.intention.glyph}  '
                           '${story.intention.label.toUpperCase()} · '
                           '${story.durationLabel.toUpperCase()}',
-                          style: AstraTextStyles.eyebrow.copyWith(color: accent),
+                          style: AstraTextStyles.eyebrow.copyWith(
+                            color: AstraColors.dim,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -622,12 +550,12 @@ class _SeeAllCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AstraSpacing.cardRadius),
         child: Ink(
           decoration: BoxDecoration(
             color: AstraColors.card,
             boxShadow: AstraColors.softShadow,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(AstraSpacing.cardRadius),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,

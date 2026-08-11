@@ -4,17 +4,20 @@ import '../theme/astra_theme.dart';
 
 /// The life areas a user can manifest toward. Stories, library filters and the
 /// daily pick are all keyed on these.
-/// Accents are chosen to hold their own *as text on white*, not just as a dot.
-/// The old set was tuned for a dark background and every one of them fell
-/// below 3:1 once the app moved into daylight — a card eyebrow in pastel pink
-/// on white is decoration, not a label.
+/// Every intention is ink now.
+///
+/// They used to be six colours, re-picked from scratch each time the
+/// background moved, and the differences were never load-bearing: the glyph
+/// and the label already say which is which, and nobody was reading meaning
+/// out of the particular shade of blue on Confidence. Six accents in a
+/// monochrome app would be the exception that undoes the rule.
 enum Intention {
-  career('Career', '✦', Color(0xFF9A6410)),
-  abundance('Abundance', '✧', AstraColors.violet),
-  love('Love', '♡', Color(0xFFB63E67)),
-  health('Health', '☘', AstraColors.good),
-  confidence('Confidence', '△', Color(0xFF1F6698)),
-  peace('Peace', '☾', Color(0xFF5C4E9E));
+  career('Career', '✦', AstraColors.text),
+  abundance('Abundance', '✧', AstraColors.text),
+  love('Love', '♡', AstraColors.text),
+  health('Health', '☘', AstraColors.text),
+  confidence('Confidence', '△', AstraColors.text),
+  peace('Peace', '☾', AstraColors.text);
 
   const Intention(this.label, this.glyph, this.accent);
 
