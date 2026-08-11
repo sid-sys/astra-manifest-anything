@@ -1,0 +1,22 @@
+# Launcher icons, generated from assets/brand/ by `dart run flutter_launcher_icons`.
+#
+# The sources come from tool/build_icon.dart, which crops the raw logo to its
+# ink and re-pads it — the original mark occupied 422x474 of a 1024 canvas, so
+# using it directly produced an icon that was mostly white space.
+flutter_launcher_icons:
+  android: "ic_launcher"
+  image_path: "assets/brand/icon.png"
+
+  # Adaptive icons are two layers the launcher animates and masks
+  # independently. White background, ink foreground: the mark keeps its paper
+  # whatever shape the launcher crops to.
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/brand/icon_foreground.png"
+
+  # Play requires a 512x512 icon for the listing; this writes one so the store
+  # asset and the launcher asset cannot drift apart.
+  web:
+    generate: true
+    image_path: "assets/brand/icon.png"
+    background_color: "#FFFFFF"
+    theme_color: "#121212"

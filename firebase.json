@@ -19,6 +19,14 @@
   "hosting": {
     "public": "build/web",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "// legal pages": [
+      "privacy.html, terms.html and delete-account.html live in web/ and are",
+      "copied verbatim into build/web by `flutter build web`. Hosting serves a",
+      "real file before it consults the rewrite below, so the catch-all does",
+      "not swallow them. cleanUrls drops the .html so the URLs given to Play",
+      "and to the app are stable even if these pages move to a real site."
+    ],
+    "cleanUrls": true,
     "rewrites": [
       {
         "source": "**",

@@ -8,6 +8,7 @@ import 'package:in_app_purchase/in_app_purchase.dart';
 import '../models/plan.dart';
 import '../providers.dart';
 import '../services/billing_service.dart';
+import '../services/legal_links.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
 import '../widgets/aura_background.dart';
@@ -232,7 +233,46 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: AstraSpacing.md),
+
+                // The renewal terms, said plainly, on the screen that takes the
+                // money — not buried in a policy page nobody opens. Play
+                // requires the disclosure; the app this one is modelled on was
+                // reviewed hardest for a price whose period was not obvious.
+                Text(
+                  'Renews automatically until you cancel in Google Play. '
+                  'Cancelling stops the next payment and you keep Plus until '
+                  'the period you have paid for ends.',
+                  textAlign: TextAlign.center,
+                  style: AstraTextStyles.small,
+                ),
+                const SizedBox(height: AstraSpacing.xs),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    TextButton(
+                      onPressed: () =>
+                          LegalLinks.open(context, LegalLinks.terms),
+                      child: Text(
+                        'Terms',
+                        style: AstraTextStyles.small.copyWith(
+                          color: AstraColors.text,
+                        ),
+                      ),
+                    ),
+                    Text('·', style: AstraTextStyles.small),
+                    TextButton(
+                      onPressed: () =>
+                          LegalLinks.open(context, LegalLinks.privacy),
+                      child: Text(
+                        'Privacy',
+                        style: AstraTextStyles.small.copyWith(
+                          color: AstraColors.text,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AstraSpacing.sm),
               ],
             ),
           ),

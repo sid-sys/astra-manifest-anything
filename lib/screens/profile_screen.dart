@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/intention.dart';
 import '../providers.dart';
 import '../services/auth_service.dart';
+import '../services/legal_links.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/allowance_ring.dart';
 import '../widgets/astra_widgets.dart';
@@ -226,6 +227,33 @@ class ProfileScreen extends ConsumerWidget {
           danger: true,
           onTap: () => _confirm(context, ConfirmKind.deleteData),
         ),
+
+        // Reachable from inside the app, not only from the store listing.
+        // Someone who wants to know what happens to what they typed should not
+        // have to leave and find the Play page to be told.
+        const SizedBox(height: AstraSpacing.xl),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _LegalLink(
+              label: 'Privacy',
+              onTap: () => LegalLinks.open(context, LegalLinks.privacy),
+            ),
+            Text('·', style: AstraTextStyles.small),
+            _LegalLink(
+              label: 'Terms',
+              onTap: () => LegalLinks.open(context, LegalLinks.terms),
+            ),
+            Text('·', style: AstraTextStyles.small),
+            _LegalLink(
+              label: 'Support',
+              onTap: () => LegalLinks.open(
+                context,
+                'mailto:${LegalLinks.supportEmail}',
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -322,6 +350,22 @@ Future<void> editIntentions(BuildContext context, WidgetRef ref) async {
   await ref
       .read(profileProvider.notifier)
       .update(profile.copyWith(intentions: selected));
+}
+
+class _LegalLink extends StatelessWidget {
+  const _LegalLink({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => TextButton(
+    onPressed: onTap,
+    child: Text(
+      label,
+      style: AstraTextStyles.small.copyWith(color: AstraColors.text),
+    ),
+  );
 }
 
 /// A row in the Account block. The destructive one is tinted, but only its
