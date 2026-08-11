@@ -57,26 +57,40 @@ final notificationServiceProvider = Provider<NotificationService>(
   (ref) => NotificationService(),
 );
 
-/// Rebuilds the reminder queue from the current profile and taste.
+/// Keeps the server's idea of this device in step with the profile.
 ///
-/// Called after any change that affects what the notifications would say —
-/// turning them on, moving the time, editing intentions, keeping an
-/// affirmation — and on launch, which is what keeps the fourteen-day queue
-/// topped up.
-Future<void> refreshReminders(WidgetRef ref) async {
+/// The affirmation itself is written and sent by a scheduled Cloud Function;
+/// all the app has to do is make sure the function knows where to send it and
+/// in what timezone. So this writes a push token and an IANA zone when
+/// reminders are on, and erases both when they are off.
+///
+/// Called on launch and after any change that moves the answer — turning
+/// reminders on or off, changing the time, signing in. Cheap enough to call on
+/// every launch: it only writes when something actually differs, so the common
+/// case is one token read and no network at all.
+Future<void> refreshPushRegistration(WidgetRef ref) async {
   final profile = ref.read(profileProvider);
   final notifications = ref.read(notificationServiceProvider);
+  final profiles = ref.read(profileProvider.notifier);
 
   if (!profile.remindersOn) {
-    await notifications.cancelAll();
+    await notifications.unregister();
+    if (profile.fcmToken != null) {
+      await profiles.update(profile.copyWith(clearPush: true));
+    }
     return;
   }
 
-  await notifications.scheduleDaily(
-    hour: profile.reminderHour,
-    minute: profile.reminderMinute,
-    intentions: profile.intentions,
-    taste: ref.read(tasteProvider),
+  final registration = await notifications.register();
+  if (registration.token == null) return;
+
+  if (registration.token == profile.fcmToken &&
+      registration.zone == profile.timezone) {
+    return;
+  }
+
+  await profiles.update(
+    profile.copyWith(fcmToken: registration.token, timezone: registration.zone),
   );
 }
 

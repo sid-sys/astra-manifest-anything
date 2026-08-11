@@ -12,6 +12,8 @@ class UserProfile {
     this.remindersOn = false,
     this.reminderHour = 8,
     this.reminderMinute = 0,
+    this.fcmToken,
+    this.timezone,
     this.age,
     this.gender = '',
     this.isSubscribed = false,
@@ -28,6 +30,20 @@ class UserProfile {
   final bool remindersOn;
   final int reminderHour;
   final int reminderMinute;
+
+  /// Where to push this user's affirmation, and the zone that decides when.
+  ///
+  /// Both are mirrored to Firestore because the scheduled function is the one
+  /// that reads them — it has no other way to know that eight in the morning is
+  /// half past two UTC for this particular phone. Null when reminders are off,
+  /// which is also how the sender knows to skip the account rather than push
+  /// into a dead address.
+  ///
+  /// The zone is an IANA name ("Asia/Kolkata"), never an offset: an offset
+  /// stored once is wrong twice a year for anyone who observes daylight saving,
+  /// and arriving in the morning is the entire point.
+  final String? fcmToken;
+  final String? timezone;
 
   /// Optional, and stated rather than inferred. The story generator writes in
   /// the listener's own voice, so knowing "27, female" lets it write a life
@@ -88,9 +104,12 @@ class UserProfile {
     bool? remindersOn,
     int? reminderHour,
     int? reminderMinute,
+    String? fcmToken,
+    String? timezone,
     bool? isSubscribed,
     DateTime? subscribedAt,
     bool? paywallSeen,
+    bool clearPush = false,
   }) => UserProfile(
     name: name ?? this.name,
     intentions: intentions ?? this.intentions,
@@ -100,6 +119,12 @@ class UserProfile {
     remindersOn: remindersOn ?? this.remindersOn,
     reminderHour: reminderHour ?? this.reminderHour,
     reminderMinute: reminderMinute ?? this.reminderMinute,
+    // Erasable, unlike every other field here. Turning reminders off has to be
+    // able to clear the token, and `??` can only ever keep the old one — a
+    // "deleted" push address that still sits in Firestore is one the sender
+    // would happily keep using.
+    fcmToken: clearPush ? null : (fcmToken ?? this.fcmToken),
+    timezone: clearPush ? null : (timezone ?? this.timezone),
     gender: gender ?? this.gender,
     joinedAt: joinedAt,
     isSubscribed: isSubscribed ?? this.isSubscribed,
@@ -116,6 +141,8 @@ class UserProfile {
     'remindersOn': remindersOn,
     'reminderHour': reminderHour,
     'reminderMinute': reminderMinute,
+    'fcmToken': fcmToken,
+    'timezone': timezone,
     'gender': gender,
     'joinedAt': joinedAt.toIso8601String(),
     'isSubscribed': isSubscribed,
@@ -134,6 +161,8 @@ class UserProfile {
     remindersOn: map['remindersOn'] as bool? ?? false,
     reminderHour: (map['reminderHour'] as num?)?.toInt() ?? 8,
     reminderMinute: (map['reminderMinute'] as num?)?.toInt() ?? 0,
+    fcmToken: map['fcmToken'] as String?,
+    timezone: map['timezone'] as String?,
     gender: map['gender'] as String? ?? '',
     joinedAt:
         DateTime.tryParse(map['joinedAt'] as String? ?? '') ?? DateTime.now(),

@@ -26,17 +26,37 @@ class ShellScreen extends ConsumerStatefulWidget {
 
 class _ShellScreenState extends ConsumerState<ShellScreen> {
   int _tab = 0;
+  StreamSubscription<String>? _tokenRefresh;
 
   @override
   void initState() {
     super.initState();
-    // Tops up the fourteen-day reminder queue. Reminders are scheduled on the
-    // device, so the only chance to extend them is while the app is open —
-    // doing it here means anyone who opens Astra even fortnightly never runs
-    // out of queued affirmations.
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => unawaited(refreshReminders(ref)),
-    );
+
+    // Re-registers this device for the morning push. Tokens rotate on
+    // reinstall and restore, and a rotated token nobody told the server about
+    // is a user whose reminders quietly stop arriving.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(refreshPushRegistration(ref));
+
+      _tokenRefresh = ref
+          .read(notificationServiceProvider)
+          .tokenRefreshes
+          .listen((token) {
+            final profile = ref.read(profileProvider);
+            if (!profile.remindersOn) return;
+            unawaited(
+              ref
+                  .read(profileProvider.notifier)
+                  .update(profile.copyWith(fcmToken: token)),
+            );
+          });
+    });
+  }
+
+  @override
+  void dispose() {
+    _tokenRefresh?.cancel();
+    super.dispose();
   }
 
   // Nothing offers the plans here. Onboarding shows them itself, between

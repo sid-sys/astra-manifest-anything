@@ -281,7 +281,7 @@ class ProfileScreen extends ConsumerWidget {
         await ref
             .read(profileProvider.notifier)
             .update(profile.copyWith(remindersOn: false));
-        await refreshReminders(ref);
+        await refreshPushRegistration(ref);
         messenger.showSnackBar(
           const SnackBar(content: Text('Daily affirmation turned off.')),
         );
@@ -296,7 +296,7 @@ class ProfileScreen extends ConsumerWidget {
               reminderMinute: picked.minute,
             ),
           );
-      await refreshReminders(ref);
+      await refreshPushRegistration(ref);
       return;
     }
 
@@ -336,7 +336,7 @@ class ProfileScreen extends ConsumerWidget {
             reminderMinute: picked.minute,
           ),
         );
-    await refreshReminders(ref);
+    await refreshPushRegistration(ref);
 
     messenger.showSnackBar(
       SnackBar(

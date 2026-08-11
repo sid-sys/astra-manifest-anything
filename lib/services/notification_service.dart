@@ -1,39 +1,53 @@
+import 'dart:async';
+
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
-import 'package:timezone/data/latest_all.dart' as tz_data;
-import 'package:timezone/timezone.dart' as tz;
-
-import '../models/affirmation_taste.dart';
-import '../models/intention.dart';
-import 'affirmations.dart';
 
 /// The daily affirmation, delivered as a notification.
 ///
-/// Scheduled on the device rather than pushed from a server. That is a real
-/// decision, not a shortcut: a push would need FCM tokens, a scheduled
-/// function, and a per-user timezone the server would have to guess — for a
-/// line of text the phone can already work out for itself. It also keeps
-/// working with no network, costs nothing per user, and means the app is not
-/// holding a push token for people who never wanted notifications.
+/// Pushed from the server, not scheduled on the device. The first version of
+/// this scheduled fourteen days of curated lines locally, which worked offline
+/// and cost nothing — but a locally scheduled notification can only ever say
+/// something the app already shipped. The lines are now written per user, from
+/// their own areas of life and their own words about what they want, which is
+/// work only a server holding an API key can do.
 ///
-/// The cost of that choice is that the text has to be scheduled in advance, so
-/// this queues [_horizon] days at a time and tops the queue up whenever the app
-/// opens. Someone who does not open the app for two weeks stops being
-/// reminded — which is arguably correct, and is the honest limit of a
-/// device-scheduled reminder.
+/// The trade is honest and worth naming: this needs a network at the moment of
+/// sending, and a push into a phone that has been offline all night arrives
+/// when it reconnects rather than at eight sharp. In exchange the affirmation
+/// is about the user's life instead of a stranger's.
+///
+/// This class owns three things and no more: permission, the channel, and the
+/// token. The text arrives from [dailyAffirmation] in `functions/index.js`.
 class NotificationService {
-  NotificationService({FlutterLocalNotificationsPlugin? plugin})
-    : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+  NotificationService({
+    FlutterLocalNotificationsPlugin? plugin,
+    this.messaging,
+  }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
   final FlutterLocalNotificationsPlugin _plugin;
 
-  /// How many days of affirmations are queued at once.
-  static const _horizon = 14;
+  /// Injected only by tests. Null in the app, where [_push] reads the singleton.
+  final FirebaseMessaging? messaging;
 
-  /// Android channel. Named for what it is, because this string is what the
-  /// user sees in system settings when they go looking for the thing that
-  /// woke their phone.
+  /// Null when Firebase never started — the app still runs, it just has no
+  /// push. Read lazily rather than in the constructor because the provider is
+  /// built before anyone has checked whether Firebase came up.
+  FirebaseMessaging? get _push {
+    if (messaging != null) return messaging;
+    try {
+      return FirebaseMessaging.instance;
+    } catch (error) {
+      debugPrint('Astra: messaging unavailable — $error');
+      return null;
+    }
+  }
+
+  /// Android channel. This id is repeated in the Cloud Function that sends the
+  /// message; a mismatch files the notification under a default channel the
+  /// user never agreed to, at a priority they never chose.
   static const _channel = AndroidNotificationChannel(
     'daily_affirmation',
     'Daily affirmation',
@@ -45,16 +59,6 @@ class NotificationService {
 
   Future<void> _init() async {
     if (_ready) return;
-
-    tz_data.initializeTimeZones();
-    try {
-      final zone = await FlutterTimezone.getLocalTimezone();
-      tz.setLocalLocation(tz.getLocation(zone.identifier));
-    } catch (error) {
-      // A device whose zone we cannot read still gets reminders, just in UTC.
-      // Better than no reminder at all, and better than crashing on launch.
-      debugPrint('Astra: could not resolve timezone, using UTC — $error');
-    }
 
     await _plugin.initialize(
       settings: const InitializationSettings(
@@ -68,7 +72,31 @@ class NotificationService {
         >()
         ?.createNotificationChannel(_channel);
 
+    // A push that lands while the user is looking at the app is swallowed by
+    // Android — the system tray is for things you are not already holding. It
+    // is still worth showing, so it gets drawn locally instead.
+    FirebaseMessaging.onMessage.listen(_showForeground);
+
     _ready = true;
+  }
+
+  Future<void> _showForeground(RemoteMessage message) async {
+    final body = message.notification?.body ?? message.data['line'];
+    if (body == null || body.isEmpty) return;
+
+    await _plugin.show(
+      id: 0,
+      title: message.notification?.title ?? 'Today’s affirmation',
+      body: body,
+      notificationDetails: NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channel.id,
+          _channel.name,
+          channelDescription: _channel.description,
+          styleInformation: BigTextStyleInformation(body),
+        ),
+      ),
+    );
   }
 
   /// Asks for permission to post notifications.
@@ -87,72 +115,50 @@ class NotificationService {
     return await android?.requestNotificationsPermission() ?? false;
   }
 
-  /// Replaces the queue with the next [_horizon] days of affirmations.
+  /// The address this phone can be pushed to, and the zone it lives in.
   ///
-  /// Cancels first, so changing the time does not leave yesterday's schedule
-  /// running alongside today's.
-  Future<void> scheduleDaily({
-    required int hour,
-    required int minute,
-    required Set<Intention> intentions,
-    required AffirmationTaste taste,
-  }) async {
+  /// Both are needed together and neither is useful alone: the token says where
+  /// to send, the IANA zone says when. An offset would have been simpler and
+  /// wrong twice a year — the point of the feature is arriving in the morning,
+  /// and a stored `+05:30` does not follow anyone across daylight saving.
+  ///
+  /// Returns nulls rather than throwing when push is unavailable. A user with
+  /// no Play Services still gets the whole app; they just get no reminder.
+  Future<({String? token, String zone})> register() async {
     await _init();
-    await cancelAll();
 
-    final now = tz.TZDateTime.now(tz.local);
+    var zone = 'UTC';
+    try {
+      zone = (await FlutterTimezone.getLocalTimezone()).identifier;
+    } catch (error) {
+      debugPrint('Astra: could not resolve timezone — $error');
+    }
 
-    for (var day = 0; day < _horizon; day++) {
-      var when = tz.TZDateTime(
-        tz.local,
-        now.year,
-        now.month,
-        now.day,
-        hour,
-        minute,
-      ).add(Duration(days: day));
-
-      // Today's slot may already have passed; the first notification is then
-      // tomorrow's rather than one that fires immediately on save.
-      if (when.isBefore(now)) continue;
-
-      final line = Affirmations.forDay(when, intentions, taste);
-
-      await _plugin.zonedSchedule(
-        id: day,
-        title: 'Today’s affirmation',
-        body: line,
-        scheduledDate: when,
-        notificationDetails: NotificationDetails(
-          android: AndroidNotificationDetails(
-            _channel.id,
-            _channel.name,
-            channelDescription: _channel.description,
-            // The line is the whole notification, and some run past one line.
-            styleInformation: BigTextStyleInformation(line),
-          ),
-        ),
-        // Inexact on purpose. Exact alarms need SCHEDULE_EXACT_ALARM, which
-        // Play grants only to alarm clocks and calendars — and nobody needs an
-        // affirmation delivered to the second.
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      );
+    try {
+      return (token: await _push?.getToken(), zone: zone);
+    } catch (error) {
+      debugPrint('Astra: no push token — $error');
+      return (token: null, zone: zone);
     }
   }
 
-  Future<void> cancelAll() async {
-    await _init();
+  /// Stops this device being pushed to.
+  ///
+  /// Deletes the token rather than only clearing it from the profile: a token
+  /// that still exists is a token something else could send to, and "off"
+  /// should mean off at the device, not off by convention on the server.
+  Future<void> unregister() async {
+    try {
+      await _push?.deleteToken();
+    } catch (error) {
+      debugPrint('Astra: could not delete push token — $error');
+    }
     await _plugin.cancelAll();
   }
 
-  /// Whether the user has already granted permission, without asking again.
-  Future<bool> get isPermitted async {
-    await _init();
-    return await _plugin
-            .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin
-            >()
-            ?.areNotificationsEnabled() ??
-        false;
-  }
+  /// Fires when Android rotates the token underneath us, which it does on
+  /// reinstall, restore, and occasionally for its own reasons. A rotated token
+  /// that never reaches the server is a user whose reminders silently stop.
+  Stream<String> get tokenRefreshes =>
+      _push?.onTokenRefresh ?? const Stream<String>.empty();
 }

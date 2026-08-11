@@ -12,9 +12,6 @@
          denies. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
-    <!-- Reminders are scheduled on the device, so they have to survive a
-         reboot. Without this, restarting the phone silently ends them. -->
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
 
     <application
         android:label="Astra"
@@ -42,18 +39,17 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <!-- Re-registers the scheduled affirmations after a reboot. The
-             plugin's own receiver; without it every queued reminder is lost
-             the first time the phone restarts. -->
-        <receiver
-            android:exported="false"
-            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED"/>
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
-                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
-            </intent-filter>
-        </receiver>
+        <!-- Files the morning affirmation under the channel the app created,
+             so it inherits the importance the user agreed to. This id is
+             repeated in the Cloud Function that sends it and in
+             NotificationService; a mismatch drops the message into a default
+             channel nobody chose. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="daily_affirmation" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@mipmap/ic_launcher" />
 
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
