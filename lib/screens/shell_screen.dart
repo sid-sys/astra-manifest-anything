@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../providers.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/aura_background.dart';
 import 'affirmations_screen.dart';
@@ -23,6 +26,18 @@ class ShellScreen extends ConsumerStatefulWidget {
 
 class _ShellScreenState extends ConsumerState<ShellScreen> {
   int _tab = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Tops up the fourteen-day reminder queue. Reminders are scheduled on the
+    // device, so the only chance to extend them is while the app is open —
+    // doing it here means anyone who opens Astra even fortnightly never runs
+    // out of queued affirmations.
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => unawaited(refreshReminders(ref)),
+    );
+  }
 
   // Nothing offers the plans here. Onboarding shows them itself, between
   // choosing an area of life and writing the first wish, and marks them seen

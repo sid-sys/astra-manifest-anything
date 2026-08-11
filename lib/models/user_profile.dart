@@ -9,6 +9,9 @@ class UserProfile {
     required this.aspiration,
     required this.voice,
     required this.joinedAt,
+    this.remindersOn = false,
+    this.reminderHour = 8,
+    this.reminderMinute = 0,
     this.age,
     this.gender = '',
     this.isSubscribed = false,
@@ -18,6 +21,13 @@ class UserProfile {
 
   final String name;
   final Set<Intention> intentions;
+
+  /// Daily affirmation reminder. Off until someone turns it on — an app that
+  /// starts notifying you before you asked is an app whose notifications get
+  /// switched off at the system level, permanently.
+  final bool remindersOn;
+  final int reminderHour;
+  final int reminderMinute;
 
   /// Optional, and stated rather than inferred. The story generator writes in
   /// the listener's own voice, so knowing "27, female" lets it write a life
@@ -75,6 +85,9 @@ class UserProfile {
     String? voice,
     int? age,
     String? gender,
+    bool? remindersOn,
+    int? reminderHour,
+    int? reminderMinute,
     bool? isSubscribed,
     DateTime? subscribedAt,
     bool? paywallSeen,
@@ -84,6 +97,9 @@ class UserProfile {
     aspiration: aspiration ?? this.aspiration,
     voice: voice ?? this.voice,
     age: age ?? this.age,
+    remindersOn: remindersOn ?? this.remindersOn,
+    reminderHour: reminderHour ?? this.reminderHour,
+    reminderMinute: reminderMinute ?? this.reminderMinute,
     gender: gender ?? this.gender,
     joinedAt: joinedAt,
     isSubscribed: isSubscribed ?? this.isSubscribed,
@@ -97,6 +113,9 @@ class UserProfile {
     'aspiration': aspiration,
     'voice': voice,
     'age': age,
+    'remindersOn': remindersOn,
+    'reminderHour': reminderHour,
+    'reminderMinute': reminderMinute,
     'gender': gender,
     'joinedAt': joinedAt.toIso8601String(),
     'isSubscribed': isSubscribed,
@@ -112,6 +131,9 @@ class UserProfile {
     aspiration: map['aspiration'] as String? ?? '',
     voice: map['voice'] as String? ?? 'marin',
     age: (map['age'] as num?)?.toInt(),
+    remindersOn: map['remindersOn'] as bool? ?? false,
+    reminderHour: (map['reminderHour'] as num?)?.toInt() ?? 8,
+    reminderMinute: (map['reminderMinute'] as num?)?.toInt() ?? 0,
     gender: map['gender'] as String? ?? '',
     joinedAt:
         DateTime.tryParse(map['joinedAt'] as String? ?? '') ?? DateTime.now(),

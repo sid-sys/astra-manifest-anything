@@ -60,6 +60,13 @@ class ProfileScreen extends ConsumerWidget {
           value: profile.intentions.map((i) => i.label).join(', '),
           onTap: () => editIntentions(context, ref),
         ),
+        _SettingRow(
+          label: 'Daily affirmation',
+          value: profile.remindersOn
+              ? _formatTime(profile.reminderHour, profile.reminderMinute)
+              : 'Off',
+          onTap: () => _editReminder(context, ref),
+        ),
         // The same ring as Home, for the same reason: the number of stories
         // left is the one fact about the plan that changes, and it should read
         // identically wherever it is shown.
@@ -238,6 +245,105 @@ class ProfileScreen extends ConsumerWidget {
           ],
         ),
       ],
+    );
+  }
+
+  static String _formatTime(int hour, int minute) {
+    final period = hour >= 12 ? 'PM' : 'AM';
+    final display = hour % 12 == 0 ? 12 : hour % 12;
+    return '$display:${minute.toString().padLeft(2, '0')} $period';
+  }
+
+  /// Turns the daily affirmation on, off, or moves it.
+  ///
+  /// Permission is asked here, at the moment the user says they want the
+  /// thing — not at launch, where it is the prompt everybody denies and can
+  /// never be asked for again.
+  static Future<void> _editReminder(BuildContext context, WidgetRef ref) async {
+    final profile = ref.read(profileProvider);
+    final messenger = ScaffoldMessenger.of(context);
+
+    if (profile.remindersOn) {
+      final picked = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay(
+          hour: profile.reminderHour,
+          minute: profile.reminderMinute,
+        ),
+        helpText: 'Daily affirmation',
+        // The way to turn it off is on the same screen as the way to move it,
+        // because a setting you cannot find the off switch for is a setting
+        // people uninstall the app over.
+        cancelText: 'Turn off',
+      );
+
+      if (picked == null) {
+        await ref
+            .read(profileProvider.notifier)
+            .update(profile.copyWith(remindersOn: false));
+        await refreshReminders(ref);
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Daily affirmation turned off.')),
+        );
+        return;
+      }
+
+      await ref
+          .read(profileProvider.notifier)
+          .update(
+            profile.copyWith(
+              reminderHour: picked.hour,
+              reminderMinute: picked.minute,
+            ),
+          );
+      await refreshReminders(ref);
+      return;
+    }
+
+    final granted = await ref
+        .read(notificationServiceProvider)
+        .requestPermission();
+
+    if (!granted) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Notifications are blocked for Astra. Turn them on in your phone '
+            'settings and try again.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (!context.mounted) return;
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(
+        hour: profile.reminderHour,
+        minute: profile.reminderMinute,
+      ),
+      helpText: 'When should it arrive?',
+    );
+    if (picked == null) return;
+
+    await ref
+        .read(profileProvider.notifier)
+        .update(
+          profile.copyWith(
+            remindersOn: true,
+            reminderHour: picked.hour,
+            reminderMinute: picked.minute,
+          ),
+        );
+    await refreshReminders(ref);
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          'One affirmation a day at ${_formatTime(picked.hour, picked.minute)}.',
+        ),
+      ),
     );
   }
 

@@ -6,6 +6,16 @@
          on a device that never ran a debug build. -->
     <uses-permission android:name="android.permission.INTERNET"/>
 
+    <!-- The daily affirmation. Requested at runtime on Android 13+, and asked
+         for when the user turns reminders on rather than at launch — a
+         permission prompt in the first ten seconds is the one everybody
+         denies. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+    <!-- Reminders are scheduled on the device, so they have to survive a
+         reboot. Without this, restarting the phone silently ends them. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+
     <application
         android:label="Astra"
         android:name="${applicationName}"
@@ -32,6 +42,19 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Re-registers the scheduled affirmations after a reboot. The
+             plugin's own receiver; without it every queued reminder is lost
+             the first time the phone restarts. -->
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

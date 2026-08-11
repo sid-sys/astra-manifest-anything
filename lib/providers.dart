@@ -17,6 +17,7 @@ import 'services/affirmations.dart';
 import 'services/auth_service.dart';
 import 'services/billing_service.dart';
 import 'services/astra_repository.dart';
+import 'services/notification_service.dart';
 import 'services/playback_controller.dart';
 import 'services/region_service.dart';
 import 'services/story_service.dart';
@@ -51,6 +52,33 @@ final storyServiceProvider = Provider<StoryService>(
 final accountServiceProvider = Provider<AccountService>(
   (ref) => AccountService(ref.watch(repositoryProvider)),
 );
+
+final notificationServiceProvider = Provider<NotificationService>(
+  (ref) => NotificationService(),
+);
+
+/// Rebuilds the reminder queue from the current profile and taste.
+///
+/// Called after any change that affects what the notifications would say —
+/// turning them on, moving the time, editing intentions, keeping an
+/// affirmation — and on launch, which is what keeps the fourteen-day queue
+/// topped up.
+Future<void> refreshReminders(WidgetRef ref) async {
+  final profile = ref.read(profileProvider);
+  final notifications = ref.read(notificationServiceProvider);
+
+  if (!profile.remindersOn) {
+    await notifications.cancelAll();
+    return;
+  }
+
+  await notifications.scheduleDaily(
+    hour: profile.reminderHour,
+    minute: profile.reminderMinute,
+    intentions: profile.intentions,
+    taste: ref.read(tasteProvider),
+  );
+}
 
 final billingServiceProvider = Provider<BillingService>((ref) {
   final billing = BillingService();
