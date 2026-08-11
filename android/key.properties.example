@@ -1,0 +1,20 @@
+# Copy to android/key.properties and fill in. That file is gitignored and must
+# stay that way: it holds the passwords to the key that signs the app.
+#
+# Generate the keystore yourself — nobody else should ever have typed these
+# passwords, including any tool that helped you set this up:
+#
+#   keytool -genkey -v -keystore %USERPROFILE%\astra-upload.jks \
+#     -storetype JKS -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+#
+# Then back up the .jks file somewhere you will still have it in five years.
+# Google Play ties your listing to this key. If you lose it you cannot publish
+# an update to your own app — you would have to ship a new listing and leave
+# your installs behind. Play App Signing (opt in at upload) softens this by
+# letting Google hold the final signing key and letting you reset the upload
+# key, and it is worth enabling for exactly that reason.
+
+storeFile=C:\\Users\\you\\astra-upload.jks
+storePassword=
+keyAlias=upload
+keyPassword=

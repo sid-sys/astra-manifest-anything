@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,6 +15,7 @@ import 'models/user_profile.dart';
 import 'services/account_service.dart';
 import 'services/affirmations.dart';
 import 'services/auth_service.dart';
+import 'services/billing_service.dart';
 import 'services/astra_repository.dart';
 import 'services/playback_controller.dart';
 import 'services/region_service.dart';
@@ -56,6 +58,49 @@ final storyServiceProvider = Provider<StoryService>(
 
 final accountServiceProvider = Provider<AccountService>(
   (ref) => AccountService(ref.watch(repositoryProvider)),
+);
+
+final billingServiceProvider = Provider<BillingService>((ref) {
+  final billing = BillingService();
+  ref.onDispose(billing.dispose);
+  return billing;
+});
+
+/// Whether this account is on Plus, according to the server.
+///
+/// Streamed from the entitlement document that only `verifyPurchase` writes.
+/// The client cannot write it — Firestore rules deny it — which is the whole
+/// point: subscription used to be a boolean on the user's own profile, so
+/// anyone able to reach Firestore could grant themselves a plan.
+///
+/// Defaults to false whenever the answer is unknown: offline, signed out, or
+/// mid-load. Free is the safe direction to be wrong in, and the server refuses
+/// over-quota generation regardless of what this says.
+final entitlementProvider = StreamProvider<bool>((ref) {
+  final uid = ref.watch(authStateProvider).valueOrNull?.uid;
+  if (uid == null) return Stream.value(false);
+
+  return FirebaseFirestore.instance
+      .collection('users')
+      .doc(uid)
+      .collection('private')
+      .doc('entitlement')
+      .snapshots()
+      .map((snap) {
+        final data = snap.data();
+        if (data == null || data['isSubscribed'] != true) return false;
+
+        final expiry = DateTime.tryParse(data['expiryTime'] as String? ?? '');
+        return expiry == null || expiry.isAfter(DateTime.now());
+      })
+      .handleError((Object error) {
+        debugPrint('Astra: entitlement stream failed — $error');
+      });
+});
+
+/// The one place the app asks "is this user paying?".
+final isSubscribedProvider = Provider<bool>(
+  (ref) => ref.watch(entitlementProvider).valueOrNull ?? false,
 );
 
 /// Drops every trace of the current user from memory and disk.
@@ -140,11 +185,12 @@ class ProfileNotifier extends StateNotifier<UserProfile> {
     await _repository.saveProfile(profile);
   }
 
-  /// Stamps the start date alongside the flag: the monthly allowance counts
-  /// from the moment someone paid, not from the first of the month.
-  Future<void> subscribe() => update(
-    state.copyWith(isSubscribed: true, subscribedAt: DateTime.now()),
-  );
+  // There is no `subscribe()`. Granting Plus was a local write that the app
+  // made to its own profile document, which meant the answer to "is this user
+  // paying" was a field the user could set. It now lives in a document only
+  // `verifyPurchase` writes, from a receipt Google confirmed — see
+  // [entitlementProvider]. The `isSubscribed` field on UserProfile survives
+  // only so old stored profiles still parse.
 
   /// Records that the subscription screen has been offered, so it is shown
   /// once after onboarding and never ambushes the user again.
@@ -418,7 +464,10 @@ final usageProvider = Provider<Usage>((ref) {
   final now = DateTime.now();
   final monthStart = DateTime(now.year, now.month);
 
-  if (profile.isSubscribed) {
+  // The server's answer, not the profile's. `profile.isSubscribed` is a local
+  // field the app itself writes; this is a document only the purchase
+  // verifier can touch.
+  if (ref.watch(isSubscribedProvider)) {
     // Count from whichever is later: the start of the month, or the moment
     // they subscribed. Someone who used their free stories and then paid on
     // the same day was being billed a month's allowance for the stories that
@@ -469,7 +518,7 @@ final usageProvider = Provider<Usage>((ref) {
 final minutesInLibraryProvider = Provider<int>((ref) {
   final total = ref
       .watch(storiesProvider)
-      .fold<int>(0, (sum, story) => sum + story.duration.inMinutes);
+      .fold<int>(0, (total, story) => total + story.duration.inMinutes);
   return total;
 });
 

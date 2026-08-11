@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
@@ -6,6 +8,22 @@ plugins {
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// Release signing, read from android/key.properties — a file that is
+// gitignored and never committed. The keystore it points at is the app's
+// identity on Play forever: lose it and you cannot ship an update to your own
+// listing under any circumstances, so it belongs in a password manager and a
+// backup, not in this repository.
+//
+// When the file is absent the build falls back to debug signing, so a fresh
+// clone still builds and runs. That fallback is deliberately loud in the
+// release output rather than silent, because a debug-signed bundle is
+// rejected by Play at upload with an error that does not explain itself.
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("key.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+val hasReleaseKey = keystoreProperties.getProperty("storeFile") != null
 
 android {
     namespace = "com.astraapp.astra"
@@ -28,11 +46,36 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseKey) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (hasReleaseKey) {
+                signingConfigs.getByName("release")
+            } else {
+                logger.warn(
+                    "\n*** astra: android/key.properties not found — signing this " +
+                        "release with the DEBUG key. Play will reject the upload. " +
+                        "See android/key.properties.example. ***\n",
+                )
+                signingConfigs.getByName("debug")
+            }
+
+            // Shrinking is off. It is worth turning on later, but R8 needs
+            // keep rules for the reflective bits of the Firebase and audio
+            // plugins, and a release that crashes only after minification is
+            // the worst possible first build to debug.
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }

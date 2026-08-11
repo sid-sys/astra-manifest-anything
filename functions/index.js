@@ -34,6 +34,9 @@ setGlobalOptions({ region: "asia-south1", maxInstances: 10 });
  */
 const AUDIO_BUCKET = "astra-manifest-audio-asia";
 
+/** Must match `applicationId` in android/app/build.gradle.kts. */
+const ANDROID_PACKAGE = "com.astraapp.astra";
+
 // ---------------------------------------------------------------- generation
 
 const STORY_MODEL = "claude-opus-5";
@@ -561,17 +564,26 @@ async function recordUsage(uid) {
  * Two tiers: three free stories for everyone, then a subscription worth
  * [PLUS_MONTHLY_LIMIT] a month.
  *
- * ⚠ `profile.isSubscribed` is written by the client, because there is no
- * billing backend yet to write it. Anyone who can call Firestore can therefore
- * grant themselves Plus. That is acceptable only while the paywall itself
- * grants Plus locally for testing — when Play Billing lands, entitlement must
- * move to this private subcollection and be written from a verified purchase
- * receipt, never from the user's own profile document.
+ * Entitlement is read from the private subcollection, which only `verifyPurchase`
+ * writes and no Firestore rule lets a client touch. It used to be read from
+ * `profile.isSubscribed` — a field on the user's own document, which the app
+ * writes — so anyone who could reach Firestore could hand themselves Plus.
  */
-async function assertWithinQuota(uid, profile) {
-  const usage = await readUsage(uid);
+async function assertWithinQuota(uid) {
+  const [usage, entitlementSnap] = await Promise.all([
+    readUsage(uid),
+    entitlementDoc(uid).get(),
+  ]);
 
-  if (!profile.isSubscribed) {
+  const entitlement = entitlementSnap.exists ? entitlementSnap.data() : {};
+
+  // Expired subscriptions stay on the document as history; only the clock
+  // decides whether they still buy anything.
+  const expired =
+    entitlement.expiryTime && new Date(entitlement.expiryTime) < new Date();
+  const subscribed = entitlement.isSubscribed === true && !expired;
+
+  if (!subscribed) {
     // A lifetime count, not a window. Three stories on the house — enough to
     // judge the thing, which nobody can do from a description — and then a
     // plan. No clock to expire and none to game.
@@ -698,7 +710,7 @@ exports.writeStory = onCall(
     const profileSnap = await db.collection("users").doc(uid).get();
     const profile = profileSnap.data() ?? {};
 
-    await assertWithinQuota(uid, profile);
+    await assertWithinQuota(uid);
     await assertRateLimit(uid, "write", GENERATION_LIMITS);
 
     const started = Date.now();
@@ -871,5 +883,140 @@ exports.deleteAccount = onCall(
 
     logger.info("Account deleted", { uid, ...deleted });
     return deleted;
+  },
+);
+
+// ---------------------------------------------------------------- purchases
+
+/**
+ * Product ids, matching the subscription ids created in the Play Console.
+ *
+ * Play calls the thing you buy a "subscription" with one or more base plans;
+ * these are the subscription ids. The prices live in the Console, not here —
+ * `plan.dart` carries a local copy for the paywall to render before the store
+ * responds, but the number the user is charged is always Play's.
+ */
+const PLAY_SUBSCRIPTIONS = new Set([
+  "astra_plus_monthly",
+  "astra_plus_yearly",
+]);
+
+/** Where entitlement lives. Written only here; the client may read, never write. */
+function entitlementDoc(uid) {
+  return admin
+    .firestore()
+    .collection("users")
+    .doc(uid)
+    .collection("private")
+    .doc("entitlement");
+}
+
+/**
+ * Turns a Play purchase token into an entitlement, or refuses.
+ *
+ * This is the only thing that may grant Plus. The client used to set
+ * `isSubscribed` on its own profile document, which meant anyone who could
+ * reach Firestore — which is anyone with the app — could hand themselves a
+ * subscription. A receipt the server has not checked with Google is a claim,
+ * not a purchase.
+ *
+ * Verification asks the Play Developer API what it knows about the token.
+ * That call is authorised by this function's own service account, which has to
+ * be granted access in the Play Console (Users and permissions → invite the
+ * functions service account → "View financial data"). Until that link exists
+ * this endpoint fails closed: no entitlement, and a clear error rather than a
+ * quiet grant.
+ */
+exports.verifyPurchase = onCall(
+  { timeoutSeconds: 60, memory: "256MiB" },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw new HttpsError("unauthenticated", "Sign in to restore a purchase.");
+    }
+    await assertRateLimit(uid, "verify", DELETE_LIMITS);
+
+    const { productId, purchaseToken } = request.data ?? {};
+
+    if (!PLAY_SUBSCRIPTIONS.has(productId)) {
+      throw new HttpsError("invalid-argument", "Unknown product.");
+    }
+    if (typeof purchaseToken !== "string" || purchaseToken.length < 20) {
+      throw new HttpsError("invalid-argument", "Missing purchase token.");
+    }
+
+    const { google } = require("googleapis");
+    const auth = new google.auth.GoogleAuth({
+      scopes: ["https://www.googleapis.com/auth/androidpublisher"],
+    });
+    const play = google.androidpublisher({ version: "v3", auth });
+
+    let purchase;
+    try {
+      const response = await play.purchases.subscriptionsv2.get({
+        packageName: ANDROID_PACKAGE,
+        token: purchaseToken,
+      });
+      purchase = response.data;
+    } catch (error) {
+      logger.error("Play verification failed", {
+        uid,
+        productId,
+        message: error?.message,
+      });
+      throw new HttpsError(
+        "permission-denied",
+        "We could not confirm that purchase with Google Play. If you were " +
+          "charged, contact support and nothing will be lost.",
+      );
+    }
+
+    // Play's own words for a subscription that is currently owed service.
+    // A cancelled subscription stays ACTIVE until the period it was paid for
+    // runs out, which is correct: they paid for that time.
+    const active =
+      purchase.subscriptionState === "SUBSCRIPTION_STATE_ACTIVE" ||
+      purchase.subscriptionState === "SUBSCRIPTION_STATE_IN_GRACE_PERIOD" ||
+      purchase.subscriptionState === "SUBSCRIPTION_STATE_CANCELED";
+
+    const expiry =
+      purchase.lineItems?.[0]?.expiryTime ?? purchase.expiryTime ?? null;
+
+    // A token belongs to one account. Re-presenting someone else's receipt is
+    // the obvious attack, and Play's own linkedPurchaseToken handling covers
+    // upgrades; this covers sharing.
+    const existing = await admin
+      .firestore()
+      .collectionGroup("private")
+      .where("purchaseToken", "==", purchaseToken)
+      .limit(2)
+      .get();
+
+    const claimedByAnother = existing.docs.some(
+      (doc) => doc.ref.parent.parent?.id !== uid,
+    );
+    if (claimedByAnother) {
+      logger.warn("Purchase token presented by a second account", { uid });
+      throw new HttpsError(
+        "permission-denied",
+        "That purchase is already linked to another account.",
+      );
+    }
+
+    await entitlementDoc(uid).set(
+      {
+        isSubscribed: active,
+        productId,
+        purchaseToken,
+        expiryTime: expiry,
+        subscribedAt: new Date().toISOString(),
+        state: purchase.subscriptionState ?? "unknown",
+        verifiedAt: new Date().toISOString(),
+      },
+      { merge: true },
+    );
+
+    logger.info("Purchase verified", { uid, productId, active });
+    return { isSubscribed: active, expiryTime: expiry };
   },
 );

@@ -52,3 +52,10 @@ app.*.map.json
 .env
 .env.*
 !.env.example
+
+# Release signing. key.properties holds the keystore passwords and the .jks is
+# the app's identity on Play — neither belongs in version control, and a repo
+# that has ever contained them needs a new key, not a new commit.
+android/key.properties
+*.jks
+*.keystore

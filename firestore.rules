@@ -20,11 +20,18 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }
 
-      // Server-owned. Usage counters and rate-limit windows live here, and
-      // nothing outside the Admin SDK may read or write them: a counter the
-      // client can edit is not a counter.
+      // Server-owned. Usage counters, rate-limit windows and the subscription
+      // entitlement live here.
+      //
+      // Readable by the owner, because the app has to draw its own allowance
+      // ring and know whether it is on Plus. Writable by nobody: these are
+      // written by the Cloud Functions through the Admin SDK, which bypasses
+      // rules entirely. A counter the client can edit is not a counter, and an
+      // entitlement the client can set is a free subscription for anyone who
+      // opens a Firestore console.
       match /private/{document=**} {
-        allow read, write: if false;
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow write: if false;
       }
     }
 

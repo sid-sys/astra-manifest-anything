@@ -1,6 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Everything this app does needs the network: sign-in, generation,
+         audio. Flutter's template declares this only in the debug manifest,
+         where it exists for hot reload — so a release build shipped without
+         this line has no network at all and fails on first launch, silently,
+         on a device that never ran a debug build. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <application
-        android:label="astra"
+        android:label="Astra"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

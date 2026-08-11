@@ -65,7 +65,7 @@ class ProfileScreen extends ConsumerWidget {
         // identically wherever it is shown.
         AllowanceCard(
           usage: usage,
-          onTap: profile.isSubscribed
+          onTap: ref.watch(isSubscribedProvider)
               ? null
               : () => Navigator.of(context).push(
                     MaterialPageRoute<bool>(
