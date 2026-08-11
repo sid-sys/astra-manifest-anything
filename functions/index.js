@@ -1191,6 +1191,15 @@ exports.dailyAffirmation = onSchedule(
           data: { type: "affirmation", line },
         });
 
+        // Kept so the Home card can show the same sentence the notification
+        // did. Without it the phone says one thing at eight and the app says
+        // another at nine, and the user has no way to know which was theirs.
+        // The client may read this document; only this function writes it.
+        await affirmationDoc(uid).set(
+          { lastSent: line },
+          { merge: true },
+        );
+
         sent++;
       } catch (error) {
         const code = error?.errorInfo?.code ?? error?.code;

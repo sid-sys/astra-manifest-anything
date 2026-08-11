@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/intention.dart';
 import '../models/story.dart';
 import '../providers.dart';
-import '../services/affirmations.dart';
 import '../services/trending_manifestations.dart';
 import '../services/wish_prompts.dart';
 import '../theme/astra_theme.dart';
@@ -225,7 +224,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 Text('Affirmation of the day', style: AstraTextStyles.small),
                 const SizedBox(height: AstraSpacing.sm),
                 Text(
-                  '“${Affirmations.forDay(DateTime.now(), profile.intentions, ref.watch(tasteProvider))}”',
+                  '“${ref.watch(dailyAffirmationProvider)}”',
                   style: AstraTextStyles.quote,
                 ),
               ],

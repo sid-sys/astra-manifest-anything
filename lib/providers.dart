@@ -379,6 +379,50 @@ final affirmationDeckProvider = Provider<List<Affirmation>>((ref) {
   return Affirmations.deck(intentions, ref.watch(tasteProvider));
 });
 
+/// The line on the Home card.
+///
+/// Prefers whatever was actually pushed to this person's phone this morning,
+/// so the card and the notification never disagree — a phone that said one
+/// sentence at eight and an app that says another at nine leaves the user with
+/// no way to tell which one was theirs.
+///
+/// Falls back to the curated pool, which is the right answer more often than it
+/// sounds: before the first push has ever been sent, when reminders are off
+/// entirely, and when generation failed. A generated line that failed to
+/// generate should degrade to a real line, not to an empty card.
+final dailyAffirmationProvider = Provider<String>((ref) {
+  final intentions = ref.watch(
+    profileProvider.select((profile) => profile.intentions),
+  );
+  final curated = Affirmations.forDay(
+    DateTime.now(),
+    intentions,
+    ref.watch(tasteProvider),
+  );
+
+  return ref.watch(sentAffirmationProvider).valueOrNull ?? curated;
+});
+
+/// The affirmation the server last pushed, straight from the document it wrote.
+final sentAffirmationProvider = StreamProvider<String?>((ref) {
+  final uid = ref.watch(authStateProvider).valueOrNull?.uid;
+  if (uid == null) return Stream.value(null);
+
+  return FirebaseFirestore.instance
+      .collection('users')
+      .doc(uid)
+      .collection('private')
+      .doc('affirmations')
+      .snapshots()
+      .map((snap) {
+        final line = snap.data()?['lastSent'] as String?;
+        return (line == null || line.isEmpty) ? null : line;
+      })
+      .handleError((Object error) {
+        debugPrint('Astra: sent affirmation unavailable — $error');
+      });
+});
+
 /// Stories the user has hearted.
 final favouriteStoriesProvider = Provider<List<Story>>(
   (ref) => ref.watch(storiesProvider).where((story) => story.favorite).toList(),
