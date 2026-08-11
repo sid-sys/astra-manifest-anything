@@ -10,7 +10,6 @@ import '../theme/astra_theme.dart';
 import '../widgets/allowance_ring.dart';
 import '../widgets/astra_widgets.dart';
 import '../widgets/profile_avatar.dart';
-import 'auth_screen.dart';
 import 'confirm_screen.dart';
 import 'paywall_screen.dart';
 import 'player_screen.dart';
@@ -188,30 +187,14 @@ class ProfileScreen extends ConsumerWidget {
         Text('Account', style: AstraTextStyles.label),
         const SizedBox(height: AstraSpacing.sm),
 
-        if (ref.watch(isGuestProvider)) ...[
-          // Offered, never enforced. A guest account is a full account; this
-          // is about not losing it with the phone.
-          _AccountRow(
-            icon: Icons.mark_email_read_outlined,
-            label: 'Add an email',
-            detail: 'Keeps your stories if you change phones',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<bool>(
-                builder: (_) => const AuthScreen(asUpgrade: true),
-              ),
-            ),
-          ),
-          const SizedBox(height: AstraSpacing.sm),
-        ] else ...[
-          _AccountRow(
-            icon: Icons.alternate_email_rounded,
-            label: ref.watch(authStateProvider).valueOrNull?.email ??
-                'Signed in',
-            detail: 'Send a link to change your password',
-            onTap: () => _resetPassword(context, ref),
-          ),
-          const SizedBox(height: AstraSpacing.sm),
-        ],
+        _AccountRow(
+          icon: Icons.alternate_email_rounded,
+          label:
+              ref.watch(authStateProvider).valueOrNull?.email ?? 'Signed in',
+          detail: 'Send a link to change your password',
+          onTap: () => _resetPassword(context, ref),
+        ),
+        const SizedBox(height: AstraSpacing.sm),
 
         _AccountRow(
           icon: Icons.logout_rounded,

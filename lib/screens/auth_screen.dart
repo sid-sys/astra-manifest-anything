@@ -8,20 +8,16 @@ import '../widgets/astra_widgets.dart';
 import '../widgets/aura_background.dart';
 import 'forgot_password_screen.dart';
 
-/// The door.
+/// The door. An email and a password, or a Google account.
 ///
-/// Four ways in, and the cheapest one is not hidden: "Continue as guest" is a
-/// visible button rather than a link in small type, because the app works
-/// without an account and pretending otherwise to harvest emails is the exact
-/// complaint that made the app this one is modelled on a one-star read.
-///
-/// It is also shown when a guest chooses to upgrade, in which case the same
-/// form links the credentials onto their existing account and keeps their
-/// stories. [asUpgrade] only changes the words.
+/// Guest sign-in used to sit here as a third option and was removed, which is
+/// a real cost — it was the only door that asked for nothing. It went because
+/// an anonymous account cannot be signed back into: the library it holds lives
+/// on one phone, and someone who reinstalled or changed handset lost every
+/// story with no way for anyone to return them. A door that friendly which
+/// quietly loses your work is worse than the extra thirty seconds.
 class AuthScreen extends ConsumerStatefulWidget {
-  const AuthScreen({super.key, this.asUpgrade = false});
-
-  final bool asUpgrade;
+  const AuthScreen({super.key});
 
   @override
   ConsumerState<AuthScreen> createState() => _AuthScreenState();
@@ -35,14 +31,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   bool _obscured = true;
   bool _busy = false;
   String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    // Someone upgrading has already decided to have an account; open on the
-    // form that makes one.
-    _creating = widget.asUpgrade;
-  }
 
   @override
   void dispose() {
@@ -85,19 +73,17 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     if (!_ready) return;
     final auth = ref.read(authServiceProvider);
 
-    final done = await _run(
+    await _run(
       () async => _creating
           ? await auth.signUpWithEmail(_email.text, _password.text)
           : await auth.signInWithEmail(_email.text, _password.text),
     );
 
-    if (done && mounted && widget.asUpgrade) Navigator.of(context).pop(true);
+    // Nothing navigates on success. The app watches the auth stream and swaps
+    // this screen out the moment a verified user exists.
   }
 
-  Future<void> _federated(Future<void> Function() signIn) async {
-    final done = await _run(signIn);
-    if (done && mounted && widget.asUpgrade) Navigator.of(context).pop(true);
-  }
+  Future<void> _federated(Future<void> Function() signIn) => _run(signIn);
 
   @override
   Widget build(BuildContext context) {
@@ -110,47 +96,23 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             padding: AstraSpacing.screenPadding,
             child: ListView(
               children: [
-                if (widget.asUpgrade)
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.close_rounded),
-                        color: AstraColors.dim,
-                        tooltip: 'Back',
-                        onPressed: _busy
-                            ? null
-                            : () => Navigator.of(context).maybePop(),
-                      ),
-                      const Spacer(),
-                    ],
-                  )
-                else
-                  const SizedBox(height: AstraSpacing.xxl),
+                const SizedBox(height: AstraSpacing.xxl),
 
                 const SizedBox(height: AstraSpacing.lg),
                 const Wordmark('Astra'),
                 const SizedBox(height: AstraSpacing.xl),
                 Text(
-                  widget.asUpgrade
-                      ? 'Keep your stories safe'
-                      : _creating
-                          ? 'Make an account'
-                          : 'Welcome back',
+                  _creating ? 'Make an account' : 'Welcome back',
                   textAlign: TextAlign.center,
                   style: AstraTextStyles.display(28),
                 ),
                 const SizedBox(height: AstraSpacing.sm),
                 Text(
-                  widget.asUpgrade
-                      ? 'Adding an email keeps everything you have already '
-                            'written and lets you sign in on another phone. '
-                            'You will confirm the address by email before '
-                            'writing anything new.'
-                      : _creating
-                          ? 'Six characters or more. We send a link to confirm '
-                                'the address — your stories sync to this '
-                                'account and follow you between devices.'
-                          : 'Sign in and your library comes with you.',
+                  _creating
+                      ? 'Six characters or more. We send a link to confirm the '
+                            'address — your stories sync to this account and '
+                            'follow you between devices.'
+                      : 'Sign in and your library comes with you.',
                   textAlign: TextAlign.center,
                   style: AstraTextStyles.bodyDim,
                 ),
@@ -243,23 +205,13 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   enabled: !_busy,
                   onTap: () => _federated(auth.signInWithGoogle),
                 ),
-
-                if (!widget.asUpgrade) ...[
-                  const SizedBox(height: AstraSpacing.sm),
-                  _ProviderButton(
-                    label: 'Continue as guest',
-                    icon: Icons.person_outline_rounded,
-                    enabled: !_busy,
-                    onTap: () => _federated(auth.continueAsGuest),
-                  ),
-                  const SizedBox(height: AstraSpacing.sm),
-                  Text(
-                    'A guest account works exactly the same. You can add an '
-                    'email later without losing anything.',
-                    textAlign: TextAlign.center,
-                    style: AstraTextStyles.small,
-                  ),
-                ],
+                const SizedBox(height: AstraSpacing.sm),
+                Text(
+                  'Your stories are saved to your account, so they follow you '
+                  'to a new phone.',
+                  textAlign: TextAlign.center,
+                  style: AstraTextStyles.small,
+                ),
 
                 const SizedBox(height: AstraSpacing.lg),
                 Center(
@@ -382,24 +334,22 @@ class _Divider extends StatelessWidget {
   );
 }
 
-/// One of the non-password ways in. Bordered rather than gold — the primary
-/// action on this screen is the form above it.
+/// The non-password way in. Bordered rather than filled — the primary action
+/// on this screen is the form above it.
 class _ProviderButton extends StatelessWidget {
   const _ProviderButton({
     required this.label,
     required this.enabled,
     required this.onTap,
-    this.icon,
-    this.glyph,
+    required this.glyph,
   });
 
   final String label;
   final bool enabled;
   final VoidCallback onTap;
-  final IconData? icon;
 
-  /// Used for Google, whose mark is a letter rather than a Material icon.
-  final String? glyph;
+  /// Google's mark is a letter rather than a Material icon.
+  final String glyph;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -424,13 +374,10 @@ class _ProviderButton extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (glyph != null)
-                  Text(
-                    glyph!,
-                    style: AstraTextStyles.label.copyWith(fontSize: 17),
-                  )
-                else
-                  Icon(icon, size: 19, color: AstraColors.text),
+                Text(
+                  glyph,
+                  style: AstraTextStyles.label.copyWith(fontSize: 17),
+                ),
                 const SizedBox(width: AstraSpacing.md),
                 Text(label, style: AstraTextStyles.body),
               ],

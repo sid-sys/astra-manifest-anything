@@ -40,14 +40,6 @@ final authStateProvider = StreamProvider<User?>((ref) {
   return ref.watch(authServiceProvider).authState();
 });
 
-/// Whether the current account is a guest. Used to decide whether to offer the
-/// upgrade prompt, never to withhold a feature — a guest is a full user.
-final isGuestProvider = Provider<bool>(
-  (ref) =>
-      ref.watch(authStateProvider).valueOrNull?.isAnonymous ??
-      false,
-);
-
 final repositoryProvider = Provider<AstraRepository>(
   (ref) => AstraRepository(ref.watch(sharedPreferencesProvider)),
 );

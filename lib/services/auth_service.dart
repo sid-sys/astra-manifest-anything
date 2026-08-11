@@ -1,14 +1,18 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
-/// Every way into Astra, and the rules about moving between them.
+/// Every way into Astra: an email and password, or a Google account.
 ///
-/// The app is usable before anyone signs in — a guest gets an anonymous
-/// account, which is a real Firebase user with a real uid and a real place to
-/// sync to. That matters more than it sounds: because a guest already has a
-/// uid, signing up later can *link* credentials onto that same account rather
-/// than creating a second one, and the stories they wrote as a guest stay
-/// theirs. Every path below that could link, does.
+/// Guest accounts are gone. They were the friendliest door in the app and they
+/// cost the thing the app is for — a library with no email attached lives and
+/// dies with one phone, so a guest who changed handset lost every story they
+/// had written, silently, with no way to get them back and nothing we could do
+/// about it. An account is the only way the promise "your stories follow you"
+/// is true.
+///
+/// The linking code below survives on purpose: an anonymous user created
+/// before this change still has stories, and signing in on top of that account
+/// keeps them rather than stranding them under an abandoned uid.
 class AuthService {
   AuthService({FirebaseAuth? auth}) : _injected = auth;
 
@@ -83,10 +87,6 @@ class AuthService {
       return null;
     }
   }
-
-  // ------------------------------------------------------------------- guest
-
-  Future<UserCredential> continueAsGuest() => _auth.signInAnonymously();
 
   // -------------------------------------------------------- email + password
 
