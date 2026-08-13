@@ -43,7 +43,7 @@ Future<void> _continue(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-/// Answers the desire and clears the plans, leaving the flow on question three.
+/// Answers the desire, leaving the flow on question three.
 Future<void> _pastTheDesire(WidgetTester tester) async {
   await _continue(tester); // past the category
   await tester.enterText(
@@ -52,14 +52,6 @@ Future<void> _pastTheDesire(WidgetTester tester) async {
   );
   await tester.pumpAndSettle();
   await _continue(tester);
-
-  // The paywall asks the store for live prices on open, and there is no
-  // Firebase in a widget test, so it throws on the way in. Swallowed rather
-  // than mocked: this test is about the questions, and the paywall already
-  // falls back to the local price table in the app.
-  tester.takeException();
-  await tester.tap(find.text('Not now'));
-  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -149,19 +141,30 @@ void main() {
     expect(find.bySemanticsLabel('Back'), findsNothing);
   });
 
-  testWidgets('the plans are offered once, not again on the way back', (
+  testWidgets('no price appears until every question has been answered', (
     tester,
   ) async {
     await _pump(tester);
     await _pastTheDesire(tester);
 
-    await tester.tap(find.bySemanticsLabel('Back'));
-    await tester.pumpAndSettle();
-    await _continue(tester);
+    // Questions three to eleven, with no interruption. The plans used to cut
+    // in after the desire, which put a price in the middle of a conversation
+    // and made the rest feel like work already charged for.
+    for (var step = 3; step <= 11; step++) {
+      expect(find.text('$step OF 11'), findsOneWidget);
+      expect(find.text('Not now'), findsNothing);
+      if (step < 11) await _continue(tester);
+    }
 
-    // Straight through to question three. Being shown a price every time you
-    // correct an answer is how a form teaches people to stop correcting them.
-    expect(find.text('3 OF 11'), findsOneWidget);
-    expect(find.text('Not now'), findsNothing);
+    // Answered. Now the offer, once, between the last answer and the story.
+    await tester.tap(find.text('Write my first story'));
+    await tester.pumpAndSettle();
+
+    // The paywall asks the store for live prices on open, and there is no
+    // Firebase in a widget test, so it throws on the way in. Swallowed rather
+    // than mocked: this test is about when the offer appears, and the paywall
+    // already falls back to the local price table in the app.
+    tester.takeException();
+    expect(find.text('Not now'), findsOneWidget);
   });
 }

@@ -52,12 +52,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   static final _stepCount = _stepNames.length;
 
-  /// The plans come straight after the desire is written.
+  /// The plans come after every question, not partway through.
   ///
-  /// By then the user has said the one thing the app is for and has not spent
-  /// anything, which is the moment the offer is about them rather than about
-  /// us. "Not now" carries on to the free story either way.
-  static const _offerAfterStep = 1;
+  /// They used to interrupt after the desire, which put a price in the middle
+  /// of a conversation and made the remaining nine questions feel like work
+  /// someone had already been charged for. Asking everything first and offering
+  /// once at the end means the offer arrives when the user has finished
+  /// describing what they want and is one tap from seeing it — and "Not now"
+  /// still carries straight on to the free story.
 
   final _desireController = TextEditingController();
   final _placeController = TextEditingController();
@@ -67,10 +69,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   var _preferences = StoryPreferences.empty;
   int _step = 0;
   bool _weaving = false;
-
-  /// Steps whose plans have already been offered, so going back and forward
-  /// again does not show the price a second time.
-  bool _offered = false;
 
   @override
   void dispose() {
@@ -112,14 +110,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   Future<void> _advance() async {
     if (_step < _stepCount - 1) {
-      if (_step == _offerAfterStep && !_offered) {
-        _offered = true;
-        await _offerPlans();
-      }
-      if (!mounted) return;
       setState(() => _step++);
       return;
     }
+
+    // Every question answered. The plans go here, between the last answer and
+    // the story it produces.
+    await _offerPlans();
+    if (!mounted) return;
 
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);

@@ -322,12 +322,49 @@ function clean(value, maxLength) {
 }
 
 /**
- * Writes the script.
+ * Retries a model call through the failures that are the model's, not ours.
  *
- * Runs at low effort deliberately: this is a single well-specified creative
- * task, not multi-step reasoning, and thinking tokens bill at output rates.
- * Effort is the dial to turn if story quality ever needs more room.
+ * Added after a real one: a user finished eleven onboarding questions, the
+ * Anthropic API answered `overloaded_error`, and the whole thing came back as
+ * a 500 with their first story gone. An overload is a queue, not a refusal,
+ * and the right response to a queue is to wait rather than to hand someone an
+ * error at the exact moment they were promised something.
+ *
+ * Only retries what is worth retrying. A 400 is a bad request and will be
+ * exactly as bad the second time; a refusal is an answer. Backoff is
+ * exponential from one second, which keeps the whole attempt inside the
+ * function's timeout even in the worst case.
  */
+async function withRetry(call, { attempts = 3 } = {}) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await call();
+    } catch (error) {
+      const status = error?.status;
+      const type = error?.error?.error?.type ?? error?.error?.type;
+
+      const worthRetrying =
+        status === 429 ||
+        status === 529 ||
+        (status >= 500 && status < 600) ||
+        type === "overloaded_error" ||
+        type === "api_error" ||
+        type === "rate_limit_error";
+
+      if (!worthRetrying || attempt >= attempts) throw error;
+
+      const waitMs = 1000 * 2 ** (attempt - 1);
+      logger.warn("Model call failed, retrying", {
+        attempt,
+        waitMs,
+        status: status ?? null,
+        type: type ?? null,
+      });
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+  }
+}
+
 /**
  * Turns the stored onboarding answers into brief lines.
  *
@@ -514,6 +551,13 @@ async function recentChapters(uid) {
     });
 }
 
+/**
+ * Writes the script.
+ *
+ * Runs at low effort deliberately: this is a single well-specified creative
+ * task, not multi-step reasoning, and thinking tokens bill at output rates.
+ * Effort is the dial to turn if story quality ever needs more room.
+ */
 async function writeScript({
   profile,
   intention,
@@ -589,22 +633,24 @@ async function writeScript({
     .filter((line) => line !== null)
     .join("\n");
 
-  const response = await anthropic.messages.create({
-    model: STORY_MODEL,
-    max_tokens: 8000,
-    system: [
-      {
-        type: "text",
-        text: SYSTEM_PROMPT,
-        cache_control: { type: "ephemeral" },
+  const response = await withRetry(() =>
+    anthropic.messages.create({
+      model: STORY_MODEL,
+      max_tokens: 8000,
+      system: [
+        {
+          type: "text",
+          text: SYSTEM_PROMPT,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      output_config: {
+        effort: "low",
+        format: { type: "json_schema", schema: STORY_SCHEMA },
       },
-    ],
-    output_config: {
-      effort: "low",
-      format: { type: "json_schema", schema: STORY_SCHEMA },
-    },
-    messages: [{ role: "user", content: brief }],
-  });
+      messages: [{ role: "user", content: brief }],
+    }),
+  );
 
   if (response.stop_reason === "refusal") {
     logger.warn("Story request declined", {
@@ -670,13 +716,18 @@ async function narrate(script, voice) {
   // prosody consistent across the seams.
   const buffers = [];
   for (const chunk of chunks) {
-    const speech = await openai.audio.speech.create({
-      model: TTS_MODEL,
-      voice,
-      input: chunk,
-      instructions: VOICE_INSTRUCTIONS,
-      response_format: "mp3",
-    });
+    // Retried for the same reason the script is: narration is the expensive
+    // half, and a chunk lost to a transient overload would otherwise fail a
+    // story that has already been written and paid for.
+    const speech = await withRetry(() =>
+      openai.audio.speech.create({
+        model: TTS_MODEL,
+        voice,
+        input: chunk,
+        instructions: VOICE_INSTRUCTIONS,
+        response_format: "mp3",
+      }),
+    );
     buffers.push(Buffer.from(await speech.arrayBuffer()));
   }
 
@@ -1313,22 +1364,24 @@ async function writeAffirmations(profile) {
     .filter(Boolean)
     .join("\n");
 
-  const response = await anthropic.messages.create({
-    model: AFFIRMATION_MODEL,
-    max_tokens: 1000,
-    system: [
-      {
-        type: "text",
-        text: AFFIRMATION_SYSTEM,
-        cache_control: { type: "ephemeral" },
+  const response = await withRetry(() =>
+    anthropic.messages.create({
+      model: AFFIRMATION_MODEL,
+      max_tokens: 1000,
+      system: [
+        {
+          type: "text",
+          text: AFFIRMATION_SYSTEM,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      output_config: {
+        effort: "low",
+        format: { type: "json_schema", schema: AFFIRMATION_SCHEMA },
       },
-    ],
-    output_config: {
-      effort: "low",
-      format: { type: "json_schema", schema: AFFIRMATION_SCHEMA },
-    },
-    messages: [{ role: "user", content: brief }],
-  });
+      messages: [{ role: "user", content: brief }],
+    }),
+  );
 
   if (response.stop_reason === "refusal") {
     logger.warn("Affirmation batch declined");

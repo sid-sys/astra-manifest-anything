@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'dart:io' show Platform;
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -32,11 +34,29 @@ class NotificationService {
   /// Injected only by tests. Null in the app, where [_push] reads the singleton.
   final FirebaseMessaging? messaging;
 
-  /// Null when Firebase never started — the app still runs, it just has no
-  /// push. Read lazily rather than in the constructor because the provider is
-  /// built before anyone has checked whether Firebase came up.
+  /// Whether this build can push at all.
+  ///
+  /// Android only. The web build has no notification plugin registered, so
+  /// every call threw `MissingPluginException` and took the surrounding
+  /// widget down with it — reminders are an Android feature and the web build
+  /// exists to look at screens, not to be notified by them. iOS will need its
+  /// own APNs setup before it can be added here.
+  bool get _supported {
+    if (kIsWeb) return false;
+    try {
+      return Platform.isAndroid;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Null when push is unavailable — on the web, or when Firebase never
+  /// started. The app still runs; it just has no reminders. Read lazily
+  /// rather than in the constructor because the provider is built before
+  /// anyone has checked whether Firebase came up.
   FirebaseMessaging? get _push {
     if (messaging != null) return messaging;
+    if (!_supported) return null;
     try {
       return FirebaseMessaging.instance;
     } catch (error) {
@@ -58,7 +78,7 @@ class NotificationService {
   bool _ready = false;
 
   Future<void> _init() async {
-    if (_ready) return;
+    if (_ready || !_supported) return;
 
     await _plugin.initialize(
       settings: const InitializationSettings(
@@ -105,6 +125,7 @@ class NotificationService {
   /// reminders on rather than at launch — a permission prompt in the first ten
   /// seconds of an app is the one everybody denies.
   Future<bool> requestPermission() async {
+    if (!_supported) return false;
     await _init();
 
     final android = _plugin
@@ -125,6 +146,7 @@ class NotificationService {
   /// Returns nulls rather than throwing when push is unavailable. A user with
   /// no Play Services still gets the whole app; they just get no reminder.
   Future<({String? token, String zone})> register() async {
+    if (!_supported) return (token: null, zone: 'UTC');
     await _init();
 
     var zone = 'UTC';
@@ -148,17 +170,29 @@ class NotificationService {
   /// that still exists is a token something else could send to, and "off"
   /// should mean off at the device, not off by convention on the server.
   Future<void> unregister() async {
+    if (!_supported) return;
     try {
       await _push?.deleteToken();
     } catch (error) {
       debugPrint('Astra: could not delete push token — $error');
     }
-    await _plugin.cancelAll();
+    try {
+      await _plugin.cancelAll();
+    } catch (error) {
+      debugPrint('Astra: could not clear notifications — $error');
+    }
   }
 
   /// Fires when Android rotates the token underneath us, which it does on
   /// reinstall, restore, and occasionally for its own reasons. A rotated token
   /// that never reaches the server is a user whose reminders silently stop.
-  Stream<String> get tokenRefreshes =>
-      _push?.onTokenRefresh ?? const Stream<String>.empty();
+  Stream<String> get tokenRefreshes {
+    if (!_supported) return const Stream<String>.empty();
+    try {
+      return _push?.onTokenRefresh ?? const Stream<String>.empty();
+    } catch (error) {
+      debugPrint('Astra: no token refresh stream — $error');
+      return const Stream<String>.empty();
+    }
+  }
 }
