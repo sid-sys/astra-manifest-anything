@@ -45,7 +45,20 @@ class ProfileScreen extends ConsumerWidget {
               // question and competed with it.
               ProfileAvatar(name: profile.name, size: 88),
               const SizedBox(height: AstraSpacing.md),
-              Text(profile.name, style: AstraTextStyles.label.copyWith(fontSize: 16)),
+              // The desire, not a name — onboarding stopped asking for one,
+              // and this is the sentence the whole account is built around.
+              Text(
+                profile.preferences.desire.isNotEmpty
+                    ? profile.preferences.desire
+                    : (profile.aspiration.isNotEmpty
+                          ? profile.aspiration
+                          : 'Your Astra'),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AstraTextStyles.label.copyWith(fontSize: 16),
+              ),
+              const SizedBox(height: 2),
               Text(
                 'Manifesting since ${DateFormat('MMMM yyyy').format(profile.joinedAt)}',
                 style: AstraTextStyles.small,

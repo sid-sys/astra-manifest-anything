@@ -205,7 +205,6 @@ class StoryPreferences {
     this.placeDetail = '',
     this.cast = const {StoryCast.alone},
     this.personName = '',
-    this.personGender = '',
     this.feelings = const {},
     this.futureShape = FutureShape.improved,
     this.style = StoryStyle.detailed,
@@ -230,19 +229,12 @@ class StoryPreferences {
   final Set<StoryCast> cast;
 
   /// Only meaningful when [cast] includes [StoryCast.someone].
+  ///
+  /// The name is all that is asked, deliberately. Gender is never collected
+  /// for this person and never inferred from the name — the stories use the
+  /// name itself wherever a pronoun would otherwise go, which is enforced in
+  /// the system prompt rather than worked around here.
   final String personName;
-
-  /// Their gender, if the user says so — and blank otherwise.
-  ///
-  /// Asked because not asking did not work. The system prompt forbids
-  /// inventing a gender for anyone named in the brief, and a live generation
-  /// broke that rule thirty-eight times in one story: given "Abhirami" and a
-  /// romantic style, the model simply decided. A rule the writer can overrule
-  /// is not a rule, and the only reliable fix for "do not guess" is to know.
-  ///
-  /// Blank still means blank. The brief omits the line, and the prompt's
-  /// instruction to lean on the person's name rather than a pronoun stands.
-  final String personGender;
 
   final Set<Feeling> feelings;
   final FutureShape futureShape;
@@ -268,7 +260,6 @@ class StoryPreferences {
     String? placeDetail,
     Set<StoryCast>? cast,
     String? personName,
-    String? personGender,
     Set<Feeling>? feelings,
     FutureShape? futureShape,
     StoryStyle? style,
@@ -283,7 +274,6 @@ class StoryPreferences {
     placeDetail: placeDetail ?? this.placeDetail,
     cast: cast ?? this.cast,
     personName: personName ?? this.personName,
-    personGender: personGender ?? this.personGender,
     feelings: feelings ?? this.feelings,
     futureShape: futureShape ?? this.futureShape,
     style: style ?? this.style,
@@ -300,7 +290,6 @@ class StoryPreferences {
     'placeDetail': placeDetail,
     'cast': cast.map((c) => c.name).toList(),
     'personName': personName,
-    'personGender': personGender,
     'feelings': feelings.map((f) => f.name).toList(),
     'futureShape': futureShape.name,
     'style': style.name,
@@ -320,7 +309,6 @@ class StoryPreferences {
             .map((n) => StoryCast.fromName(n as String))
             .toSet(),
         personName: map['personName'] as String? ?? '',
-        personGender: map['personGender'] as String? ?? '',
         feelings: ((map['feelings'] as List?) ?? const [])
             .map((n) => Feeling.fromName(n as String))
             .toSet(),

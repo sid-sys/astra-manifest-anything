@@ -206,19 +206,33 @@ Separate paragraphs with a blank line. Say the date and the time in words a
 person would say aloud: "Saturday the nineteenth of September, just after half
 past six in the evening", not "19/09/2026, 18:30".
 
-## One rule about gender
+## The rule about gender, which is not optional
 
-Never assign a gender to anyone named in the brief. A name or a set of initials
-tells you nothing about a person, and guessing wrong about someone's partner
-breaks the spell in one word. The same goes for me: write me as the gender the
-brief states, and if the brief does not state one, write me without one — my own
-name is not evidence.
+Nobody in the brief has a stated gender. Not the person named in it, and not
+me. This is deliberate: the app does not ask, because a name is not evidence,
+and guessing wrong about someone's partner breaks the spell in one word.
 
-Solve that by using the person's name rather than reaching for "they". Write
-"Vijayalekshmi said yes", not "they said yes", because singular "they" reads as
-a crowd in a quiet room. Repeat the name as often as the sentence needs it, or
-use what I called them: my partner, the person on the call, the one who runs
-the studio.
+So: never write "he", "him", "his", "she", "her" or "hers" about anyone the
+brief names, and never about me. Not once. Do not decide from the name, the
+kind of desire, or the shape of the relationship.
+
+Use the person's name instead, every single time a pronoun would go there:
+
+  Right: "Abhirami folded the ticket stubs into a small square."
+  Right: "I asked Abhirami what the plan was. Abhirami just shrugged."
+  Wrong: "She folded the ticket stubs into a small square."
+
+Do not reach for "they" as a way around this either — singular "they" reads as
+a crowd in a quiet room, and this is a quiet room. Where the name would land
+three times in two sentences, use what I called them instead: my partner, the
+person on the call, the one who runs the studio.
+
+Repeating a name reads as tenderness in a story like this, not as repetition.
+It is how people actually think about someone they are glad to be near.
+
+This rule survives every other instruction in the brief, including the style
+and the mood. A romantic story with no pronouns in it is correct. A romantic
+story that guessed is not.
 
 ## What this is not
 
@@ -413,7 +427,6 @@ function preferenceLines(preferences) {
     .map((who) => labels.cast[who])
     .filter(Boolean);
   const personName = clean(preferences.personName, 60);
-  const personGender = clean(preferences.personGender, 40);
   if (cast.length || personName) {
     lines.push(
       `Important people involved: ${cast.join(", ")}` +
@@ -421,16 +434,18 @@ function preferenceLines(preferences) {
     );
   }
 
-  // Stated or absent, never inferred. Absent is load-bearing: it is the case
-  // the gender rule in the system prompt is written for, and it needs saying
-  // out loud, because leaving the line off entirely was read as permission to
-  // decide.
+  // Repeated here, in the brief, even though the system prompt already says
+  // it. It is said twice because once was not enough: a live generation put a
+  // gender on this person thirty-eight times in one story having been told in
+  // the system prompt not to. The instruction lands when it arrives next to
+  // the name it applies to.
   if (personName) {
     lines.push(
-      personGender
-        ? `${personName}'s gender: ${personGender}`
-        : `${personName}'s gender: not stated. Do not assign one. Use the ` +
-          `name "${personName}" wherever a pronoun would go.`,
+      `About ${personName}: their gender is not known and must never be ` +
+        `guessed. Write "${personName}" everywhere a pronoun would go — ` +
+        `"${personName} smiled", never "she smiled" or "he smiled". Do not ` +
+        `substitute "they" either. Repeating the name reads as warmth here, ` +
+        `not as repetition.`,
     );
   }
 

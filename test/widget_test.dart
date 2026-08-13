@@ -6,12 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Onboarding asks nine questions now, and only two of them are compulsory.
+/// Onboarding is eleven questions, one to a page, and only one of them is
+/// compulsory.
 ///
-/// That ratio is the thing worth testing. Every extra question is a chance to
-/// lose someone, and the case for asking nine is that the answers make the
-/// stories specific — which only holds if the seven optional ones can genuinely
-/// be walked past.
+/// That ratio is the thing worth testing. Eleven questions is a lot to ask
+/// before anyone has seen what the app makes, and the case for asking them is
+/// that the answers change the writing — which only holds if the other ten can
+/// genuinely be walked past, and if a mistap can be walked back.
 Future<Widget> _bootstrap() async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
@@ -25,7 +26,7 @@ Future<Widget> _bootstrap() async {
   );
 }
 
-/// Pumps on a viewport tall enough that a step's lower half is built. A
+/// Pumps on a viewport tall enough that a page's lower half is built. A
 /// ListView does not build what it cannot show, so on the default 800x600 the
 /// assertions would be about scroll position rather than about the screen.
 Future<void> _pump(WidgetTester tester) async {
@@ -42,117 +43,125 @@ Future<void> _continue(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// Answers the desire and clears the plans, leaving the flow on question three.
+Future<void> _pastTheDesire(WidgetTester tester) async {
+  await _continue(tester); // past the category
+  await tester.enterText(
+    find.byType(TextField).first,
+    'I run my own studio in Kochi',
+  );
+  await tester.pumpAndSettle();
+  await _continue(tester);
+
+  // The paywall asks the store for live prices on open, and there is no
+  // Firebase in a widget test, so it throws on the way in. Swallowed rather
+  // than mocked: this test is about the questions, and the paywall already
+  // falls back to the local price table in the app.
+  tester.takeException();
+  await tester.tap(find.text('Not now'));
+  await tester.pumpAndSettle();
+}
+
 void main() {
-  testWidgets('onboarding opens on the name step', (tester) async {
+  testWidgets('onboarding opens on the first question, not a form', (
+    tester,
+  ) async {
     await _pump(tester);
 
-    expect(find.text('What should Astra call you?'), findsOneWidget);
+    expect(
+      find.text('What kind of desire do you want to visualise?'),
+      findsOneWidget,
+    );
+    expect(find.text('1 OF 11'), findsOneWidget);
   });
 
-  testWidgets('onboarding says where you are in it', (tester) async {
+  testWidgets('nothing asks for a name, an age or a gender', (tester) async {
     await _pump(tester);
+    await _pastTheDesire(tester);
 
-    // A bar alone says "partway". The count is what answers the only question
-    // anyone has while filling in a form — and it matters more at nine steps
-    // than it did at four.
-    expect(find.text('STEP 1 OF 9'), findsOneWidget);
-    expect(find.text('YOU'), findsOneWidget);
+    // Removed on purpose. The stories are first person, so nobody is addressed
+    // by name inside one, and the generator writes no gender it was not given.
+    for (var step = 3; step <= 11; step++) {
+      expect(find.textContaining('call you'), findsNothing);
+      expect(find.text('AGE'), findsNothing);
+      expect(find.text('GENDER'), findsNothing);
+      if (step < 11) await _continue(tester);
+    }
   });
 
   testWidgets('the questions themselves never mention money', (tester) async {
     await _pump(tester);
 
     // The plans are a route of their own, shown after the desire. What must
-    // not happen is a price appearing inside a step, beside a field someone is
-    // being asked to fill in.
+    // not happen is a price appearing inside a question.
     expect(find.textContaining('₹'), findsNothing);
     expect(find.textContaining(r'$'), findsNothing);
     expect(find.textContaining('month'), findsNothing);
   });
 
-  testWidgets('continue stays disabled until a name is entered', (
+  testWidgets('only the desire cannot be skipped', (tester) async {
+    await _pump(tester);
+
+    // The category has a default, so question one is passable untouched.
+    await _continue(tester);
+    expect(find.text('What is your desire?'), findsOneWidget);
+
+    // Question two is not: there is nothing to write a story from.
+    await _continue(tester);
+    expect(find.text('What is your desire?'), findsOneWidget);
+  });
+
+  testWidgets('every question after the desire opens already passable', (
     tester,
   ) async {
     await _pump(tester);
+    await _pastTheDesire(tester);
 
-    await _continue(tester);
-    expect(find.text('What should Astra call you?'), findsOneWidget);
-
-    await tester.enterText(find.byType(TextField).first, 'Sana');
-    await tester.pumpAndSettle();
-    await _continue(tester);
-
-    expect(find.text('What do you want to visualise, Sana?'), findsOneWidget);
-  });
-
-  testWidgets('the desire is the second thing that cannot be skipped', (
-    tester,
-  ) async {
-    await _pump(tester);
-
-    await tester.enterText(find.byType(TextField).first, 'Sana');
-    await tester.pumpAndSettle();
-    await _continue(tester);
-
-    // Still on the desire step: there is nothing to write a story from.
-    await _continue(tester);
-    expect(find.text('What do you want to visualise, Sana?'), findsOneWidget);
-  });
-
-  testWidgets('age and gender can both be skipped', (tester) async {
-    await _pump(tester);
-
-    await tester.enterText(find.byType(TextField).first, 'Sana');
-    await tester.pumpAndSettle();
-
-    // Straight past without touching either field. An app that will not let
-    // you past a gender question is an app people close, and the whole reason
-    // for asking is that guessing was worse — a refusal to answer is a valid
-    // answer.
-    await _continue(tester);
-
-    expect(find.text('What do you want to visualise, Sana?'), findsOneWidget);
-  });
-
-  testWidgets('every step after the desire opens already passable', (
-    tester,
-  ) async {
-    await _pump(tester);
-
-    await tester.enterText(find.byType(TextField).first, 'Sana');
-    await tester.pumpAndSettle();
-    await _continue(tester);
-
-    await tester.enterText(
-      find.byType(TextField).last,
-      'I run my own studio in Kochi',
-    );
-    await tester.pumpAndSettle();
-    await _continue(tester);
-
-    // The plans, offered once, straight after the desire. "Not now" is a real
-    // answer that carries on to the free story — which is the whole reason it
-    // sits here rather than in front of the app.
-    //
-    // The paywall asks the store for live prices on open, and there is no
-    // Firebase in a widget test, so it throws on the way in. Swallowed here
-    // rather than mocked: what this test is about is that the seven optional
-    // steps can be walked past, and the paywall's price lookup already falls
-    // back to the local catalogue in the app.
-    tester.takeException();
-    expect(find.text('Not now'), findsOneWidget);
-    await tester.tap(find.text('Not now'));
-    await tester.pumpAndSettle();
-
-    // Steps three to eight: timeline, people, place, feelings, future, telling.
-    // Each answered by not answering, which is the promise the whole flow
-    // rests on.
-    for (var step = 3; step <= 8; step++) {
-      expect(find.text('STEP $step OF 9'), findsOneWidget);
+    for (var step = 3; step <= 10; step++) {
+      expect(find.text('$step OF 11'), findsOneWidget);
       await _continue(tester);
     }
 
-    expect(find.text('STEP 9 OF 9'), findsOneWidget);
+    expect(find.text('11 OF 11'), findsOneWidget);
     expect(find.text('Write my first story'), findsOneWidget);
+  });
+
+  testWidgets('back goes back, and keeps the answer that was given', (
+    tester,
+  ) async {
+    await _pump(tester);
+    await _pastTheDesire(tester);
+
+    expect(find.text('3 OF 11'), findsOneWidget);
+
+    await tester.tap(find.bySemanticsLabel('Back'));
+    await tester.pumpAndSettle();
+
+    // Back onto the desire, with the sentence still in the box — the whole
+    // point of a back button is fixing one answer, not retyping them all.
+    expect(find.text('2 OF 11'), findsOneWidget);
+    expect(find.text('I run my own studio in Kochi'), findsOneWidget);
+  });
+
+  testWidgets('the first question has no back button to press', (tester) async {
+    await _pump(tester);
+
+    expect(find.bySemanticsLabel('Back'), findsNothing);
+  });
+
+  testWidgets('the plans are offered once, not again on the way back', (
+    tester,
+  ) async {
+    await _pump(tester);
+    await _pastTheDesire(tester);
+
+    await tester.tap(find.bySemanticsLabel('Back'));
+    await tester.pumpAndSettle();
+    await _continue(tester);
+
+    // Straight through to question three. Being shown a price every time you
+    // correct an answer is how a form teaches people to stop correcting them.
+    expect(find.text('3 OF 11'), findsOneWidget);
+    expect(find.text('Not now'), findsNothing);
   });
 }

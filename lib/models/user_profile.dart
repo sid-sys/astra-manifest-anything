@@ -92,7 +92,17 @@ class UserProfile {
     joinedAt: DateTime.now(),
   );
 
-  bool get isOnboarded => name.isNotEmpty && intentions.isNotEmpty;
+  /// Whether onboarding has been answered.
+  ///
+  /// The desire alone, because it is the only answer onboarding insists on.
+  /// This used to require a name too, which stopped being true the moment the
+  /// name question was removed — and would have left every new user stuck on
+  /// the onboarding screen forever, having just answered eleven questions.
+  ///
+  /// [aspiration] is checked as well so profiles written before the questions
+  /// changed still read as onboarded rather than being asked everything again.
+  bool get isOnboarded =>
+      preferences.desire.trim().isNotEmpty || aspiration.trim().isNotEmpty;
 
   /// Whether a story can be written without paying, given how many have been
   /// written already.
