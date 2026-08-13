@@ -13,7 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 ///
 /// Nothing here signs anyone in. That needs a live Firebase project, and a
 /// test that pretends otherwise would be testing a mock's opinion of Firebase.
-Future<Widget> _bootstrap() async {
+Future<Widget> _bootstrap({bool asUpgrade = false}) async {
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
 
@@ -21,22 +21,22 @@ Future<Widget> _bootstrap() async {
     overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
     child: MaterialApp(
       theme: buildAstraTheme(),
-      home: const AuthScreen(),
+      home: AuthScreen(asUpgrade: asUpgrade),
     ),
   );
 }
 
 /// Pumps the screen on a viewport tall enough to hold all of it.
 ///
-/// The default 800x600 test window leaves the lower buttons below the fold, and
+/// The default 800x600 test window leaves the guest button below the fold, and
 /// a ListView does not build what it cannot show — so without this, half these
 /// tests would be asserting on scroll position rather than on the screen.
-Future<void> _pump(WidgetTester tester) async {
+Future<void> _pump(WidgetTester tester, {bool asUpgrade = false}) async {
   tester.view.physicalSize = const Size(1000, 2400);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
 
-  await tester.pumpWidget(await _bootstrap());
+  await tester.pumpWidget(await _bootstrap(asUpgrade: asUpgrade));
   await tester.pumpAndSettle();
 }
 
@@ -48,14 +48,22 @@ bool _armed(WidgetTester tester, String label) {
 }
 
 void main() {
-  testWidgets('both ways in are offered, and guest is not', (tester) async {
+  testWidgets('every way in is offered, guest included', (tester) async {
     await _pump(tester);
 
     expect(find.text('Log in'), findsOneWidget);
     expect(find.text('Continue with Google'), findsOneWidget);
-    // Guest sign-in is gone on purpose: an anonymous account cannot be signed
-    // back into, so the library it holds dies with the phone.
-    expect(find.text('Continue as guest'), findsNothing);
+    // The one that costs the user nothing is a button like the others, not a
+    // link in small grey type at the bottom.
+    expect(find.text('Continue as guest'), findsOneWidget);
+  });
+
+  testWidgets('the guest button says what it costs', (tester) async {
+    await _pump(tester);
+
+    // The limitation belongs next to the button, not in a warning the user
+    // meets later when their stories are already stranded.
+    expect(find.textContaining('only lives on this phone'), findsOneWidget);
   });
 
   testWidgets('logging in needs an address and six characters', (tester) async {
@@ -119,4 +127,14 @@ void main() {
     expect(find.text('sana@example.com'), findsOneWidget);
   });
 
+  testWidgets('upgrading a guest opens on the sign-up form and hides guest', (
+    tester,
+  ) async {
+    await _pump(tester, asUpgrade: true);
+
+    expect(find.text('Keep your stories safe'), findsOneWidget);
+    expect(find.text('Create account'), findsOneWidget);
+    // Already a guest. Offering it again would be offering nothing.
+    expect(find.text('Continue as guest'), findsNothing);
+  });
 }

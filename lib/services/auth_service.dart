@@ -1,18 +1,22 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
-/// Every way into Astra: an email and password, or a Google account.
+/// Every way into Astra, and the rules about moving between them.
 ///
-/// Guest accounts are gone. They were the friendliest door in the app and they
-/// cost the thing the app is for — a library with no email attached lives and
-/// dies with one phone, so a guest who changed handset lost every story they
-/// had written, silently, with no way to get them back and nothing we could do
-/// about it. An account is the only way the promise "your stories follow you"
-/// is true.
+/// The app is usable before anyone signs in — a guest gets an anonymous
+/// account, which is a real Firebase user with a real uid and a real place to
+/// sync to. That matters more than it sounds: because a guest already has a
+/// uid, signing up later can *link* credentials onto that same account rather
+/// than creating a second one, and the stories they wrote as a guest stay
+/// theirs. Every path below that could link, does.
 ///
-/// The linking code below survives on purpose: an anonymous user created
-/// before this change still has stories, and signing in on top of that account
-/// keeps them rather than stranding them under an abandoned uid.
+/// The cost of the guest door is real and is not hidden from the user: an
+/// anonymous account has nothing to sign back in with, so the library it holds
+/// lives on one handset. Reinstall or change phone and it is gone, with no way
+/// for anyone to return it. That is why [ConfirmScreen] warns a guest before
+/// they log out, and why Profile keeps offering to add an email. The trade is
+/// deliberate — a door that asks for nothing is worth having, as long as the
+/// app is honest about where it leads.
 class AuthService {
   AuthService({FirebaseAuth? auth}) : _injected = auth;
 
@@ -87,6 +91,15 @@ class AuthService {
       return null;
     }
   }
+
+  // ------------------------------------------------------------------- guest
+
+  /// Signs in with no credentials at all.
+  ///
+  /// A real Firebase user with a real uid, which is what makes the linking in
+  /// [_createOrLink] and [_federated] possible later — a guest who signs up is
+  /// upgraded in place and keeps everything they wrote.
+  Future<UserCredential> continueAsGuest() => _auth.signInAnonymously();
 
   // -------------------------------------------------------- email + password
 
