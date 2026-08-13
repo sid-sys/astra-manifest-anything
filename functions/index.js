@@ -40,7 +40,30 @@ const ANDROID_PACKAGE = "com.astraapp.astra";
 
 // ---------------------------------------------------------------- generation
 
-const STORY_MODEL = "claude-opus-5";
+/**
+ * Who writes the script.
+ *
+ * Both providers are wired up and produce the same JSON, so this is one word
+ * to change and redeploy rather than a rewrite. It exists because the script
+ * is the second most expensive thing the app does and the models are not
+ * priced alike — see `docs/model-costs.md` for the arithmetic and the sample
+ * output each one produced from the same brief.
+ *
+ * Narration is OpenAI either way; there is no Anthropic equivalent.
+ */
+const STORY_PROVIDER = "anthropic";
+
+const ANTHROPIC_STORY_MODEL = "claude-opus-5";
+
+/**
+ * The OpenAI tier used when [STORY_PROVIDER] is "openai".
+ *
+ * Terra rather than Sol: Sol costs more per story than Opus 5 does, so
+ * switching provider to reach it would be paying more for a lateral move.
+ * Terra is the balanced production tier and roughly halves the script cost.
+ */
+const OPENAI_STORY_MODEL = "gpt-5.6-terra";
+
 const TTS_MODEL = "gpt-4o-mini-tts";
 const TTS_VOICE = "marin";
 
@@ -343,13 +366,22 @@ async function withRetry(call, { attempts = 3 } = {}) {
       const status = error?.status;
       const type = error?.error?.error?.type ?? error?.error?.type;
 
+      // Google's own SDKs report an upstream 5xx as a message rather than a
+      // status, so the string is checked too. Found the hard way: a 502 from
+      // Identity Toolkit failed an account deletion *after* the data was
+      // already gone.
+      const message = String(error?.message ?? "");
+
       const worthRetrying =
         status === 429 ||
         status === 529 ||
         (status >= 500 && status < 600) ||
         type === "overloaded_error" ||
         type === "api_error" ||
-        type === "rate_limit_error";
+        type === "rate_limit_error" ||
+        /Status code: "5\d\d"/.test(message) ||
+        /\b(502|503|504)\b/.test(message) ||
+        error?.errorInfo?.code === "app/network-error";
 
       if (!worthRetrying || attempt >= attempts) throw error;
 
@@ -565,8 +597,8 @@ async function writeScript({
   mood,
   lengthMinutes,
   chapters = [],
+  providerOverride,
 }) {
-  const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
 
   // Two constraints meeting: the house style asks for 700 to 1200 words, and
   // the audio wants five minutes, which at the measured 183 wpm is 915.
@@ -633,9 +665,38 @@ async function writeScript({
     .filter((line) => line !== null)
     .join("\n");
 
+  const provider = String(providerOverride || STORY_PROVIDER)
+    .trim()
+    .toLowerCase();
+
+  const started = Date.now();
+  const { title, script, usage } = provider === "openai"
+    ? await writeScriptWithOpenAI(brief)
+    : await writeScriptWithClaude(brief);
+
+  logger.info("Script written", {
+    provider,
+    words: script.split(/\s+/).length,
+    elapsedMs: Date.now() - started,
+    ...usage,
+  });
+
+  return { title, script };
+}
+
+/**
+ * The Anthropic path.
+ *
+ * The house style is sent as a cached system block. It is the same on every
+ * request and roughly six times the size of the brief, so paying to re-read it
+ * each time would be most of the input bill.
+ */
+async function writeScriptWithClaude(brief) {
+  const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
+
   const response = await withRetry(() =>
     anthropic.messages.create({
-      model: STORY_MODEL,
+      model: ANTHROPIC_STORY_MODEL,
       max_tokens: 8000,
       system: [
         {
@@ -667,19 +728,73 @@ async function writeScript({
     throw new HttpsError("internal", "The story came back empty.");
   }
 
-  const { title, script } = JSON.parse(text);
-  // input_tokens is the *uncached remainder*, so the cache fields have to be
-  // logged alongside it — otherwise the prompt looks 6x smaller than it is and
-  // there is no way to tell whether caching is working at all.
-  logger.info("Script written", {
-    words: script.split(/\s+/).length,
-    inputTokens: response.usage.input_tokens,
-    cacheWrite: response.usage.cache_creation_input_tokens,
-    cacheRead: response.usage.cache_read_input_tokens,
-    outputTokens: response.usage.output_tokens,
-  });
+  return {
+    ...JSON.parse(text),
+    // input_tokens is the *uncached remainder*, so the cache fields have to be
+    // logged alongside it — otherwise the prompt looks 6x smaller than it is
+    // and there is no way to tell whether caching is working at all.
+    usage: {
+      inputTokens: response.usage.input_tokens,
+      cacheWrite: response.usage.cache_creation_input_tokens,
+      cacheRead: response.usage.cache_read_input_tokens,
+      outputTokens: response.usage.output_tokens,
+    },
+  };
+}
 
-  return { title, script };
+/**
+ * The OpenAI path.
+ *
+ * Same prompt, same schema, same JSON back, so the caller cannot tell which
+ * one wrote the story. Caching is automatic rather than requested: OpenAI
+ * discounts a repeated prefix on its own, and the house style is the prefix.
+ */
+async function writeScriptWithOpenAI(brief) {
+  const openai = new OpenAI({ apiKey: OPENAI_API_KEY.value() });
+
+  const response = await withRetry(() =>
+    openai.chat.completions.create({
+      model: OPENAI_STORY_MODEL,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: brief },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "story",
+          strict: true,
+          schema: STORY_SCHEMA,
+        },
+      },
+    }),
+  );
+
+  const choice = response.choices?.[0];
+
+  // The model's own way of declining. Same user-facing message as Anthropic's
+  // refusal, because to the person holding the phone it is the same event.
+  if (choice?.message?.refusal) {
+    logger.warn("Story request declined", { refusal: choice.message.refusal });
+    throw new HttpsError(
+      "invalid-argument",
+      "That request couldn't be written. Try describing the moment differently.",
+    );
+  }
+
+  const text = choice?.message?.content;
+  if (!text) {
+    throw new HttpsError("internal", "The story came back empty.");
+  }
+
+  return {
+    ...JSON.parse(text),
+    usage: {
+      inputTokens: response.usage?.prompt_tokens,
+      cacheRead: response.usage?.prompt_tokens_details?.cached_tokens,
+      outputTokens: response.usage?.completion_tokens,
+    },
+  };
 }
 
 /**
@@ -1047,7 +1162,9 @@ const DELETE_LIMITS = [
  */
 exports.writeStory = onCall(
   {
-    secrets: [ANTHROPIC_API_KEY],
+    // Both, because either provider may write the script depending on
+    // STORY_PROVIDER, and a secret that is not declared is not mounted.
+    secrets: [ANTHROPIC_API_KEY, OPENAI_API_KEY],
     timeoutSeconds: 180,
     memory: "512MiB",
   },
@@ -1245,7 +1362,27 @@ exports.deleteAccount = onCall(
     deleted.documents = stories.data().count + 1;
     await db.recursiveDelete(userDoc);
 
-    await admin.auth().deleteUser(uid);
+    // Retried, and the retry matters more here than anywhere else in the app.
+    // By this line the audio and every document are already gone, so a
+    // transient failure leaves an account that owns nothing and a user who was
+    // told the deletion failed. That is exactly what a 502 from Identity
+    // Toolkit did once.
+    try {
+      await withRetry(() => admin.auth().deleteUser(uid));
+    } catch (error) {
+      // Logged at error level with the uid, because this is the one state the
+      // app cannot repair by itself: the data is gone and the credential is
+      // not. Support needs to be able to find it.
+      logger.error("Data deleted but the account survived", {
+        uid,
+        reason: String(error?.message ?? error),
+      });
+      throw new HttpsError(
+        "internal",
+        "Your data has been deleted, but the account itself could not be " +
+          "closed. Contact support and it will be finished by hand.",
+      );
+    }
 
     logger.info("Account deleted", { uid, ...deleted });
     return deleted;
