@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/intention.dart';
 import '../models/story.dart';
+import '../models/story_preferences.dart';
 import '../models/user_profile.dart';
 import 'astra_repository.dart';
 import 'story_generator.dart';
@@ -68,10 +69,15 @@ class StoryService {
   bool get signedIn => repository.uid != null;
 
   /// Writes the script. Returns as soon as the words exist — no audio yet.
+  /// [scene] is today's moment, in the user's words, and is usually empty —
+  /// the whole point of storing preferences is that nobody restates their
+  /// desire every morning. [focus] says what to do when it is: continue the
+  /// main storyline, go somewhere new in the same life, or let Astra choose.
   Future<Story> write({
     required UserProfile profile,
     required Intention intention,
     required String scene,
+    StoryFocus focus = StoryFocus.desire,
   }) async {
     if (!signedIn) {
       return _offlineGenerator.generate(
@@ -92,6 +98,7 @@ class StoryService {
       final result = await _call('writeStory', const Duration(seconds: 170), {
         'intention': intention.name,
         'scene': scene.trim(),
+        'focus': focus.name,
       });
 
       final data = Map<String, dynamic>.from(result as Map);

@@ -11,6 +11,7 @@ import 'models/affirmation_taste.dart';
 import 'models/intention.dart';
 import 'models/plan.dart';
 import 'models/story.dart';
+import 'models/story_preferences.dart';
 import 'models/user_profile.dart';
 import 'services/account_service.dart';
 import 'services/affirmations.dart';
@@ -179,6 +180,7 @@ class StoryComposer {
   Future<Story> compose({
     required Intention intention,
     required String scene,
+    StoryFocus focus = StoryFocus.desire,
     UserProfile? profile,
   }) async {
     final story = await _ref
@@ -187,6 +189,7 @@ class StoryComposer {
           profile: profile ?? _ref.read(profileProvider),
           intention: intention,
           scene: scene,
+          focus: focus,
         );
 
     await _ref.read(storiesProvider.notifier).add(story);

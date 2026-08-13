@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../models/intention.dart';
+import '../models/story_preferences.dart';
 import '../models/user_profile.dart';
 import '../providers.dart';
-import '../services/trending_manifestations.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
 import '../widgets/aura_background.dart';
@@ -13,13 +12,23 @@ import 'paywall_screen.dart';
 import 'proof_screen.dart';
 import 'story_flow.dart';
 
-/// Name, then what you are calling in, then the wish — and then the story.
+/// Nine questions, then the story.
 ///
-/// The last step used to save the wish and drop the user on the home screen
-/// with an empty box, so the first thing the app did with the sentence someone
-/// had just typed was forget it. Onboarding now ends in the thing it was
-/// selling: the wish goes straight into a story, free, before any price is
-/// mentioned.
+/// It asks a lot more than it used to, and that is the point: the generator can
+/// only be as specific as what it was told, and the difference between "a café"
+/// and "the café near the waterfront in Kochi, on a Saturday evening" is the
+/// difference between a story about someone and a story about you. Everything
+/// asked here is stored once and sent with every story afterwards, so this is
+/// the only time anyone answers it.
+///
+/// Only two answers are required — a name and a desire. Every other step opens
+/// with Continue already enabled, because a question you cannot skip is a
+/// question people close the app on, and a blank answer is honestly handled:
+/// the brief simply omits it rather than inventing something.
+///
+/// It ends in the thing it was selling. The last step used to save the wish and
+/// drop the user on the home screen with an empty box, so the first thing the
+/// app did with the sentence someone had just typed was forget it.
 class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -28,18 +37,34 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 }
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
-  static const _stepCount = 4;
+  static const _stepNames = [
+    'YOU',
+    'YOUR DESIRE',
+    'WHEN',
+    'WHO',
+    'WHERE',
+    'HOW IT FEELS',
+    'YOUR LIFE THEN',
+    'THE TELLING',
+    'ANYTHING ELSE',
+  ];
 
-  /// What each step is called, shown above the bar. The plans are not in here
-  /// because they are not a question — they appear between step three and step
-  /// four and ask nothing of anyone who says "Not now".
-  static const _stepNames = ['YOUR NAME', 'ABOUT YOU', 'YOUR FOCUS', 'YOUR WISH'];
+  static final _stepCount = _stepNames.length;
+
+  /// The step the plans follow: after the desire, before the seven questions
+  /// about how to tell it. By then the user has said what they want and has
+  /// not spent anything, which is the moment the offer is about them rather
+  /// than about us.
+  static const _offerAfterStep = 1;
 
   final _nameController = TextEditingController();
   final _ageController = TextEditingController();
-  final _wishController = TextEditingController();
+  final _desireController = TextEditingController();
+  final _placeController = TextEditingController();
+  final _personController = TextEditingController();
+  final _extrasController = TextEditingController();
 
-  Intention? _intention;
+  var _preferences = StoryPreferences.empty;
   String _gender = '';
   int _step = 0;
   bool _weaving = false;
@@ -48,13 +73,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   void dispose() {
     _nameController.dispose();
     _ageController.dispose();
-    _wishController.dispose();
+    _desireController.dispose();
+    _placeController.dispose();
+    _personController.dispose();
+    _extrasController.dispose();
     super.dispose();
   }
 
-  /// The step the plans follow. Named rather than written as `2` in the middle
-  /// of a conditional, because the order of these steps has changed twice.
-  static const _intentionStep = 2;
+  void _edit(StoryPreferences Function(StoryPreferences) change) =>
+      setState(() => _preferences = change(_preferences));
 
   /// Shows the reviews, if there are any, and then the plans.
   ///
@@ -80,22 +107,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   bool get _canAdvance => switch (_step) {
     0 => _nameController.text.trim().isNotEmpty,
-    // Age and gender are both skippable. They make a story fit better, but
-    // they are not worth losing a user over, and an app that will not let you
-    // past a gender question is an app people close.
-    1 => true,
-    2 => _intention != null,
-    _ => _wishController.text.trim().length > 3 && !_weaving,
+    1 => _desireController.text.trim().length > 3,
+    // Everything from here is skippable. A blank answer means the story does
+    // not lean on it, which is a real answer and better than a guess.
+    _ => !_weaving,
   };
 
   Future<void> _advance() async {
     if (_step < _stepCount - 1) {
-      // The plans sit between choosing an area of life and writing the wish.
-      // By this point the user has told the app what they want out of it and
-      // has not yet spent anything, which is the moment the offer is about
-      // them rather than about us — and "Not now" carries straight on to the
-      // free story either way.
-      if (_step == _intentionStep) await _offerPlans();
+      if (_step == _offerAfterStep) await _offerPlans();
       if (!mounted) return;
       setState(() => _step++);
       return;
@@ -104,25 +124,33 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
     final container = ProviderScope.containerOf(context);
-    final intention = _intention ?? Intention.career;
-    final wish = _wishController.text.trim();
 
-    // Anything the paywall already wrote — a subscription taken two steps ago
-    // — lives on the stored profile. Building this one from `empty()` without
-    // carrying it would silently un-subscribe someone who had just paid.
+    final desire = _desireController.text.trim();
+    final preferences = _preferences.copyWith(
+      desire: desire,
+      placeDetail: _placeController.text.trim(),
+      personName: _personController.text.trim(),
+      extras: _extrasController.text.trim(),
+    );
+
+    // Anything the paywall already wrote — a subscription taken seven steps
+    // ago — lives on the stored profile. Building this one from `empty()`
+    // without carrying it would silently un-subscribe someone who had just
+    // paid.
     final existing = container.read(profileProvider);
 
     final profile = UserProfile.empty().copyWith(
       name: _nameController.text.trim(),
-      intentions: {intention},
+      intentions: {preferences.category.intention},
       age: int.tryParse(_ageController.text.trim()),
       gender: _gender,
       isSubscribed: existing.isSubscribed,
       subscribedAt: existing.subscribedAt,
       paywallSeen: true,
-      // The wish is the profile's aspiration too — it is the one line that
-      // makes every later story sound like this person.
-      aspiration: wish,
+      preferences: preferences,
+      // Kept in step with `preferences.desire` so that anything still reading
+      // the old field — the affirmation writer does — sees the same sentence.
+      aspiration: desire,
     );
 
     setState(() => _weaving = true);
@@ -142,15 +170,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         navigator,
         messenger,
         container,
-        intention: intention,
-        scene: wish,
-        // The provider is still empty; hand the generator the profile
-        // directly rather than letting it read one that has not landed.
+        intention: preferences.category.intention,
+        // The first story is the desire itself becoming true. Every story
+        // after it continues from there.
+        scene: desire,
         profile: profile,
       );
     } finally {
       // Even if the story failed, the answers were given and saved — sending
-      // the user back through three questions to try again would be a second
+      // the user back through nine questions to try again would be a second
       // insult.
       await container.read(profileProvider.notifier).update(profile);
     }
@@ -158,6 +186,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final name = _nameController.text.trim();
+
     return Scaffold(
       body: AuraBackground(
         child: SafeArea(
@@ -192,39 +222,82 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 const SizedBox(height: AstraSpacing.sm),
                 AstraProgressBar(value: (_step + 1) / _stepCount, height: 6),
                 const SizedBox(height: AstraSpacing.xl),
+
                 Expanded(
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 260),
                     child: SingleChildScrollView(
                       key: ValueKey(_step),
                       child: switch (_step) {
-                        0 => _NameStep(
-                          controller: _nameController,
-                          onChanged: () => setState(() {}),
-                        ),
-                        1 => _AboutStep(
+                        0 => _AboutStep(
+                          nameController: _nameController,
                           ageController: _ageController,
                           gender: _gender,
-                          name: _nameController.text.trim(),
+                          onChanged: () => setState(() {}),
                           onGender: (value) => setState(
                             () => _gender = _gender == value ? '' : value,
                           ),
                         ),
-                        2 => _IntentionStep(
-                          selected: _intention,
-                          onPick: (intention) =>
-                              setState(() => _intention = intention),
-                        ),
-                        _ => _WishStep(
-                          controller: _wishController,
-                          name: _nameController.text.trim(),
-                          intention: _intention ?? Intention.career,
+                        1 => _DesireStep(
+                          controller: _desireController,
+                          name: name,
+                          category: _preferences.category,
+                          onCategory: (category) =>
+                              _edit((p) => p.copyWith(category: category)),
                           onChanged: () => setState(() {}),
+                        ),
+                        2 => _TimeframeStep(
+                          selected: _preferences.timeframe,
+                          onPick: (value) =>
+                              _edit((p) => p.copyWith(timeframe: value)),
+                        ),
+                        3 => _CastStep(
+                          selected: _preferences.cast,
+                          personController: _personController,
+                          personGender: _preferences.personGender,
+                          onToggle: _toggleCast,
+                          onPersonGender: (value) => _edit(
+                            (p) => p.copyWith(
+                              personGender: p.personGender == value
+                                  ? ''
+                                  : value,
+                            ),
+                          ),
+                        ),
+                        4 => _PlaceStep(
+                          selected: _preferences.place,
+                          detailController: _placeController,
+                          onPick: (value) =>
+                              _edit((p) => p.copyWith(place: value)),
+                        ),
+                        5 => _FeelingsStep(
+                          selected: _preferences.feelings,
+                          onToggle: _toggleFeeling,
+                        ),
+                        6 => _FutureStep(
+                          selected: _preferences.futureShape,
+                          onPick: (value) =>
+                              _edit((p) => p.copyWith(futureShape: value)),
+                        ),
+                        7 => _TellingStep(
+                          style: _preferences.style,
+                          realism: _preferences.realism,
+                          onStyle: (value) =>
+                              _edit((p) => p.copyWith(style: value)),
+                          onRealism: (value) =>
+                              _edit((p) => p.copyWith(realism: value)),
+                        ),
+                        _ => _ExtrasStep(
+                          controller: _extrasController,
+                          authenticity: _preferences.authenticity,
+                          onAuthenticity: (value) =>
+                              _edit((p) => p.copyWith(authenticity: value)),
                         ),
                       },
                     ),
                   ),
                 ),
+
                 AstraButton(
                   label: _step == _stepCount - 1
                       ? 'Write my first story'
@@ -232,14 +305,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   busy: _weaving,
                   onPressed: _canAdvance ? _advance : null,
                 ),
-                if (_step == _stepCount - 1) ...[
-                  const SizedBox(height: AstraSpacing.sm),
-                  Text(
-                    'Free. No card, no account needed.',
-                    textAlign: TextAlign.center,
-                    style: AstraTextStyles.small,
-                  ),
-                ],
                 const SizedBox(height: AstraSpacing.lg),
               ],
             ),
@@ -248,62 +313,169 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       ),
     );
   }
+
+  /// "Just me" is exclusive. Picking it clears the rest, and picking anyone
+  /// else clears it — a story cannot be both alone and with your family.
+  void _toggleCast(StoryCast who) => _edit((p) {
+    if (who == StoryCast.alone) {
+      return p.copyWith(cast: const {StoryCast.alone});
+    }
+
+    final next = {...p.cast, if (true) who}..remove(StoryCast.alone);
+    if (p.cast.contains(who)) next.remove(who);
+
+    return p.copyWith(cast: next.isEmpty ? const {StoryCast.alone} : next);
+  });
+
+  /// Up to three. The fourth tap is ignored rather than silently dropping the
+  /// oldest — a limit that quietly rewrites your answer is worse than one that
+  /// holds.
+  void _toggleFeeling(Feeling feeling) => _edit((p) {
+    final next = {...p.feelings};
+    if (!next.remove(feeling) && next.length < 3) next.add(feeling);
+    return p.copyWith(feelings: next);
+  });
 }
 
-class _NameStep extends StatelessWidget {
-  const _NameStep({required this.controller, required this.onChanged});
+// ------------------------------------------------------------------- pieces
 
-  final TextEditingController controller;
-  final VoidCallback onChanged;
+/// The heading and the sentence under it, repeated on every step.
+class _Ask extends StatelessWidget {
+  const _Ask({required this.question, required this.hint});
+
+  final String question;
+  final String hint;
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text('What should Astra call you?', style: AstraTextStyles.display(30)),
+      Text(question, style: AstraTextStyles.display(28)),
       const SizedBox(height: AstraSpacing.sm),
-      Text(
-        'Your name is spoken inside your stories, so they land as yours.',
-        style: AstraTextStyles.bodyDim,
-      ),
+      Text(hint, style: AstraTextStyles.bodyDim),
       const SizedBox(height: AstraSpacing.xl),
-      AstraCard(
-        child: TextField(
-          controller: controller,
-          onChanged: (_) => onChanged(),
-          textCapitalization: TextCapitalization.words,
-          style: AstraTextStyles.body.copyWith(fontSize: 16),
-          cursorColor: AstraColors.accent,
-          decoration: InputDecoration(
-            border: InputBorder.none,
-            isDense: true,
-            hintText: 'First name',
-            hintStyle: AstraTextStyles.bodyDim,
-          ),
-        ),
-      ),
     ],
   );
 }
 
-/// Age and gender, both optional and both stated rather than guessed.
+/// A column of full-width choices, one selected.
 ///
-/// This exists because the app got it wrong from a name: "Sid" was read as a
-/// man and the person in the wish as another man, and the story fell apart in
-/// one pronoun. Asking is the fix — but asking is only better than guessing if
-/// skipping is genuinely allowed, so Continue is enabled from the moment this
-/// step opens and an empty answer simply means the stories never mention it.
+/// A column rather than a wrap of chips because these options are sentences,
+/// and sentences in chips wrap into an unreadable staircase.
+class _ChoiceList<T> extends StatelessWidget {
+  const _ChoiceList({
+    required this.options,
+    required this.label,
+    required this.selected,
+    required this.onPick,
+  });
+
+  final List<T> options;
+  final String Function(T) label;
+  final T? selected;
+  final ValueChanged<T> onPick;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      for (final option in options) ...[
+        AstraCard(
+          onTap: () => onPick(option),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Icon(
+                option == selected
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+                size: 19,
+                color: option == selected
+                    ? AstraColors.accent
+                    : AstraColors.dim,
+              ),
+              const SizedBox(width: AstraSpacing.md),
+              Expanded(
+                child: Text(
+                  label(option),
+                  style: AstraTextStyles.body.copyWith(
+                    fontWeight: option == selected
+                        ? FontWeight.w600
+                        : FontWeight.w400,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AstraSpacing.sm),
+      ],
+    ],
+  );
+}
+
+/// A boxed text field, matching the rest of the app's cards.
+class _Input extends StatelessWidget {
+  const _Input({
+    required this.controller,
+    required this.hint,
+    this.onChanged,
+    this.lines = 1,
+    this.capitalization = TextCapitalization.sentences,
+    this.keyboardType,
+    this.formatters,
+  });
+
+  final TextEditingController controller;
+  final String hint;
+  final VoidCallback? onChanged;
+  final int lines;
+  final TextCapitalization capitalization;
+  final TextInputType? keyboardType;
+  final List<TextInputFormatter>? formatters;
+
+  @override
+  Widget build(BuildContext context) => AstraCard(
+    child: TextField(
+      controller: controller,
+      onChanged: onChanged == null ? null : (_) => onChanged!(),
+      maxLines: lines,
+      textCapitalization: capitalization,
+      keyboardType: keyboardType,
+      inputFormatters: formatters,
+      style: AstraTextStyles.body.copyWith(fontSize: 16),
+      cursorColor: AstraColors.accent,
+      decoration: InputDecoration(
+        border: InputBorder.none,
+        isDense: true,
+        hintText: hint,
+        hintStyle: AstraTextStyles.bodyDim,
+      ),
+    ),
+  );
+}
+
+// -------------------------------------------------------------------- steps
+
+/// Name, age and gender. Only the name is required.
+///
+/// Age and gender exist because the app got gender wrong from a name once:
+/// "Sid" was read as a man and the person in the wish as another man, and the
+/// story fell apart in one pronoun. Asking is the fix — but asking is only
+/// better than guessing if skipping is genuinely allowed, so an empty answer
+/// simply means the stories never mention it.
 class _AboutStep extends StatelessWidget {
   const _AboutStep({
+    required this.nameController,
     required this.ageController,
     required this.gender,
-    required this.name,
+    required this.onChanged,
     required this.onGender,
   });
 
+  final TextEditingController nameController;
   final TextEditingController ageController;
   final String gender;
-  final String name;
+  final VoidCallback onChanged;
   final ValueChanged<String> onGender;
 
   static const _options = ['Woman', 'Man', 'Non-binary'];
@@ -312,37 +484,30 @@ class _AboutStep extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(
-        name.isEmpty ? 'A little about you' : 'A little about you, $name',
-        style: AstraTextStyles.display(30),
+      const _Ask(
+        question: 'What should Astra call you?',
+        hint:
+            'Your name is spoken inside your stories, so they land as yours. '
+            'Age and gender are optional, and nothing is guessed from a name.',
       ),
-      const SizedBox(height: AstraSpacing.sm),
-      Text(
-        'Your stories are written in your own voice, so this helps them sound '
-        'like your life. Skip either one — nothing is guessed from your name.',
-        style: AstraTextStyles.bodyDim,
+      _Input(
+        controller: nameController,
+        hint: 'First name',
+        onChanged: onChanged,
+        capitalization: TextCapitalization.words,
       ),
-      const SizedBox(height: AstraSpacing.xl),
+      const SizedBox(height: AstraSpacing.lg),
 
       Text('AGE', style: AstraTextStyles.eyebrow),
       const SizedBox(height: AstraSpacing.sm),
-      AstraCard(
-        child: TextField(
-          controller: ageController,
-          keyboardType: TextInputType.number,
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(3),
-          ],
-          style: AstraTextStyles.body.copyWith(fontSize: 16),
-          cursorColor: AstraColors.accent,
-          decoration: InputDecoration(
-            border: InputBorder.none,
-            isDense: true,
-            hintText: 'Optional',
-            hintStyle: AstraTextStyles.bodyDim,
-          ),
-        ),
+      _Input(
+        controller: ageController,
+        hint: 'Optional',
+        keyboardType: TextInputType.number,
+        formatters: [
+          FilteringTextInputFormatter.digitsOnly,
+          LengthLimitingTextInputFormatter(3),
+        ],
       ),
       const SizedBox(height: AstraSpacing.lg),
 
@@ -367,165 +532,397 @@ class _AboutStep extends StatelessWidget {
   );
 }
 
-/// One choice, not several.
-///
-/// It used to take a set, which made the next step's examples ambiguous — show
-/// the ones for love, or for money, or a shuffle of both? A single pick makes
-/// the third step obvious, and more intentions can be added later from Edit
-/// desires without anyone having to decide about it here.
-class _IntentionStep extends StatelessWidget {
-  const _IntentionStep({required this.selected, required this.onPick});
-
-  final Intention? selected;
-  final ValueChanged<Intention> onPick;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text('What are you calling in?', style: AstraTextStyles.display(30)),
-      const SizedBox(height: AstraSpacing.sm),
-      Text(
-        'Pick the one that matters most right now. You can add more later.',
-        style: AstraTextStyles.bodyDim,
-      ),
-      const SizedBox(height: AstraSpacing.xl),
-      Wrap(
-        spacing: AstraSpacing.sm,
-        runSpacing: AstraSpacing.sm,
-        children: [
-          for (final intention in Intention.values)
-            TagChip(
-              label: '${intention.glyph}  ${intention.label}',
-              selected: intention == selected,
-              accent: intention.accent,
-              onTap: () => onPick(intention),
-            ),
-        ],
-      ),
-    ],
-  );
-}
-
-/// The wish, with worked examples for the chosen intention and the one piece
-/// of advice that changes the output more than anything else.
-class _WishStep extends StatelessWidget {
-  const _WishStep({
+/// The category and the desire itself — the two halves of one question.
+class _DesireStep extends StatelessWidget {
+  const _DesireStep({
     required this.controller,
     required this.name,
-    required this.intention,
+    required this.category,
+    required this.onCategory,
     required this.onChanged,
   });
 
   final TextEditingController controller;
   final String name;
-  final Intention intention;
+  final DesireCategory category;
+  final ValueChanged<DesireCategory> onCategory;
   final VoidCallback onChanged;
 
   @override
-  Widget build(BuildContext context) {
-    final examples = TrendingManifestations.all
-        .where((wish) => wish.intention == intention)
-        .toList();
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _Ask(
+        question: name.isEmpty
+            ? 'What do you want to visualise?'
+            : 'What do you want to visualise, $name?',
+        hint:
+            'Pick the part of life it belongs to, then say it in your own '
+            'words, as if it has already happened.',
+      ),
+      Wrap(
+        spacing: AstraSpacing.sm,
+        runSpacing: AstraSpacing.sm,
+        children: [
+          for (final option in DesireCategory.values)
+            TagChip(
+              label: '${option.glyph}  ${option.label}',
+              selected: option == category,
+              onTap: () => onCategory(option),
+            ),
+        ],
+      ),
+      const SizedBox(height: AstraSpacing.lg),
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          name.isEmpty ? 'In your own words' : 'In your own words, $name',
-          style: AstraTextStyles.display(30),
+      _Input(
+        controller: controller,
+        hint: 'I want to…',
+        onChanged: onChanged,
+        lines: 4,
+      ),
+      const SizedBox(height: AstraSpacing.md),
+
+      // The single highest-leverage instruction in the app. A generator can
+      // only be as specific as the sentence it was given, and "more money"
+      // produces a story about nothing.
+      AstraCard(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.lightbulb_outline_rounded,
+              size: 18,
+              color: AstraColors.accent,
+            ),
+            const SizedBox(width: AstraSpacing.md),
+            Expanded(
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: 'Be specific. ',
+                      style: AstraTextStyles.body.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const TextSpan(
+                      text:
+                          'Amounts, places, names, dates. '
+                          '“₹4 lakh a month from my studio in Goa by March” '
+                          'writes a story you can picture. “More money” '
+                          'writes one about nobody.',
+                    ),
+                  ],
+                ),
+                style: AstraTextStyles.bodyDim,
+              ),
+            ),
+          ],
         ),
+      ),
+    ],
+  );
+}
+
+class _TimeframeStep extends StatelessWidget {
+  const _TimeframeStep({required this.selected, required this.onPick});
+
+  final Timeframe selected;
+  final ValueChanged<Timeframe> onPick;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const _Ask(
+        question: 'When do you imagine this happening?',
+        hint:
+            'Your stories open on a real date. This decides which one, so the '
+            'moment has somewhere to sit.',
+      ),
+      _ChoiceList<Timeframe>(
+        options: Timeframe.values,
+        label: (t) => t.label,
+        selected: selected,
+        onPick: onPick,
+      ),
+    ],
+  );
+}
+
+class _CastStep extends StatelessWidget {
+  const _CastStep({
+    required this.selected,
+    required this.personController,
+    required this.personGender,
+    required this.onToggle,
+    required this.onPersonGender,
+  });
+
+  final Set<StoryCast> selected;
+  final TextEditingController personController;
+  final String personGender;
+  final ValueChanged<StoryCast> onToggle;
+  final ValueChanged<String> onPersonGender;
+
+  static const _genders = ['Woman', 'Man', 'Non-binary'];
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const _Ask(
+        question: 'Who should be in your story?',
+        hint: 'Choose as many as fit. Conversations are what make it real.',
+      ),
+      Wrap(
+        spacing: AstraSpacing.sm,
+        runSpacing: AstraSpacing.sm,
+        children: [
+          for (final option in StoryCast.values)
+            TagChip(
+              label: option.label,
+              selected: selected.contains(option),
+              onTap: () => onToggle(option),
+            ),
+        ],
+      ),
+
+      if (selected.contains(StoryCast.someone)) ...[
+        const SizedBox(height: AstraSpacing.lg),
+        Text('THEIR NAME', style: AstraTextStyles.eyebrow),
         const SizedBox(height: AstraSpacing.sm),
-        Text(
-          'Say what you want as if it has already happened. This becomes your '
-          'first story.',
-          style: AstraTextStyles.bodyDim,
+        _Input(
+          controller: personController,
+          hint: 'The name you would actually use',
+          capitalization: TextCapitalization.words,
         ),
         const SizedBox(height: AstraSpacing.lg),
 
-        AstraCard(
-          child: TextField(
-            controller: controller,
-            onChanged: (_) => onChanged(),
-            maxLines: 4,
-            style: AstraTextStyles.body,
-            cursorColor: AstraColors.accent,
-            decoration: InputDecoration(
-              border: InputBorder.none,
-              isDense: true,
-              hintText: examples.isEmpty
-                  ? 'I want to lead my own design studio…'
-                  : examples.first.wish,
-              hintStyle: AstraTextStyles.bodyDim,
-            ),
-          ),
-        ),
-        const SizedBox(height: AstraSpacing.md),
-
-        // The single highest-leverage instruction in the app. A generator can
-        // only be as specific as the sentence it was given, and "more money"
-        // produces a story about nothing.
-        AstraCard(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Icon(
-                Icons.lightbulb_outline_rounded,
-                size: 18,
-                color: AstraColors.accent,
+        Text('AND THEIR GENDER', style: AstraTextStyles.eyebrow),
+        const SizedBox(height: AstraSpacing.sm),
+        Wrap(
+          spacing: AstraSpacing.sm,
+          runSpacing: AstraSpacing.sm,
+          children: [
+            for (final option in _genders)
+              TagChip(
+                label: option,
+                selected: personGender == option,
+                onTap: () => onPersonGender(option),
               ),
-              const SizedBox(width: AstraSpacing.md),
-              Expanded(
-                child: Text.rich(
-                  TextSpan(
-                    children: [
-                      TextSpan(
-                        text: 'Be specific. ',
-                        style: AstraTextStyles.body.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const TextSpan(
-                        text:
-                            'Amounts, places, names, models, dates. '
-                            '“₹4 lakh a month from my studio in Goa by March” '
-                            'writes a story you can picture. “More money” '
-                            'writes one about nobody.',
-                      ),
-                    ],
-                  ),
-                  style: AstraTextStyles.bodyDim,
-                ),
-              ),
-            ],
-          ),
+          ],
         ),
-
-        if (examples.isNotEmpty) ...[
-          const SizedBox(height: AstraSpacing.lg),
-          Text(
-            'POPULAR IN ${intention.label.toUpperCase()}',
-            style: AstraTextStyles.eyebrow,
-          ),
-          const SizedBox(height: AstraSpacing.sm),
-          Wrap(
-            spacing: AstraSpacing.sm,
-            runSpacing: AstraSpacing.sm,
-            children: [
-              for (final example in examples)
-                TagChip(
-                  label: example.label,
-                  accent: intention.accent,
-                  selected: controller.text == example.wish,
-                  onTap: () {
-                    controller.text = example.wish;
-                    onChanged();
-                  },
-                ),
-            ],
-          ),
-        ],
+        const SizedBox(height: AstraSpacing.sm),
+        Text(
+          'Optional, and asked rather than guessed — a name is not evidence. '
+          'Left blank, your stories use their name instead of a pronoun.',
+          style: AstraTextStyles.small,
+        ),
       ],
-    );
-  }
+    ],
+  );
+}
+
+class _PlaceStep extends StatelessWidget {
+  const _PlaceStep({
+    required this.selected,
+    required this.detailController,
+    required this.onPick,
+  });
+
+  final StoryPlace selected;
+  final TextEditingController detailController;
+  final ValueChanged<StoryPlace> onPick;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const _Ask(
+        question: 'Where should it happen?',
+        hint:
+            'A named place beats a described one. “The café near the '
+            'waterfront in Kochi” is somewhere you have stood.',
+      ),
+      Wrap(
+        spacing: AstraSpacing.sm,
+        runSpacing: AstraSpacing.sm,
+        children: [
+          for (final option in StoryPlace.values)
+            TagChip(
+              label: option.label,
+              selected: option == selected,
+              onTap: () => onPick(option),
+            ),
+        ],
+      ),
+      const SizedBox(height: AstraSpacing.lg),
+
+      Text('CITY OR PLACE', style: AstraTextStyles.eyebrow),
+      const SizedBox(height: AstraSpacing.sm),
+      _Input(
+        controller: detailController,
+        hint: 'Optional — Kochi, my parents’ house, the office in Bandra',
+        capitalization: TextCapitalization.words,
+      ),
+    ],
+  );
+}
+
+class _FeelingsStep extends StatelessWidget {
+  const _FeelingsStep({required this.selected, required this.onToggle});
+
+  final Set<Feeling> selected;
+  final ValueChanged<Feeling> onToggle;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const _Ask(
+        question: 'How do you want to feel when it is real?',
+        hint: 'Up to three. This is what the ending is built to land on.',
+      ),
+      Wrap(
+        spacing: AstraSpacing.sm,
+        runSpacing: AstraSpacing.sm,
+        children: [
+          for (final option in Feeling.values)
+            TagChip(
+              label: '${option.glyph}  ${option.label}',
+              selected: selected.contains(option),
+              onTap: () => onToggle(option),
+            ),
+        ],
+      ),
+      const SizedBox(height: AstraSpacing.md),
+      Text(
+        selected.length >= 3
+            ? 'Three chosen. Tap one to swap it out.'
+            : '${3 - selected.length} more if you want them.',
+        style: AstraTextStyles.small,
+      ),
+    ],
+  );
+}
+
+class _FutureStep extends StatelessWidget {
+  const _FutureStep({required this.selected, required this.onPick});
+
+  final FutureShape selected;
+  final ValueChanged<FutureShape> onPick;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const _Ask(
+        question: 'What does your life look like then?',
+        hint:
+            'This sets how much of the world around the moment has moved, '
+            'which is most of what makes a story believable.',
+      ),
+      _ChoiceList<FutureShape>(
+        options: FutureShape.values,
+        label: (s) => s.label,
+        selected: selected,
+        onPick: onPick,
+      ),
+    ],
+  );
+}
+
+class _TellingStep extends StatelessWidget {
+  const _TellingStep({
+    required this.style,
+    required this.realism,
+    required this.onStyle,
+    required this.onRealism,
+  });
+
+  final StoryStyle style;
+  final Realism realism;
+  final ValueChanged<StoryStyle> onStyle;
+  final ValueChanged<Realism> onRealism;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const _Ask(
+        question: 'How should it be told?',
+        hint: 'The register, and how close it stays to an ordinary day.',
+      ),
+      Text('THE KIND OF STORY', style: AstraTextStyles.eyebrow),
+      const SizedBox(height: AstraSpacing.sm),
+      Wrap(
+        spacing: AstraSpacing.sm,
+        runSpacing: AstraSpacing.sm,
+        children: [
+          for (final option in StoryStyle.values)
+            TagChip(
+              label: option.label,
+              selected: option == style,
+              onTap: () => onStyle(option),
+            ),
+        ],
+      ),
+      const SizedBox(height: AstraSpacing.lg),
+
+      Text('HOW REAL IT SHOULD FEEL', style: AstraTextStyles.eyebrow),
+      const SizedBox(height: AstraSpacing.sm),
+      _ChoiceList<Realism>(
+        options: Realism.values,
+        label: (r) => r.label,
+        selected: realism,
+        onPick: onRealism,
+      ),
+    ],
+  );
+}
+
+class _ExtrasStep extends StatelessWidget {
+  const _ExtrasStep({
+    required this.controller,
+    required this.authenticity,
+    required this.onAuthenticity,
+  });
+
+  final TextEditingController controller;
+  final Authenticity authenticity;
+  final ValueChanged<Authenticity> onAuthenticity;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const _Ask(
+        question: 'Anything you want written in?',
+        hint:
+            'A sentence someone says, a song, an outfit, a date, a dish. '
+            'Small specific things are what a memory is made of.',
+      ),
+      _Input(
+        controller: controller,
+        hint: 'Optional — she calls me by my full name when she is teasing',
+        lines: 4,
+      ),
+      const SizedBox(height: AstraSpacing.xl),
+
+      Text(
+        'WHAT WOULD MAKE IT FEEL LIKE YOUR LIFE',
+        style: AstraTextStyles.eyebrow,
+      ),
+      const SizedBox(height: AstraSpacing.sm),
+      // The most useful answer in the whole flow: it says which kind of
+      // specificity to spend the words on.
+      _ChoiceList<Authenticity>(
+        options: Authenticity.values,
+        label: (a) => a.label,
+        selected: authenticity,
+        onPick: onAuthenticity,
+      ),
+    ],
+  );
 }

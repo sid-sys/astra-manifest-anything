@@ -10,7 +10,6 @@ import '../theme/astra_theme.dart';
 import '../widgets/allowance_ring.dart';
 import '../widgets/astra_widgets.dart';
 import '../widgets/profile_avatar.dart';
-import 'auth_screen.dart';
 import 'confirm_screen.dart';
 import 'paywall_screen.dart';
 import 'player_screen.dart';
@@ -195,21 +194,17 @@ class ProfileScreen extends ConsumerWidget {
         Text('Account', style: AstraTextStyles.label),
         const SizedBox(height: AstraSpacing.sm),
 
-        if (ref.watch(isGuestProvider)) ...[
-          // Offered, never enforced. A guest account is a full account; this
-          // is about not losing it with the phone.
-          _AccountRow(
-            icon: Icons.mark_email_read_outlined,
-            label: 'Add an email',
-            detail: 'Keeps your stories if you change phones',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<bool>(
-                builder: (_) => const AuthScreen(asUpgrade: true),
-              ),
-            ),
-          ),
-          const SizedBox(height: AstraSpacing.sm),
-        ] else ...[
+        // A guest gets a row that states the fact and does nothing, because
+        // there is no password to reset and no address to send a link to.
+        // The upgrade path used to live here and was removed; anyone wanting
+        // an account signs out and signs up.
+        if (ref.watch(isGuestProvider))
+          const _AccountRow(
+            icon: Icons.person_outline_rounded,
+            label: 'Guest',
+            detail: 'This account lives on this phone only',
+          )
+        else
           _AccountRow(
             icon: Icons.alternate_email_rounded,
             label:
@@ -217,8 +212,7 @@ class ProfileScreen extends ConsumerWidget {
             detail: 'Send a link to change your password',
             onTap: () => _resetPassword(context, ref),
           ),
-          const SizedBox(height: AstraSpacing.sm),
-        ],
+        const SizedBox(height: AstraSpacing.sm),
 
         _AccountRow(
           icon: Icons.logout_rounded,
@@ -237,30 +231,47 @@ class ProfileScreen extends ConsumerWidget {
 
         // Reachable from inside the app, not only from the store listing.
         // Someone who wants to know what happens to what they typed should not
-        // have to leave and find the Play page to be told.
-        const SizedBox(height: AstraSpacing.xl),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _LegalLink(
-              label: 'Privacy',
-              onTap: () => LegalLinks.open(context, LegalLinks.privacy),
-            ),
-            Text('·', style: AstraTextStyles.small),
-            _LegalLink(
-              label: 'Terms',
-              onTap: () => LegalLinks.open(context, LegalLinks.terms),
-            ),
-            Text('·', style: AstraTextStyles.small),
-            _LegalLink(
-              label: 'Support',
-              onTap: () => LegalLinks.open(
-                context,
-                'mailto:${LegalLinks.supportEmail}',
-              ),
-            ),
-          ],
+        // have to leave and find the Play page to be told — and the same three
+        // URLs are what Play holds on file, so what a reviewer reads and what a
+        // user reads are the same page.
+        const SizedBox(height: AstraSpacing.xxl),
+        Text('Legal', style: AstraTextStyles.label),
+        const SizedBox(height: AstraSpacing.sm),
+
+        _AccountRow(
+          icon: Icons.shield_outlined,
+          label: 'Privacy policy',
+          detail: 'What is collected, and what is never sold',
+          onTap: () => LegalLinks.open(context, LegalLinks.privacy),
         ),
+        const SizedBox(height: AstraSpacing.sm),
+        _AccountRow(
+          icon: Icons.description_outlined,
+          label: 'Terms of use',
+          detail: 'What Astra promises, and what it does not',
+          onTap: () => LegalLinks.open(context, LegalLinks.terms),
+        ),
+        const SizedBox(height: AstraSpacing.sm),
+        // The web page, not the in-app button above it. Play requires a URL
+        // that works without installing the app, for someone who has already
+        // uninstalled it and still wants their data gone.
+        _AccountRow(
+          icon: Icons.link_off_rounded,
+          label: 'Delete your account',
+          detail: 'How to erase everything, including from the web',
+          onTap: () => LegalLinks.open(context, LegalLinks.deleteAccount),
+        ),
+        const SizedBox(height: AstraSpacing.sm),
+        _AccountRow(
+          icon: Icons.mail_outline_rounded,
+          label: 'Contact support',
+          detail: LegalLinks.supportEmail,
+          onTap: () => LegalLinks.open(
+            context,
+            'mailto:${LegalLinks.supportEmail}',
+          ),
+        ),
+        const SizedBox(height: AstraSpacing.xl),
       ],
     );
   }
@@ -458,21 +469,6 @@ Future<void> editIntentions(BuildContext context, WidgetRef ref) async {
       .update(profile.copyWith(intentions: selected));
 }
 
-class _LegalLink extends StatelessWidget {
-  const _LegalLink({required this.label, required this.onTap});
-
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => TextButton(
-    onPressed: onTap,
-    child: Text(
-      label,
-      style: AstraTextStyles.small.copyWith(color: AstraColors.text),
-    ),
-  );
-}
 
 /// A row in the Account block. The destructive one is tinted, but only its
 /// icon and label — a whole card in error red reads as something already
@@ -482,14 +478,17 @@ class _AccountRow extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.detail,
-    required this.onTap,
+    this.onTap,
     this.danger = false,
   });
 
   final IconData icon;
   final String label;
   final String detail;
-  final VoidCallback onTap;
+
+  /// Null for a row that only states a fact. The chevron goes with it, so a
+  /// row that does nothing does not look like a row that leads somewhere.
+  final VoidCallback? onTap;
   final bool danger;
 
   @override
@@ -515,11 +514,12 @@ class _AccountRow extends StatelessWidget {
               ],
             ),
           ),
-          const Icon(
-            Icons.chevron_right_rounded,
-            size: 18,
-            color: AstraColors.dim,
-          ),
+          if (onTap != null)
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: AstraColors.dim,
+            ),
         ],
       ),
     );

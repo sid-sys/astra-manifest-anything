@@ -1,5 +1,6 @@
 import 'intention.dart';
 import 'plan.dart';
+import 'story_preferences.dart';
 
 /// Everything the story generator needs to write in the user's own life.
 class UserProfile {
@@ -14,6 +15,7 @@ class UserProfile {
     this.reminderMinute = 0,
     this.fcmToken,
     this.timezone,
+    this.preferences = StoryPreferences.empty,
     this.age,
     this.gender = '',
     this.isSubscribed = false,
@@ -54,7 +56,19 @@ class UserProfile {
 
   /// The user's goal in their own words — the raw material that makes a story
   /// feel specific rather than generic.
+  ///
+  /// Kept alongside [preferences] rather than replaced by it, because it is
+  /// what every profile written before onboarding started asking these
+  /// questions has. [StoryPreferences.desire] is the same sentence for anyone
+  /// who has onboarded since; `preferences.desire` wins when both exist.
   final String aspiration;
+
+  /// Everything onboarding asked, sent with every story.
+  ///
+  /// The second of the three layers the generator combines: a core desire that
+  /// stays put, preferences that stay put, and today's moment, which is the
+  /// only thing the user types again.
+  final StoryPreferences preferences;
   final String voice;
   final DateTime joinedAt;
   final bool isSubscribed;
@@ -98,6 +112,7 @@ class UserProfile {
     String? name,
     Set<Intention>? intentions,
     String? aspiration,
+    StoryPreferences? preferences,
     String? voice,
     int? age,
     String? gender,
@@ -114,6 +129,7 @@ class UserProfile {
     name: name ?? this.name,
     intentions: intentions ?? this.intentions,
     aspiration: aspiration ?? this.aspiration,
+    preferences: preferences ?? this.preferences,
     voice: voice ?? this.voice,
     age: age ?? this.age,
     remindersOn: remindersOn ?? this.remindersOn,
@@ -136,6 +152,7 @@ class UserProfile {
     'name': name,
     'intentions': intentions.map((i) => i.name).toList(),
     'aspiration': aspiration,
+    'preferences': preferences.toMap(),
     'voice': voice,
     'age': age,
     'remindersOn': remindersOn,
@@ -156,6 +173,11 @@ class UserProfile {
         .map((n) => Intention.fromName(n as String))
         .toSet(),
     aspiration: map['aspiration'] as String? ?? '',
+    preferences: map['preferences'] == null
+        ? StoryPreferences.empty
+        : StoryPreferences.fromMap(
+            Map<String, dynamic>.from(map['preferences'] as Map),
+          ),
     voice: map['voice'] as String? ?? 'marin',
     age: (map['age'] as num?)?.toInt(),
     remindersOn: map['remindersOn'] as bool? ?? false,

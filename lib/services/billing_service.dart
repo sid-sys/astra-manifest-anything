@@ -22,12 +22,32 @@ import 'package:in_app_purchase/in_app_purchase.dart';
 class BillingService {
   BillingService({InAppPurchase? store, FirebaseFunctions? functions})
     : _store = store ?? InAppPurchase.instance,
-      _functions =
-          functions ??
-          FirebaseFunctions.instanceFor(region: 'asia-south1');
+      _injectedFunctions = functions;
 
   final InAppPurchase _store;
-  final FirebaseFunctions _functions;
+  final FirebaseFunctions? _injectedFunctions;
+
+  /// Resolved on use rather than in the constructor.
+  ///
+  /// Reaching for `FirebaseFunctions.instanceFor` before `initializeApp`
+  /// throws, and building this object must not: the paywall reads it in
+  /// `initState` to fetch live prices, so on a build where Firebase never
+  /// started — no network at launch, a widget test — opening the plans threw
+  /// instead of falling back to the local price table.
+  ///
+  /// Null means there is nothing to verify a receipt against, which is caught
+  /// where it matters: no verification, no entitlement.
+  FirebaseFunctions? get _functions {
+    if (_injectedFunctions != null) return _injectedFunctions;
+    try {
+      // Must match the deployed region; the default would 404 against a
+      // function that lives in asia-south1.
+      return FirebaseFunctions.instanceFor(region: 'asia-south1');
+    } catch (error) {
+      debugPrint('Astra: no functions available for billing — $error');
+      return null;
+    }
+  }
 
   /// Subscription ids as created in the Play Console. Must match
   /// `PLAY_SUBSCRIPTIONS` in `functions/index.js`.
@@ -139,7 +159,15 @@ class BillingService {
   }
 
   Future<bool> _verify(PurchaseDetails purchase) async {
-    final result = await _functions
+    final functions = _functions;
+    if (functions == null) {
+      // Nothing to check the receipt with, so nothing is granted. Failing
+      // closed is the only safe direction: the alternative is handing out a
+      // subscription because a network call could not be made.
+      throw StateError('Purchases cannot be verified on this build.');
+    }
+
+    final result = await functions
         .httpsCallable(
           'verifyPurchase',
           options: HttpsCallableOptions(timeout: const Duration(seconds: 60)),

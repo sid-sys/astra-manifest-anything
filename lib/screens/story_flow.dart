@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/intention.dart';
+import '../models/story_preferences.dart';
 import '../models/user_profile.dart';
 import '../providers.dart';
 import '../services/story_service.dart';
@@ -30,6 +31,7 @@ Future<bool> weaveStory(
   ProviderContainer container, {
   required Intention intention,
   required String scene,
+  StoryFocus focus = StoryFocus.desire,
   UserProfile? profile,
 }) async {
   // Ask for money before spending a minute of the user's time, not after —
@@ -55,6 +57,7 @@ Future<bool> weaveStory(
     final story = await composer.compose(
       intention: intention,
       scene: scene,
+      focus: focus,
       profile: profile,
     );
 
