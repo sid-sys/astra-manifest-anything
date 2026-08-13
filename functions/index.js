@@ -954,10 +954,14 @@ const AFFIRMATION_SCHEMA = {
   properties: {
     lines: {
       type: "array",
-      minItems: AFFIRMATION_BATCH,
-      maxItems: AFFIRMATION_BATCH,
       items: { type: "string" },
-      description: "One affirmation per day, in the order they will be read.",
+      // The count is asked for in the description and in the brief rather than
+      // enforced with minItems: structured outputs reject any minItems other
+      // than 0 or 1, so a schema that looks stricter is a schema that 400s. A
+      // batch that comes back short is harmless — it just refills sooner.
+      description:
+        `Exactly ${AFFIRMATION_BATCH} affirmations, one per day, in the order ` +
+        "they will be read.",
     },
   },
   required: ["lines"],
@@ -1021,7 +1025,11 @@ async function writeAffirmations(profile) {
   if (!text) return [];
 
   const { lines } = JSON.parse(text);
-  return Array.isArray(lines) ? lines.filter((line) => typeof line === "string") : [];
+  if (!Array.isArray(lines)) return [];
+
+  return lines
+    .filter((line) => typeof line === "string" && line.trim())
+    .slice(0, AFFIRMATION_BATCH);
 }
 
 /**
@@ -1055,6 +1063,11 @@ async function takeAffirmation(uid, profile) {
   );
 
   return line;
+}
+
+/** Hands back a day claimed by a run that then produced nothing to send. */
+function releaseClaim(uid) {
+  return affirmationDoc(uid).set({ lastSentDate: null }, { merge: true });
 }
 
 /**
@@ -1173,6 +1186,11 @@ exports.dailyAffirmation = onSchedule(
       try {
         const line = await takeAffirmation(uid, profile);
         if (!line) {
+          // Nothing was written, so nothing was sent — give the day back and
+          // let a later tick try again. The claim is taken before the work on
+          // purpose, but holding it after a failure would mean one bad Claude
+          // call costs someone their whole morning.
+          await releaseClaim(uid);
           skipped++;
           continue;
         }
@@ -1206,15 +1224,33 @@ exports.dailyAffirmation = onSchedule(
 
         // The device uninstalled, or the token rotated and we missed it.
         // Clearing it stops us paying to send into the void every morning.
-        if (
+        // The first two are what a real uninstalled device returns. The third
+        // is deliberately narrow: `invalid-argument` also covers a malformed
+        // *message*, and treating that as a bad token would wipe the push
+        // address of every user on the next run. Only the wording rules that
+        // out.
+        const deadToken =
           code === "messaging/registration-token-not-registered" ||
-          code === "messaging/invalid-registration-token"
-        ) {
+          code === "messaging/invalid-registration-token" ||
+          (code === "messaging/invalid-argument" &&
+            /registration token/i.test(error?.message ?? ""));
+
+        if (deadToken) {
           await doc.ref.set({ fcmToken: null }, { merge: true });
           logger.info("Dropped a dead push token", { uid });
         } else {
-          logger.error("Affirmation send failed", { uid, message: error?.message });
+          // Logged under `reason`, not `message`: the structured logger treats
+          // `message` as the entry's own text and swallows the field.
+          logger.error("Affirmation failed", {
+            uid,
+            reason: String(error?.message ?? error),
+            stack: error?.stack ?? null,
+          });
         }
+
+        // The claim stays. A failure here is a send that may or may not have
+        // landed, and the wrong guess costs a duplicate notification rather
+        // than a missed one — so the day is spent either way.
         skipped++;
       }
     }
