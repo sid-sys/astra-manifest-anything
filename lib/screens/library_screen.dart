@@ -13,9 +13,10 @@ import 'player_screen.dart';
 /// There is no daily listen cap here by design: a story you generated is a
 /// story you can play as often as you like.
 class LibraryScreen extends ConsumerStatefulWidget {
-  const LibraryScreen({super.key, required this.onCreate});
+  const LibraryScreen({super.key, required this.onWrite});
 
-  final VoidCallback onCreate;
+  /// Sends the user to Home, which is where writing starts.
+  final VoidCallback onWrite;
 
   @override
   ConsumerState<LibraryScreen> createState() => _LibraryScreenState();
@@ -26,7 +27,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final all = ref.watch(storiesProvider);
+    // Manifestations and stories in one list, newest first.
+    //
+    // Nothing new is written as a story any more, but every story ever written
+    // is still here and still plays. Deleting them would take back audio people
+    // paid for, and a second "old stories" tab would be a museum nobody visits.
+    // They are the same thing to listen to, so they are one list.
+    final all = ref.watch(everythingWrittenProvider);
+
     final stories =
         _filter == null ? all : all.where((s) => s.intention == _filter).toList();
     final usedIntentions = {for (final story in all) story.intention};
@@ -35,12 +43,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       return EmptyState(
         glyph: '✦',
         title: 'Your library is waiting',
-        body: 'Stories you weave are kept here — filterable, replayable, and '
-            'available offline.',
+        body: 'Everything Maya writes for you is kept here — replayable, for '
+            'as long as you want it.',
         action: AstraButton(
-          label: 'Weave your first story',
+          label: 'Write your first manifestation',
           icon: Icons.auto_awesome,
-          onPressed: widget.onCreate,
+          onPressed: widget.onWrite,
         ),
       );
     }
@@ -78,7 +86,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             story: story,
             onPlay: () {
               final queue = stories.where((s) => s.id != story.id).toList();
-              ref.read(playbackProvider).play(story, queue: queue);
+              // Opened, not started. Pressing play is the user's call — see
+              // [PlaybackController.open].
+              ref.read(playbackProvider).open(story, queue: queue);
               Navigator.of(context).push(
                 MaterialPageRoute<void>(builder: (_) => const PlayerScreen()),
               );
@@ -89,13 +99,50 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                 SnackBar(content: Text('Queued “${story.title}”')),
               );
             },
-            onDelete: () => ref.read(storiesProvider.notifier).remove(story.id),
+            onDelete: () async {
+              final sure = await confirmDelete(
+                context,
+                'Delete “${story.title}”?',
+              );
+              if (!sure || !mounted) return;
+              final messenger = ScaffoldMessenger.of(context);
+              try {
+                // Manifestations live in their own collection, so removing
+                // them from the stories list alone deleted nothing on the
+                // server — a delete on a document that was never there
+                // succeeds silently, so the mistake never even showed an
+                // error, only an item that refused to go away.
+                //
+                // Which collection a story is actually in is asked of the
+                // list itself rather than guessed from its id. The prefix
+                // check this used to be — `id.startsWith('manifest_')` — is
+                // true for every manifestation [ManifestService.write]
+                // makes today, but not for one written before that
+                // convention existed, and there is no way to tell the two
+                // apart by looking at the id alone.
+                final isManifestation = ref
+                    .read(manifestationsProvider)
+                    .valueOrNull
+                    ?.any((m) => m.id == story.id) ??
+                    story.id.startsWith('manifest_');
+
+                if (isManifestation) {
+                  await ref.read(manifestServiceProvider).delete(story.id);
+                  ref.invalidate(manifestationsProvider);
+                } else {
+                  await ref.read(storiesProvider.notifier).remove(story.id);
+                }
+              } catch (error) {
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text('Could not delete — try again ($error).'),
+                  ),
+                );
+              }
+            },
           ),
           const SizedBox(height: AstraSpacing.sm),
         ],
-
-        const SizedBox(height: AstraSpacing.sm),
-        AstraGhostButton(label: '＋  New story', onPressed: widget.onCreate),
       ],
     );
   }
@@ -112,7 +159,7 @@ class _StoryRow extends StatelessWidget {
   final Story story;
   final VoidCallback onPlay;
   final VoidCallback onQueue;
-  final VoidCallback onDelete;
+  final Future<void> Function() onDelete;
 
   @override
   Widget build(BuildContext context) => AstraCard(
@@ -140,7 +187,7 @@ class _StoryRow extends StatelessWidget {
           ),
         ),
         PopupMenuButton<String>(
-          icon: const Icon(Icons.more_horiz, color: AstraColors.dim, size: 20),
+          icon: Icon(Icons.more_horiz, color: AstraColors.dim, size: 20),
           color: AstraColors.cardRaised,
           tooltip: 'Story options',
           onSelected: (value) => switch (value) {

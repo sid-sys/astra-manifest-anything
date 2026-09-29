@@ -60,7 +60,7 @@ class NotificationService {
     try {
       return FirebaseMessaging.instance;
     } catch (error) {
-      debugPrint('Astra: messaging unavailable — $error');
+      debugPrint('Maya: messaging unavailable — $error');
       return null;
     }
   }
@@ -75,7 +75,31 @@ class NotificationService {
     importance: Importance.defaultImportance,
   );
 
+  /// Announcements from us, on their own channel.
+  ///
+  /// Separate from the affirmation channel on purpose. Android channels are
+  /// the user's controls: somebody who wants their morning line but not news
+  /// about the app has to be able to switch one off and keep the other, and
+  /// that only works if they arrive separately. Sending an announcement down
+  /// the affirmation channel would be spending a permission that was given for
+  /// something else.
+  ///
+  /// The id is repeated in `BROADCAST_CHANNEL` in the Cloud Function.
+  static const _announcements = AndroidNotificationChannel(
+    'announcements',
+    'News about the app',
+    description: 'Occasional word from us when something changes.',
+    importance: Importance.defaultImportance,
+  );
+
   bool _ready = false;
+
+  /// Called with a broadcast id when the user opens one of our announcements.
+  ///
+  /// Set by whoever owns the server call, so this class keeps knowing nothing
+  /// about Cloud Functions — it owns permission, channels and the token, and
+  /// adding a fourth job to it is how a service becomes a junk drawer.
+  void Function(String broadcastId)? onBroadcastOpened;
 
   Future<void> _init() async {
     if (_ready || !_supported) return;
@@ -84,38 +108,80 @@ class NotificationService {
       settings: const InitializationSettings(
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       ),
+      // A tap on a notification this app drew itself, rather than one Android
+      // drew from the tray. Same event to the user, two different callbacks.
+      onDidReceiveNotificationResponse: (response) {
+        final payload = response.payload;
+        if (payload != null && payload.isNotEmpty) _opened(payload);
+      },
     );
 
-    await _plugin
+    final android = _plugin
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.createNotificationChannel(_channel);
+        >();
+
+    await android?.createNotificationChannel(_channel);
+    await android?.createNotificationChannel(_announcements);
 
     // A push that lands while the user is looking at the app is swallowed by
     // Android — the system tray is for things you are not already holding. It
     // is still worth showing, so it gets drawn locally instead.
     FirebaseMessaging.onMessage.listen(_showForeground);
 
+    // Tapped while the app was in the background, and tapped on a phone where
+    // the app was not running at all. Two callbacks because Android delivers
+    // them at different moments, and missing the second one loses every open
+    // from a cold start — which is most of them.
+    FirebaseMessaging.onMessageOpenedApp.listen(_fromTap);
+    unawaited(
+      FirebaseMessaging.instance.getInitialMessage().then((message) {
+        if (message != null) _fromTap(message);
+      }),
+    );
+
     _ready = true;
+  }
+
+  void _fromTap(RemoteMessage message) {
+    final id = message.data['broadcastId'];
+    if (id is String && id.isNotEmpty) _opened(id);
+  }
+
+  void _opened(String broadcastId) {
+    final report = onBroadcastOpened;
+    if (report != null) report(broadcastId);
   }
 
   Future<void> _showForeground(RemoteMessage message) async {
     final body = message.notification?.body ?? message.data['line'];
     if (body == null || body.isEmpty) return;
 
+    // An announcement and a daily affirmation are drawn on their own channels
+    // and given their own ids, so one never replaces the other in the tray.
+    final broadcastId = message.data['broadcastId'] as String?;
+    final isBroadcast = message.data['type'] == 'broadcast';
+    final channel = isBroadcast ? _announcements : _channel;
+
+    // An announcement may arrive with no title, and should then be drawn with
+    // none — Android puts the app name in the header either way. Only the
+    // affirmation falls back to a title, because it always had one.
+    final title = message.notification?.title;
+
     await _plugin.show(
-      id: 0,
-      title: message.notification?.title ?? 'Today’s affirmation',
+      id: isBroadcast ? 1 : 0,
+      title: isBroadcast ? title : (title ?? 'Today’s affirmation'),
       body: body,
       notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
-          _channel.id,
-          _channel.name,
-          channelDescription: _channel.description,
+          channel.id,
+          channel.name,
+          channelDescription: channel.description,
           styleInformation: BigTextStyleInformation(body),
         ),
       ),
+      // Comes back as the payload when this one is tapped.
+      payload: isBroadcast ? broadcastId : null,
     );
   }
 
@@ -153,13 +219,13 @@ class NotificationService {
     try {
       zone = (await FlutterTimezone.getLocalTimezone()).identifier;
     } catch (error) {
-      debugPrint('Astra: could not resolve timezone — $error');
+      debugPrint('Maya: could not resolve timezone — $error');
     }
 
     try {
       return (token: await _push?.getToken(), zone: zone);
     } catch (error) {
-      debugPrint('Astra: no push token — $error');
+      debugPrint('Maya: no push token — $error');
       return (token: null, zone: zone);
     }
   }
@@ -174,12 +240,12 @@ class NotificationService {
     try {
       await _push?.deleteToken();
     } catch (error) {
-      debugPrint('Astra: could not delete push token — $error');
+      debugPrint('Maya: could not delete push token — $error');
     }
     try {
       await _plugin.cancelAll();
     } catch (error) {
-      debugPrint('Astra: could not clear notifications — $error');
+      debugPrint('Maya: could not clear notifications — $error');
     }
   }
 
@@ -191,7 +257,7 @@ class NotificationService {
     try {
       return _push?.onTokenRefresh ?? const Stream<String>.empty();
     } catch (error) {
-      debugPrint('Astra: no token refresh stream — $error');
+      debugPrint('Maya: no token refresh stream — $error');
       return const Stream<String>.empty();
     }
   }

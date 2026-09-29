@@ -8,9 +8,12 @@ import '../providers.dart';
 import '../services/playback_controller.dart';
 import '../services/story_service.dart';
 import '../theme/astra_theme.dart';
+import '../widgets/astra_orb.dart';
 import '../widgets/astra_widgets.dart';
 import '../widgets/script_view.dart';
 import '../widgets/aura_background.dart';
+import '../widgets/report_content.dart';
+import '../widgets/session_feedback.dart';
 
 /// Full-screen playback.
 ///
@@ -19,12 +22,41 @@ import '../widgets/aura_background.dart';
 /// everything else, which meant the script auto-scrolling to the line being
 /// spoken carried the pause button off the screen — the one control you reach
 /// for while listening was the one you had to go hunting for.
-class PlayerScreen extends ConsumerWidget {
+class PlayerScreen extends ConsumerStatefulWidget {
   const PlayerScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PlayerScreen> createState() => _PlayerScreenState();
+}
+
+class _PlayerScreenState extends ConsumerState<PlayerScreen> {
+  /// Rolled once, when the screen opens.
+  ///
+  /// Not read inside `build`: a fresh roll on every rebuild would make the card
+  /// appear and vanish as the position ticked, which is the one thing more
+  /// annoying than being asked every time.
+  late final bool _askForFeedback = SessionFeedback.shouldAsk();
+
+  /// Set when the audio reaches the end. The question is asked *after* the
+  /// session, never during it — a mood card sliding in over a meditation is
+  /// the opposite of what the meditation was for.
+  bool _finished = false;
+
+  @override
+  Widget build(BuildContext context) {
     final playback = ref.watch(playbackProvider);
+
+    // "Finished" means the audio actually ran out, not that the user scrubbed
+    // near the end — hence the position check against a real duration rather
+    // than a progress fraction, which is 1.0 for a moment on an empty track.
+    final done = playback.state.duration > Duration.zero &&
+        playback.state.position >= playback.state.duration -
+            const Duration(seconds: 2);
+    if (done && !_finished) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _finished = true);
+      });
+    }
     final state = playback.state;
     final playing = state.story;
 
@@ -63,13 +95,20 @@ class PlayerScreen extends ConsumerWidget {
                 },
                 onFavorite: () =>
                     ref.read(storiesProvider.notifier).toggleFavorite(story),
+                onReport: () => reportContent(
+                  context,
+                  ref,
+                  kind: 'story',
+                  contentId: story.id,
+                  excerpt: '${story.title}\n\n${story.script}',
+                ),
               ),
               Expanded(
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                   children: [
                     const SizedBox(height: AstraSpacing.md),
-                    Center(child: _Orb(story: story)),
+                    Center(child: _Orb(story: story, playing: state.playing)),
                     const SizedBox(height: AstraSpacing.lg),
                     Text(
                       story.title,
@@ -117,6 +156,18 @@ class PlayerScreen extends ConsumerWidget {
                         ],
                       ),
                     ),
+                    // Asked after the session, and only sometimes.
+                    //
+                    // Both conditions matter. Asking during a meditation is
+                    // the opposite of what the meditation is for, and asking
+                    // after every single one turns the question into
+                    // furniture — people learn its shape and tap the middle
+                    // answer to clear it, which produces data that looks real
+                    // and is not.
+                    if (_finished && _askForFeedback) ...[
+                      const SizedBox(height: AstraSpacing.lg),
+                      SessionFeedback(about: story.id),
+                    ],
                     const SizedBox(height: AstraSpacing.lg),
                   ],
                 ),
@@ -136,11 +187,13 @@ class _Header extends StatelessWidget {
     required this.story,
     required this.onClose,
     required this.onFavorite,
+    required this.onReport,
   });
 
   final Story story;
   final VoidCallback onClose;
   final VoidCallback onFavorite;
+  final VoidCallback onReport;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -154,6 +207,7 @@ class _Header extends StatelessWidget {
         tooltip: 'Close player',
       ),
       Expanded(child: Wordmark('Now Playing')),
+      ReportButton(onTap: onReport),
       IconButton(
         icon: Icon(
           story.favorite ? Icons.favorite : Icons.favorite_border,
@@ -167,32 +221,17 @@ class _Header extends StatelessWidget {
 }
 
 class _Orb extends StatelessWidget {
-  const _Orb({required this.story});
+  const _Orb({required this.story, required this.playing});
 
   final Story story;
 
+  /// Turns only while the audio does. A sphere revolving over a paused player
+  /// says the app is doing something when it is not, and the stillness is a
+  /// clearer "paused" than the icon on the button.
+  final bool playing;
+
   @override
-  Widget build(BuildContext context) => Container(
-    width: 120,
-    height: 120,
-    alignment: Alignment.center,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      // The orb catches the light from the top-left, same as everything else
-      // on the wash — a flat disc here would be the only object in the app
-      // that is not lit.
-      gradient: const RadialGradient(
-        center: Alignment(-0.35, -0.45),
-        radius: 0.95,
-        colors: [Colors.white, AstraColors.auraTop],
-      ),
-      boxShadow: AstraColors.liftedShadow,
-    ),
-    child: Text(
-      story.intention.glyph,
-      style: TextStyle(fontSize: 36, color: story.intention.accent),
-    ),
-  );
+  Widget build(BuildContext context) => AstraOrb(size: 132, spinning: playing);
 }
 
 /// The pinned control bar: scrubber, times, and everything you press while
@@ -210,7 +249,7 @@ class _Transport extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
-    decoration: const BoxDecoration(
+    decoration: BoxDecoration(
       color: AstraColors.canvasRaised,
       border: Border(top: BorderSide(color: AstraColors.line)),
     ),
@@ -276,6 +315,43 @@ class _Transport extends StatelessWidget {
             ],
           ),
 
+          // The music under the voice, and how loud it sits.
+          //
+          // A slider rather than a fixed level, because the right amount of
+          // music depends on the room, the phone and the person — and because
+          // some people want the words alone.
+          const SizedBox(height: AstraSpacing.md),
+          Row(
+            children: [
+              _ControlButton(
+                icon: playback.bedOn
+                    ? Icons.music_note_rounded
+                    : Icons.music_off_rounded,
+                tooltip: playback.bedOn ? 'Music on' : 'Music off',
+                onTap: playback.toggleBed,
+              ),
+              Expanded(
+                child: Slider(
+                  value: playback.bedVolume,
+                  max: 0.5,
+                  activeColor: AstraColors.accent,
+                  inactiveColor: AstraColors.line,
+                  onChanged: playback.bedOn
+                      ? (value) => playback.setBedVolume(value)
+                      : null,
+                ),
+              ),
+              SizedBox(
+                width: 40,
+                child: Text(
+                  '${(playback.bedVolume * 100).round()}%',
+                  textAlign: TextAlign.end,
+                  style: AstraTextStyles.small,
+                ),
+              ),
+            ],
+          ),
+
           if (!story.hasAudio) ...[
             const SizedBox(height: AstraSpacing.sm),
             Text(
@@ -285,6 +361,7 @@ class _Transport extends StatelessWidget {
               style: AstraTextStyles.small,
             ),
           ],
+
         ],
       ),
     ),
@@ -424,12 +501,12 @@ class _PlayButton extends StatelessWidget {
           width: 62,
           height: 62,
           alignment: Alignment.center,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             shape: BoxShape.circle,
             gradient: AstraColors.accentGradient,
           ),
           child: recording
-              ? const SizedBox(
+              ? SizedBox(
                   width: 22,
                   height: 22,
                   child: CircularProgressIndicator(

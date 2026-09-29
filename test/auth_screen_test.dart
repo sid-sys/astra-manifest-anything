@@ -7,9 +7,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// The sign-in screen, tested for the things that are decisions rather than
-/// decoration: that the free way in is visible, that the form refuses to
-/// submit rubbish, and that the reset path exists.
+/// The account screen, tested for the things that are decisions rather than
+/// decoration: that it opens on sign-up, that the free way in is visible, that
+/// the form refuses to submit rubbish, and that the reset path exists.
+///
+/// It opens on sign-up because it is the app's front door — it now comes
+/// before onboarding, so almost everyone reaching it has no account. Anyone
+/// who does has a persisted session and never sees this screen at all.
 ///
 /// Nothing here signs anyone in. That needs a live Firebase project, and a
 /// test that pretends otherwise would be testing a mock's opinion of Firebase.
@@ -48,73 +52,126 @@ bool _armed(WidgetTester tester, String label) {
 }
 
 void main() {
-  testWidgets('every way in is offered, guest included', (tester) async {
+  testWidgets('it opens on sign-up, not on log-in', (tester) async {
     await _pump(tester);
 
-    expect(find.text('Log in'), findsOneWidget);
+    // The front door for a new user. This used to open on "Welcome back",
+    // which asked people without accounts to remember a password they had
+    // never set.
+    expect(find.text('Make an account'), findsOneWidget);
+    expect(find.text('Create account'), findsOneWidget);
+    expect(find.text('Welcome back'), findsNothing);
+  });
+
+  testWidgets('both ways in are offered', (tester) async {
+    await _pump(tester);
+
+    expect(find.text('Create account'), findsOneWidget);
     expect(find.text('Continue with Google'), findsOneWidget);
-    // The one that costs the user nothing is a button like the others, not a
-    // link in small grey type at the bottom.
-    expect(find.text('Continue as guest'), findsOneWidget);
   });
 
-  testWidgets('the guest button says what it costs', (tester) async {
+  testWidgets('there is no way in without credentials', (tester) async {
     await _pump(tester);
 
-    // The limitation belongs next to the button, not in a warning the user
-    // meets later when their stories are already stranded.
-    expect(find.textContaining('only lives on this phone'), findsOneWidget);
+    // The guest door has been closed twice now, and the second reason is the
+    // one worth remembering. Signing in with Google while a guest was active
+    // *links* the accounts rather than replacing one, so the guest's sample
+    // profile survived onto the real account: a brand new user was carried past
+    // onboarding on answers that were never theirs and dropped straight onto
+    // the paywall, having been asked nothing at all.
+    expect(find.text('Continue as guest'), findsNothing);
+    expect(find.textContaining('guest'), findsNothing);
+
+    // Every remaining route leaves the user with something to sign back in
+    // with, which is the whole point.
+    expect(find.text('Continue with Google'), findsOneWidget);
+    expect(find.text('Create account'), findsOneWidget);
   });
 
-  testWidgets('logging in needs an address and six characters', (tester) async {
-    await _pump(tester);
-
-    expect(_armed(tester, 'Log in'), isFalse);
-
-    await tester.enterText(find.byType(TextField).first, 'not-an-email');
-    await tester.enterText(find.byType(TextField).last, 'longenough');
-    await tester.pumpAndSettle();
-    expect(_armed(tester, 'Log in'), isFalse);
-
-    await tester.enterText(find.byType(TextField).first, 'sana@example.com');
-    await tester.enterText(find.byType(TextField).last, 'short');
-    await tester.pumpAndSettle();
-    expect(_armed(tester, 'Log in'), isFalse);
-
-    await tester.enterText(find.byType(TextField).last, 'sixchars');
-    await tester.pumpAndSettle();
-    expect(_armed(tester, 'Log in'), isTrue);
-  });
-
-  testWidgets('the form switches between logging in and signing up', (
+  testWidgets('signing up needs a name, an address and six characters', (
     tester,
   ) async {
     await _pump(tester);
 
-    expect(find.text('Welcome back'), findsOneWidget);
-    await tester.tap(find.textContaining('Make one', findRichText: true));
+    // Three boxes on the sign-up form, in this order. The name is first
+    // because it is the one the app speaks aloud — every manifestation opens
+    // by saying it, and without one the writer falls back to "friend".
+    Finder box(int index) => find.byType(TextField).at(index);
+    const name = 0;
+    const email = 1;
+    const password = 2;
+
+    expect(find.byType(TextField), findsNWidgets(3));
+    expect(_armed(tester, 'Create account'), isFalse);
+
+    // Everything but the name.
+    await tester.enterText(box(email), 'sana@example.com');
+    await tester.enterText(box(password), 'sixchars');
+    await tester.pumpAndSettle();
+    expect(_armed(tester, 'Create account'), isFalse);
+
+    await tester.enterText(box(name), 'Sana');
+    await tester.pumpAndSettle();
+    expect(_armed(tester, 'Create account'), isTrue);
+
+    // And the two that were already checked, still checked.
+    await tester.enterText(box(email), 'not-an-email');
+    await tester.pumpAndSettle();
+    expect(_armed(tester, 'Create account'), isFalse);
+
+    await tester.enterText(box(email), 'sana@example.com');
+    await tester.enterText(box(password), 'short');
+    await tester.pumpAndSettle();
+    expect(_armed(tester, 'Create account'), isFalse);
+  });
+
+  testWidgets('logging back in does not ask for the name again', (
+    tester,
+  ) async {
+    await _pump(tester);
+    await tester.tap(find.textContaining('Log in', findRichText: true));
     await tester.pumpAndSettle();
 
+    expect(find.byType(TextField), findsNWidgets(2));
+    expect(find.text('Your first name'), findsNothing);
+  });
+
+  testWidgets('the form switches between signing up and logging in', (
+    tester,
+  ) async {
+    await _pump(tester);
+
     expect(find.text('Make an account'), findsOneWidget);
-    expect(find.text('Create account'), findsOneWidget);
+    await tester.tap(find.textContaining('Log in', findRichText: true));
+    await tester.pumpAndSettle();
+
+    // The way back for someone who signed out and is returning.
+    expect(find.text('Welcome back'), findsOneWidget);
+    expect(find.text('Log in'), findsOneWidget);
   });
 
   testWidgets('forgot password is only offered where it applies', (
     tester,
   ) async {
     await _pump(tester);
-    expect(find.text('Forgot password?'), findsOneWidget);
 
-    // Nobody has forgotten the password of an account they are creating.
-    await tester.tap(find.textContaining('Make one', findRichText: true));
-    await tester.pumpAndSettle();
+    // Nobody has forgotten the password of an account they are creating, and
+    // sign-up is where this screen now opens.
     expect(find.text('Forgot password?'), findsNothing);
+
+    await tester.tap(find.textContaining('Log in', findRichText: true));
+    await tester.pumpAndSettle();
+    expect(find.text('Forgot password?'), findsOneWidget);
   });
 
   testWidgets('forgot password carries the typed address across', (
     tester,
   ) async {
     await _pump(tester);
+
+    // Reachable only from the log-in form, so switch to it first.
+    await tester.tap(find.textContaining('Log in', findRichText: true));
+    await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).first, 'sana@example.com');
     await tester.pumpAndSettle();
@@ -127,14 +184,15 @@ void main() {
     expect(find.text('sana@example.com'), findsOneWidget);
   });
 
-  testWidgets('upgrading a guest opens on the sign-up form and hides guest', (
+  testWidgets('the upgrade route also opens on the sign-up form', (
     tester,
   ) async {
     await _pump(tester, asUpgrade: true);
 
+    // Kept for the accounts made while the guest door was open. They still
+    // exist, and this is how their stories move onto something with a password
+    // rather than being stranded beside it.
     expect(find.text('Keep your stories safe'), findsOneWidget);
     expect(find.text('Create account'), findsOneWidget);
-    // Already a guest. Offering it again would be offering nothing.
-    expect(find.text('Continue as guest'), findsNothing);
   });
 }

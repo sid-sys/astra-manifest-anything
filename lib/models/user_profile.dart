@@ -11,8 +11,10 @@ class UserProfile {
     required this.voice,
     required this.joinedAt,
     this.remindersOn = false,
-    this.reminderHour = 8,
+    this.reminderHour = 7,
     this.reminderMinute = 0,
+    this.eveningHour = 22,
+    this.eveningMinute = 0,
     this.fcmToken,
     this.timezone,
     this.preferences = StoryPreferences.empty,
@@ -21,6 +23,14 @@ class UserProfile {
     this.isSubscribed = false,
     this.subscribedAt,
     this.paywallSeen = false,
+    this.firstStoryStarted = false,
+    this.onboardingDone = false,
+    this.belief = '',
+    this.importance = '',
+    this.reminderPref = '',
+    this.onboardingV2Done = false,
+    this.sendMorning = true,
+    this.sendEvening = true,
   });
 
   final String name;
@@ -32,6 +42,14 @@ class UserProfile {
   final bool remindersOn;
   final int reminderHour;
   final int reminderMinute;
+
+  /// The second send, in the user's own time. Ten at night by default.
+  ///
+  /// Two a day rather than one, because that is when an affirmation is
+  /// actually said: on waking, before the day has had an opinion, and before
+  /// sleep. Both are changeable; neither has to be.
+  final int eveningHour;
+  final int eveningMinute;
 
   /// Where to push this user's affirmation, and the zone that decides when.
   ///
@@ -84,6 +102,61 @@ class UserProfile {
   /// Whether the subscription screen has been shown once after onboarding.
   final bool paywallSeen;
 
+  /// Whether the automatic first story has already been attempted.
+  ///
+  /// Set before the attempt rather than after, so a generation that fails —
+  /// or an app killed mid-write — does not re-fire it on every launch. Each
+  /// story costs real money; "did we try" is the honest question here, not
+  /// "did it work". The user can always press the button themselves.
+  final bool firstStoryStarted;
+
+  /// Whether the questions were answered through to the end.
+  ///
+  /// A real field, because the thing that used to stand in for one is gone.
+  /// "Onboarded" meant "has a desire", since the desire was question three and
+  /// nothing else was compulsory enough to test. The desire is now typed on
+  /// Home for each manifestation rather than answered once, so that test would
+  /// send every existing user back through the questions on their next launch.
+  ///
+  /// [isOnboarded] still accepts the old evidence as well, so nobody who
+  /// answered under the previous flow is asked again.
+  final bool onboardingDone;
+
+  /// How strongly this person believes their thoughts can shape their life —
+  /// one of "absolutely", "i-think-so", "not-sure", "not-really". Asked first
+  /// in the belief-and-ritual onboarding, never shown back to them; it colours
+  /// how confidently Maya writes rather than being quoted at them.
+  final String belief;
+
+  /// How much they want the change they named — one of "not-sure",
+  /// "would-like-it", "very-important", "ready-to-change".
+  final String importance;
+
+  /// When they want reminders — "morning", "evening", "both" or "later". Feeds
+  /// [remindersOn] and the two send times rather than replacing them; this is
+  /// the answer that decided what those started as.
+  final String reminderPref;
+
+  /// Whether the belief-and-ritual onboarding (four questions, not the old
+  /// twelve) has been completed.
+  ///
+  /// Deliberately separate from [onboardingDone]: that flag is satisfied by
+  /// almost every existing account already (a name typed at signup is enough),
+  /// which would skip this newer flow for everyone who has ever used the app.
+  /// This one only a real answer to these four questions can set.
+  final bool onboardingV2Done;
+
+  /// Which of the two daily sends this account gets, given [remindersOn].
+  ///
+  /// True for both by default so every account that predates these fields —
+  /// which is every account, since they came with the reminder-timing
+  /// onboarding question — keeps getting exactly what it always got. Only the
+  /// onboarding question or a deliberate change in Profile turns either one
+  /// off; [remindersOn] itself stays the master switch for "any reminders at
+  /// all", so turning it off still silences both without touching these.
+  final bool sendMorning;
+  final bool sendEvening;
+
   static UserProfile empty() => UserProfile(
     name: '',
     intentions: const {},
@@ -97,12 +170,17 @@ class UserProfile {
   /// The desire alone, because it is the only answer onboarding insists on.
   /// This used to require a name too, which stopped being true the moment the
   /// name question was removed — and would have left every new user stuck on
-  /// the onboarding screen forever, having just answered eleven questions.
+  /// the onboarding screen forever, having just answered four questions.
   ///
   /// [aspiration] is checked as well so profiles written before the questions
   /// changed still read as onboarded rather than being asked everything again.
   bool get isOnboarded =>
-      preferences.desire.trim().isNotEmpty || aspiration.trim().isNotEmpty;
+      name.trim().isNotEmpty ||
+      onboardingDone ||
+      // Written before [onboardingDone] existed. Both were set by finishing the
+      // questions, so either one proves it.
+      preferences.desire.trim().isNotEmpty ||
+      aspiration.trim().isNotEmpty;
 
   /// Whether a story can be written without paying, given how many have been
   /// written already.
@@ -129,11 +207,21 @@ class UserProfile {
     bool? remindersOn,
     int? reminderHour,
     int? reminderMinute,
+    int? eveningHour,
+    int? eveningMinute,
     String? fcmToken,
     String? timezone,
     bool? isSubscribed,
     DateTime? subscribedAt,
     bool? paywallSeen,
+    bool? firstStoryStarted,
+    bool? onboardingDone,
+    String? belief,
+    String? importance,
+    String? reminderPref,
+    bool? onboardingV2Done,
+    bool? sendMorning,
+    bool? sendEvening,
     bool clearPush = false,
   }) => UserProfile(
     name: name ?? this.name,
@@ -145,6 +233,8 @@ class UserProfile {
     remindersOn: remindersOn ?? this.remindersOn,
     reminderHour: reminderHour ?? this.reminderHour,
     reminderMinute: reminderMinute ?? this.reminderMinute,
+    eveningHour: eveningHour ?? this.eveningHour,
+    eveningMinute: eveningMinute ?? this.eveningMinute,
     // Erasable, unlike every other field here. Turning reminders off has to be
     // able to clear the token, and `??` can only ever keep the old one — a
     // "deleted" push address that still sits in Firestore is one the sender
@@ -156,25 +246,38 @@ class UserProfile {
     isSubscribed: isSubscribed ?? this.isSubscribed,
     subscribedAt: subscribedAt ?? this.subscribedAt,
     paywallSeen: paywallSeen ?? this.paywallSeen,
+    firstStoryStarted: firstStoryStarted ?? this.firstStoryStarted,
+    onboardingDone: onboardingDone ?? this.onboardingDone,
+    belief: belief ?? this.belief,
+    importance: importance ?? this.importance,
+    reminderPref: reminderPref ?? this.reminderPref,
+    onboardingV2Done: onboardingV2Done ?? this.onboardingV2Done,
+    sendMorning: sendMorning ?? this.sendMorning,
+    sendEvening: sendEvening ?? this.sendEvening,
   );
 
+  /// Only what the app uses today. The old onboarding answers (age, gender,
+  /// aspiration, story preferences, voice, progress flags) are no longer asked
+  /// or written; the admin panel can remove them from older accounts.
   Map<String, dynamic> toMap() => {
     'name': name,
     'intentions': intentions.map((i) => i.name).toList(),
-    'aspiration': aspiration,
-    'preferences': preferences.toMap(),
-    'voice': voice,
-    'age': age,
     'remindersOn': remindersOn,
     'reminderHour': reminderHour,
     'reminderMinute': reminderMinute,
+    'eveningHour': eveningHour,
+    'eveningMinute': eveningMinute,
     'fcmToken': fcmToken,
     'timezone': timezone,
-    'gender': gender,
     'joinedAt': joinedAt.toIso8601String(),
     'isSubscribed': isSubscribed,
     'subscribedAt': subscribedAt?.toIso8601String(),
-    'paywallSeen': paywallSeen,
+    'belief': belief,
+    'importance': importance,
+    'reminderPref': reminderPref,
+    'onboardingV2Done': onboardingV2Done,
+    'sendMorning': sendMorning,
+    'sendEvening': sendEvening,
   };
 
   factory UserProfile.fromMap(Map<String, dynamic> map) => UserProfile(
@@ -201,5 +304,13 @@ class UserProfile {
     isSubscribed: map['isSubscribed'] as bool? ?? false,
     subscribedAt: DateTime.tryParse(map['subscribedAt'] as String? ?? ''),
     paywallSeen: map['paywallSeen'] as bool? ?? false,
+    firstStoryStarted: map['firstStoryStarted'] as bool? ?? false,
+    onboardingDone: map['onboardingDone'] as bool? ?? false,
+    belief: map['belief'] as String? ?? '',
+    importance: map['importance'] as String? ?? '',
+    reminderPref: map['reminderPref'] as String? ?? '',
+    onboardingV2Done: map['onboardingV2Done'] as bool? ?? false,
+    sendMorning: map['sendMorning'] as bool? ?? true,
+    sendEvening: map['sendEvening'] as bool? ?? true,
   );
 }

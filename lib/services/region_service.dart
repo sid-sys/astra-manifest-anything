@@ -22,8 +22,6 @@ class RegionService {
 
   List<Plan> get plans => PricingCatalog.plansForCountry(countryCode);
 
-  bool get isIndia => countryCode == 'IN';
-
   static String _deviceCountryCode() {
     final fromLocale = ui.PlatformDispatcher.instance.locale.countryCode;
     if (fromLocale != null && fromLocale.isNotEmpty) {

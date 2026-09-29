@@ -1,22 +1,19 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
-/// Every way into Astra, and the rules about moving between them.
+/// Every way into Maya, and the rules about moving between them.
 ///
-/// The app is usable before anyone signs in — a guest gets an anonymous
-/// account, which is a real Firebase user with a real uid and a real place to
-/// sync to. That matters more than it sounds: because a guest already has a
-/// uid, signing up later can *link* credentials onto that same account rather
-/// than creating a second one, and the stories they wrote as a guest stay
-/// theirs. Every path below that could link, does.
+/// Two doors now: an email and password, or Google. The anonymous "continue as
+/// guest" door was removed. It cost nothing to walk through and that was the
+/// problem — an anonymous account has no password, so the library it held lived
+/// on one handset and a reinstall destroyed it with nobody able to return it.
+/// A door that quietly forfeits everything you wrote is not a kindness.
 ///
-/// The cost of the guest door is real and is not hidden from the user: an
-/// anonymous account has nothing to sign back in with, so the library it holds
-/// lives on one handset. Reinstall or change phone and it is gone, with no way
-/// for anyone to return it. That is why [ConfirmScreen] warns a guest before
-/// they log out, and why Profile keeps offering to add an email. The trade is
-/// deliberate — a door that asks for nothing is worth having, as long as the
-/// app is honest about where it leads.
+/// The linking machinery below is kept rather than deleted, because accounts
+/// created through that door still exist. Anyone still holding one can sign up
+/// or sign in with Google and their stories move onto the credentialed account
+/// instead of being stranded beside it.
 class AuthService {
   AuthService({FirebaseAuth? auth}) : _injected = auth;
 
@@ -87,19 +84,58 @@ class AuthService {
     try {
       return _auth.currentUser;
     } catch (error) {
-      debugPrint('Astra: no auth available, running local-only — $error');
+      debugPrint('Maya: no auth available, running local-only — $error');
       return null;
     }
   }
 
-  // ------------------------------------------------------------------- guest
-
-  /// Signs in with no credentials at all.
+  /// Ends a session whose account no longer exists, and says whether it did.
   ///
-  /// A real Firebase user with a real uid, which is what makes the linking in
-  /// [_createOrLink] and [_federated] possible later — a guest who signs up is
-  /// upgraded in place and keeps everything they wrote.
-  Future<UserCredential> continueAsGuest() => _auth.signInAnonymously();
+  /// Firebase keeps a signed-in user cached on the device and does not check
+  /// with the server until the token needs refreshing, which can be an hour
+  /// away. So an account deleted from the Console — or by `deleteAccount` on
+  /// another phone — stays signed in here, and the app cheerfully routes on a
+  /// user that is not there any more. What that looked like in practice was an
+  /// app opening straight onto the paywall: a live-looking session, a profile
+  /// still in local storage, and an entitlement lookup that could only ever
+  /// come back empty.
+  ///
+  /// `reload` is the cheapest way to ask. It is one round trip on launch, and
+  /// only on launch.
+  ///
+  /// Returns true when a dead session was dropped, so the caller can clear the
+  /// device as well — the local profile outlives the account otherwise, and the
+  /// next person to sign in inherits it.
+  Future<bool> dropDeadSession() async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+
+    try {
+      await user.reload();
+      return false;
+    } on FirebaseAuthException catch (error) {
+      const gone = {
+        'user-not-found',
+        'user-disabled',
+        'user-token-expired',
+        'invalid-user-token',
+      };
+      if (!gone.contains(error.code)) {
+        // Offline, or any other transient failure. Keeping the session is the
+        // right guess: signing people out because their train went into a
+        // tunnel would be far worse than the bug this fixes.
+        debugPrint('Maya: could not check the session — ${error.code}');
+        return false;
+      }
+
+      debugPrint('Maya: signing out a dead session — ${error.code}');
+      await _auth.signOut();
+      return true;
+    } catch (error) {
+      debugPrint('Maya: could not check the session — $error');
+      return false;
+    }
+  }
 
   // -------------------------------------------------------- email + password
 
@@ -183,8 +219,82 @@ class AuthService {
 
   // -------------------------------------------------------------- federated
 
-  Future<UserCredential> signInWithGoogle() =>
-      _federated(GoogleAuthProvider()..addScope('email'));
+  /// Whether [GoogleSignIn.instance] has been initialised in this process.
+  ///
+  /// `initialize` is a one-time platform call, and the sign-in button can be
+  /// pressed more than once.
+  static bool _googleReady = false;
+
+  /// Signs in with Google, natively on Android and through a popup on the web.
+  ///
+  /// Android does **not** use [FirebaseAuth.signInWithProvider] here, and that
+  /// is the whole point of this method. That call opens Google in a Chrome
+  /// Custom Tab and finishes the handshake by redirecting back through the
+  /// project's `firebaseapp.com` page — a redirect that needs `sessionStorage`
+  /// to survive the round trip. On a real device it does not, and every
+  /// attempt died on Firebase's own page reading:
+  ///
+  ///     Unable to process request due to missing initial state. This may
+  ///     happen if browser sessionStorage is inaccessible or accidentally
+  ///     cleared.
+  ///
+  /// That flow is meant for providers with no native SDK — GitHub, Microsoft,
+  /// Yahoo. Google has one, and the supported path on Android is to ask it for
+  /// an identity token and hand that to Firebase, which is what happens below.
+  /// No browser, no redirect, nothing to lose between hops.
+  ///
+  /// This is also the first thing in the app that the SHA-1 fingerprints
+  /// actually matter to: Google checks the calling package against the
+  /// certificate it was signed with before it will issue a token. The old
+  /// browser flow never looked at them, which is why months of adding and
+  /// removing fingerprints changed nothing.
+  ///
+  /// The web keeps the popup, which has no such problem — a popup shares
+  /// storage with the page that opened it.
+  Future<UserCredential> signInWithGoogle() async {
+    if (kIsWeb) {
+      return _federated(GoogleAuthProvider()..addScope('email'));
+    }
+
+    final google = GoogleSignIn.instance;
+    if (!_googleReady) {
+      // No `serverClientId` passed on purpose. The Android plugin falls back
+      // to the `default_web_client_id` string resource, which the Google
+      // Services Gradle plugin generates from `google-services.json` — so the
+      // id follows that file instead of being copied into source, where it
+      // would quietly go stale the next time the file is downloaded.
+      await google.initialize();
+      _googleReady = true;
+    }
+
+    final GoogleSignInAccount account;
+    try {
+      account = await google.authenticate();
+    } on GoogleSignInException catch (error) {
+      // Backing out of the account picker is not a failure, and must not be
+      // shown as one. Everything else keeps Google's own description, which
+      // names the real problem — a missing fingerprint says so outright.
+      throw FirebaseAuthException(
+        code: error.code == GoogleSignInExceptionCode.canceled
+            ? 'canceled'
+            : 'google-sign-in-failed',
+        message: error.description ?? error.code.name,
+      );
+    }
+
+    final idToken = account.authentication.idToken;
+    if (idToken == null) {
+      // Reached when Google authenticated the user but would not vouch for
+      // them to anyone else, which in practice means the web client id behind
+      // `default_web_client_id` is missing or does not belong to this project.
+      throw FirebaseAuthException(
+        code: 'google-sign-in-failed',
+        message: 'Google signed in but returned no identity token.',
+      );
+    }
+
+    return _withCredential(GoogleAuthProvider.credential(idToken: idToken));
+  }
 
   // Sign in with Apple is not offered. If this app is ever submitted to the App
   // Store while Google sign-in exists, Apple's guidelines require it — adding
@@ -222,7 +332,46 @@ class AuthService {
         : _auth.signInWithProvider(provider);
   }
 
-  Future<void> signOut() => _auth.signOut();
+  /// One path for a credential that already exists, guest-linking and all.
+  ///
+  /// Same shape as [_federated] and for the same reason — an anonymous account
+  /// that signs in with Google should carry its stories onto the real account
+  /// rather than be abandoned next to it.
+  Future<UserCredential> _withCredential(AuthCredential credential) async {
+    final guest = _auth.currentUser;
+
+    if (guest != null && guest.isAnonymous) {
+      try {
+        return await guest.linkWithCredential(credential);
+      } on FirebaseAuthException catch (error) {
+        if (error.code != 'credential-already-in-use' &&
+            error.code != 'email-already-in-use' &&
+            error.code != 'provider-already-linked') {
+          rethrow;
+        }
+      }
+    }
+
+    return _auth.signInWithCredential(credential);
+  }
+
+  Future<void> signOut() async {
+    // Google is signed out first and separately. Firebase forgetting the
+    // session does not make Google forget which account was chosen, so without
+    // this the next "Continue with Google" silently reuses the last account
+    // and never shows the picker — which looks like the sign-out failed.
+    if (!kIsWeb) {
+      try {
+        await GoogleSignIn.instance.signOut();
+      } catch (error) {
+        // Never block a sign-out on this. Not having been signed into Google
+        // is the common case, and it throws.
+        debugPrint('Maya: Google sign-out skipped — $error');
+      }
+    }
+
+    await _auth.signOut();
+  }
 }
 
 /// Turns a [FirebaseAuthException] into something worth showing someone.
@@ -253,6 +402,9 @@ String authErrorMessage(Object error) {
       'Sign-in was cancelled.',
     'operation-not-allowed' =>
       'That sign-in method is not enabled for this app yet.',
+    'google-sign-in-failed' =>
+      'Google could not sign you in. Try again, or use your email and '
+          'password.',
     'unverified-email' =>
       'Check your inbox and click the link before signing in.',
     _ => 'Something went wrong. Please try again.',

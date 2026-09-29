@@ -42,12 +42,22 @@ It also pushes the audio to about 5m56s against a 5-minute design target.
 
 ## Two things this measurement changed
 
-**The planning number is stale.** `plan.dart` and `pricing_test.dart` assume
-$0.105 a story. The measured cost on Opus 5 is **$0.114** — about 9% over —
-because the script runs to ~1,800 output tokens rather than the ~1,200 the
-estimate assumed. Margin at the 20-story cap is 71.5% rather than the 73.7%
-documented, which is still above the 65% floor the test enforces, but the
-constant should be corrected rather than left to drift.
+**The planning number was stale, and one plan did not survive fixing it.**
+`plan.dart` and `pricing_test.dart` assumed $0.105 a story. The measured cost
+on Opus 5 is **$0.114** — about 9% over — because the script runs to ~1,800
+output tokens rather than the ~1,200 the estimate assumed.
+
+This section previously concluded the correction was safe: "margin at the
+20-story cap is 71.5% rather than 73.7%, still above the 65% floor". That was
+true of the dollar monthly plan and of no other. Checked against the whole
+catalogue, ₹6,499/year fell to **63.6%** at the cap — under the floor its own
+test enforces — because a yearly plan pays twelve months of cost up front out
+of one payment, so a 9% cost rise hits it twelve times as hard.
+
+Both are now fixed: the constant is $0.114, and the yearly rupee plan is
+₹6,999, which restores 66.2% at the cap. The lesson worth keeping is that the
+yearly plan in the weaker currency is the one to check first — it is where any
+cost movement shows up, and it is the last place anyone looks.
 
 **Sol is not worth considering.** At $30 per million output it costs *more*
 per story than Opus 5 does. Switching provider to reach it would be paying

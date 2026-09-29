@@ -5,11 +5,13 @@ import 'package:intl/intl.dart';
 import '../models/intention.dart';
 import '../providers.dart';
 import '../services/auth_service.dart';
+import '../services/billing_service.dart';
 import '../services/legal_links.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/allowance_ring.dart';
 import '../widgets/astra_widgets.dart';
 import '../widgets/profile_avatar.dart';
+import 'admin_screen.dart';
 import 'confirm_screen.dart';
 import 'paywall_screen.dart';
 import 'player_screen.dart';
@@ -45,14 +47,19 @@ class ProfileScreen extends ConsumerWidget {
               // question and competed with it.
               ProfileAvatar(name: profile.name, size: 88),
               const SizedBox(height: AstraSpacing.md),
-              // The desire, not a name — onboarding stopped asking for one,
-              // and this is the sentence the whole account is built around.
+              // The name. This showed the desire sentence for as long as
+              // onboarding had stopped asking for one, which read as a slogan
+              // pinned to a profile rather than a person's account. Accounts
+              // made in that window have no name stored, so the desire is
+              // still the fallback rather than a blank line.
               Text(
-                profile.preferences.desire.isNotEmpty
-                    ? profile.preferences.desire
-                    : (profile.aspiration.isNotEmpty
-                          ? profile.aspiration
-                          : 'Your Astra'),
+                profile.name.isNotEmpty
+                    ? profile.name
+                    : (profile.preferences.desire.isNotEmpty
+                          ? profile.preferences.desire
+                          : (profile.aspiration.isNotEmpty
+                                ? profile.aspiration
+                                : 'Your Maya')),
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -68,18 +75,58 @@ class ProfileScreen extends ConsumerWidget {
         ),
         const SizedBox(height: AstraSpacing.xl),
 
+        // One row, not two. This used to be "Story preferences" and
+        // "Intentions & life details" side by side, which put the same
+        // underlying question — what is this account actually about — behind
+        // two different settings that could disagree with each other. Life
+        // areas now live inside Story preferences, reachable one tap further
+        // in rather than one row over.
+        // What Maya calls you, in every story it writes.
         _SettingRow(
-          label: 'Intentions & life details',
-          value: profile.intentions.map((i) => i.label).join(', '),
-          onTap: () => editIntentions(context, ref),
+          label: 'Your name',
+          value: profile.name.isEmpty ? 'Not set' : profile.name,
+          onTap: () => _editName(context, ref),
         ),
+        // Two sends, so two rows.
+        //
+        // The server has sent morning and night for a while — the user's own
+        // time, and 10 PM unless they move it — but this screen only ever
+        // showed the first one, under a label that said "Daily affirmation".
+        // Somebody reading their own settings had no way to learn that a
+        // second one was coming, or to move it.
         _SettingRow(
-          label: 'Daily affirmation',
-          value: profile.remindersOn
-              ? _formatTime(profile.reminderHour, profile.reminderMinute)
-              : 'Off',
-          onTap: () => _editReminder(context, ref),
+          label: 'Affirmation reminders',
+          value: profile.remindersOn ? 'On' : 'Off',
+          onTap: () => _toggleReminders(context, ref),
         ),
+        if (profile.remindersOn) ...[
+          _SettingRow(
+            label: 'Morning',
+            value: _formatTime(profile.reminderHour, profile.reminderMinute),
+            onTap: () => _editSlot(context, ref, evening: false),
+          ),
+          _SettingRow(
+            label: 'Night',
+            value: _formatTime(profile.eveningHour, profile.eveningMinute),
+            onTap: () => _editSlot(context, ref, evening: true),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(
+              left: 4,
+              right: 4,
+              bottom: AstraSpacing.sm,
+            ),
+            child: Text(
+              // Said once, under both, rather than folded into each time.
+              // The sender runs on a cron tick, so a reminder set for 7:00
+              // lands between 7:00 and 7:15 — never earlier, sometimes that
+              // much later. A bare exact time would look broken on the days
+              // it drifted.
+              'Each one arrives within 15 minutes of its time.',
+              style: AstraTextStyles.small,
+            ),
+          ),
+        ],
         // The same ring as Home, for the same reason: the number of stories
         // left is the one fact about the plan that changes, and it should read
         // identically wherever it is shown.
@@ -93,6 +140,26 @@ class ProfileScreen extends ConsumerWidget {
                     ),
                   ),
         ),
+
+        // Cancelling, and where it actually happens.
+        //
+        // Shown only to someone on a live plan, and it opens Play's own page
+        // for this app rather than the list of every subscription they hold.
+        // The app cannot cancel anything itself — Google owns the billing — so
+        // the choice is between one honest tap and a paragraph telling them to
+        // go and find it. A subscription that is hard to leave is one people
+        // refuse to start.
+        ..._cancelRow(context, ref),
+
+        // Cancelled, and still running.
+        //
+        // Play keeps a cancelled subscription alive until the period the user
+        // paid for runs out, and it says nothing to them in the meantime — so
+        // without this the app looks identical before and after cancelling,
+        // and the first sign anything changed is the day it stops working.
+        // Shown only while it is cancelled: an active plan needs no notice.
+        ..._cancellationNotice(ref),
+
         const SizedBox(height: AstraSpacing.md),
 
         AstraCard(
@@ -154,7 +221,7 @@ class ProfileScreen extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  const Icon(
+                  Icon(
                     Icons.play_circle_outline_rounded,
                     color: AstraColors.accent,
                     size: 24,
@@ -186,7 +253,7 @@ class ProfileScreen extends ConsumerWidget {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.favorite,
                       size: 17,
                       color: AstraColors.accent,
@@ -227,11 +294,42 @@ class ProfileScreen extends ConsumerWidget {
           ),
         const SizedBox(height: AstraSpacing.sm),
 
+        // Only ever drawn for the one Google account named in AdminService,
+        // and drawing it is all this does — the panel's data comes from a
+        // function that checks the same thing again and refuses on its own.
+        if (ref.watch(isAdminProvider).valueOrNull ?? false) ...[
+          _AccountRow(
+            icon: Icons.insights_rounded,
+            label: 'Admin',
+            detail: 'Signups, activity, stories written',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const AdminScreen()),
+            ),
+          ),
+          const SizedBox(height: AstraSpacing.sm),
+        ],
+
         _AccountRow(
           icon: Icons.logout_rounded,
           label: 'Log out',
           detail: 'Clears this device',
-          onTap: () => _confirm(context, ConfirmKind.signOut),
+          // Straight out, with nothing to confirm.
+          //
+          // It used to open the same are-you-sure screen that deleting an
+          // account does, and the two are not comparable: deleting destroys
+          // the stories, logging out leaves every one of them on the server
+          // and hands them back at the next sign-in. Asking twice for
+          // something reversible teaches people to tap past the question,
+          // which is exactly the habit you do not want them to have when the
+          // screen underneath it says Delete.
+          //
+          // Both halves, always. `signOut` only ends the Firebase session; it
+          // does not touch this device. Calling it alone left the previous
+          // account's name, stories and streak sitting in local storage for
+          // the next person to sign in and find — which is what happened when
+          // this first bypassed the confirmation screen and inherited only
+          // half of what that screen did.
+          onTap: () => _logOut(context, ref),
         ),
         const SizedBox(height: AstraSpacing.sm),
         _AccountRow(
@@ -261,7 +359,7 @@ class ProfileScreen extends ConsumerWidget {
         _AccountRow(
           icon: Icons.description_outlined,
           label: 'Terms of use',
-          detail: 'What Astra promises, and what it does not',
+          detail: 'What Maya promises, and what it does not',
           onTap: () => LegalLinks.open(context, LegalLinks.terms),
         ),
         const SizedBox(height: AstraSpacing.sm),
@@ -295,49 +393,26 @@ class ProfileScreen extends ConsumerWidget {
     return '$display:${minute.toString().padLeft(2, '0')} $period';
   }
 
-  /// Turns the daily affirmation on, off, or moves it.
+  /// Turns both reminders on or off.
   ///
   /// Permission is asked here, at the moment the user says they want the
   /// thing — not at launch, where it is the prompt everybody denies and can
   /// never be asked for again.
-  static Future<void> _editReminder(BuildContext context, WidgetRef ref) async {
+  static Future<void> _toggleReminders(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
     final profile = ref.read(profileProvider);
     final messenger = ScaffoldMessenger.of(context);
 
     if (profile.remindersOn) {
-      final picked = await showTimePicker(
-        context: context,
-        initialTime: TimeOfDay(
-          hour: profile.reminderHour,
-          minute: profile.reminderMinute,
-        ),
-        helpText: 'Daily affirmation',
-        // The way to turn it off is on the same screen as the way to move it,
-        // because a setting you cannot find the off switch for is a setting
-        // people uninstall the app over.
-        cancelText: 'Turn off',
-      );
-
-      if (picked == null) {
-        await ref
-            .read(profileProvider.notifier)
-            .update(profile.copyWith(remindersOn: false));
-        await refreshPushRegistration(ref);
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Daily affirmation turned off.')),
-        );
-        return;
-      }
-
       await ref
           .read(profileProvider.notifier)
-          .update(
-            profile.copyWith(
-              reminderHour: picked.hour,
-              reminderMinute: picked.minute,
-            ),
-          );
+          .update(profile.copyWith(remindersOn: false));
       await refreshPushRegistration(ref);
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Affirmation reminders turned off.')),
+      );
       return;
     }
 
@@ -349,7 +424,7 @@ class ProfileScreen extends ConsumerWidget {
       messenger.showSnackBar(
         const SnackBar(
           content: Text(
-            'Notifications are blocked for Astra. Turn them on in your phone '
+            'Notifications are blocked for Maya. Turn them on in your phone '
             'settings and try again.',
           ),
         ),
@@ -357,35 +432,55 @@ class ProfileScreen extends ConsumerWidget {
       return;
     }
 
-    if (!context.mounted) return;
+    // On at the two defaults, and the rows below say what they are. Asking for
+    // two times before sending anything would be three taps to reach a setting
+    // most people will never move.
+    await ref
+        .read(profileProvider.notifier)
+        .update(profile.copyWith(remindersOn: true));
+    await refreshPushRegistration(ref);
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          'Affirmations at ${_formatTime(profile.reminderHour, profile.reminderMinute)} '
+          'and ${_formatTime(profile.eveningHour, profile.eveningMinute)}.',
+        ),
+      ),
+    );
+  }
+
+  /// Moves one of the two.
+  static Future<void> _editSlot(
+    BuildContext context,
+    WidgetRef ref, {
+    required bool evening,
+  }) async {
+    final profile = ref.read(profileProvider);
+
     final picked = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay(
-        hour: profile.reminderHour,
-        minute: profile.reminderMinute,
-      ),
-      helpText: 'When should it arrive?',
+      initialTime: evening
+          ? TimeOfDay(hour: profile.eveningHour, minute: profile.eveningMinute)
+          : TimeOfDay(hour: profile.reminderHour, minute: profile.reminderMinute),
+      helpText: evening ? 'Night affirmation' : 'Morning affirmation',
     );
     if (picked == null) return;
 
     await ref
         .read(profileProvider.notifier)
         .update(
-          profile.copyWith(
-            remindersOn: true,
-            reminderHour: picked.hour,
-            reminderMinute: picked.minute,
-          ),
+          evening
+              ? profile.copyWith(
+                  eveningHour: picked.hour,
+                  eveningMinute: picked.minute,
+                )
+              : profile.copyWith(
+                  reminderHour: picked.hour,
+                  reminderMinute: picked.minute,
+                ),
         );
     await refreshPushRegistration(ref);
-
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          'One affirmation a day at ${_formatTime(picked.hour, picked.minute)}.',
-        ),
-      ),
-    );
   }
 
   /// Changing a password by email rather than in a form.
@@ -410,6 +505,115 @@ class ProfileScreen extends ConsumerWidget {
     } catch (error) {
       messenger.showSnackBar(SnackBar(content: Text(authErrorMessage(error))));
     }
+  }
+
+  /// The "cancel my plan" row, for people who have something to cancel.
+  static List<Widget> _cancelRow(BuildContext context, WidgetRef ref) {
+    final plan = ref.watch(entitlementDetailsProvider).valueOrNull;
+    if (plan == null || !plan.isSubscribed || plan.isCancelled) return const [];
+
+    return [
+      const SizedBox(height: AstraSpacing.md),
+      _AccountRow(
+        icon: Icons.open_in_new_rounded,
+        label: 'Cancel Maya Plus',
+        detail: 'Opens Google Play · you keep Plus until the period ends',
+        onTap: () => LegalLinks.open(
+          context,
+          LegalLinks.playSubscription(
+            BillingService.monthlyId,
+            'com.astraapp.astra',
+          ),
+        ),
+      ),
+    ];
+  }
+
+  /// Renames the account.
+  ///
+  /// The name is not decoration: it is spoken in every story, so getting it
+  /// wrong at signup meant hearing the wrong name read aloud for as long as the
+  /// account lived. It was asked once during onboarding and never editable
+  /// after.
+  static Future<void> _editName(BuildContext context, WidgetRef ref) async {
+    final profile = ref.read(profileProvider);
+
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => _NameDialog(initial: profile.name),
+    );
+
+    final trimmed = name?.trim() ?? '';
+    // An empty name is read aloud as a gap. Keeping the old one is the better
+    // failure.
+    if (trimmed.isEmpty || trimmed == profile.name) return;
+
+    await ref.read(profileProvider.notifier).update(
+      profile.copyWith(name: trimmed),
+    );
+  }
+
+  /// Ends the session and erases this device's copy, in that order.
+  ///
+  /// The two belong together and must never be separated again: signing out
+  /// without the wipe hands the next account the last one's data, and wiping
+  /// without the sign-out deletes a live user's library under them.
+  static Future<void> _logOut(BuildContext context, WidgetRef ref) async {
+    // Taken before the sign-out — see [forgetEverythingLocal].
+    final container = ProviderScope.containerOf(context);
+    await container.read(accountServiceProvider).signOut();
+    await forgetEverythingLocal(container);
+  }
+
+  /// The "you cancelled, it ends on X" line, or nothing at all.
+  static List<Widget> _cancellationNotice(WidgetRef ref) {
+    final entitlement = ref.watch(entitlementDetailsProvider).valueOrNull;
+    if (entitlement == null || !entitlement.isCancelled) return const [];
+
+    final ends = entitlement.expiryTime;
+
+    return [
+      const SizedBox(height: AstraSpacing.md),
+      AstraCard(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.info_outline_rounded,
+              size: 18,
+              color: AstraColors.dim,
+            ),
+            const SizedBox(width: AstraSpacing.sm),
+            Expanded(
+              child: Text(
+                ends == null
+                    // Play told us it is cancelled but not when it lapses.
+                    // Better to say the true half than to invent a date the
+                    // user will hold us to.
+                    ? 'You have cancelled Maya Plus. It stays on until the '
+                        'period you have paid for ends.'
+                    : 'You have cancelled Maya Plus. It stays on until '
+                        '${_longDate(ends)}, and you keep everything you '
+                        'have already made.',
+                style: AstraTextStyles.bodyDim,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  /// "3 October 2026" — spelled out, because a cancellation date read wrong is
+  /// a support email, and 3/10 means two different days either side of the
+  /// Atlantic.
+  static String _longDate(DateTime when) {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+    final local = when.toLocal();
+    return '${local.day} ${months[local.month - 1]} ${local.year}';
   }
 
   static Future<void> _confirm(BuildContext context, ConfirmKind kind) =>
@@ -528,7 +732,7 @@ class _AccountRow extends StatelessWidget {
             ),
           ),
           if (onTap != null)
-            const Icon(
+            Icon(
               Icons.chevron_right_rounded,
               size: 18,
               color: AstraColors.dim,
@@ -564,9 +768,62 @@ class _SettingRow extends StatelessWidget {
             ),
           ),
           if (onTap != null)
-            const Icon(Icons.chevron_right, size: 18, color: AstraColors.dim),
+            Icon(Icons.chevron_right, size: 18, color: AstraColors.dim),
         ],
       ),
     ),
+  );
+}
+
+/// The rename dialog, which owns its own text controller.
+///
+/// A [StatefulWidget] rather than a controller created next to `showDialog`,
+/// and the reason is a crash rather than tidiness. Disposing a controller the
+/// moment `showDialog` returns disposes it while the dialog is still animating
+/// out and its `TextField` is still listening — which trips
+/// `_dependents.isEmpty` deep inside the framework and takes the whole screen
+/// down to a red page.
+///
+/// Owning the controller here ties its life to the widget that uses it, so it
+/// is disposed after the field is gone rather than before.
+class _NameDialog extends StatefulWidget {
+  const _NameDialog({required this.initial});
+
+  final String initial;
+
+  @override
+  State<_NameDialog> createState() => _NameDialogState();
+}
+
+class _NameDialogState extends State<_NameDialog> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save() => Navigator.of(context).pop(_controller.text);
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    backgroundColor: AstraColors.card,
+    title: Text('Your name', style: AstraTextStyles.label),
+    content: TextField(
+      controller: _controller,
+      autofocus: true,
+      textCapitalization: TextCapitalization.words,
+      decoration: const InputDecoration(hintText: 'What should we call you?'),
+      onSubmitted: (_) => _save(),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Text('Cancel'),
+      ),
+      TextButton(onPressed: _save, child: const Text('Save')),
+    ],
   );
 }

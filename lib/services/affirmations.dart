@@ -3,10 +3,70 @@ import '../models/intention.dart';
 
 /// One card in the affirmation deck: the line and the life area it belongs to.
 class Affirmation {
-  const Affirmation({required this.line, required this.intention});
+  const Affirmation({
+    required this.line,
+    required this.intention,
+    this.isShortVersion = false,
+  });
 
   final String line;
   final Intention intention;
+
+  /// True for the one distilled line at the head of a generated group — the
+  /// single sentence the batch of eight was written down to. Shown with its
+  /// own styling in the deck rather than blending in as card nine of nine.
+  final bool isShortVersion;
+}
+
+/// One area's worth of server-generated lines: eight variations and the one
+/// line that distills them, exactly as [functions/index.js] writes them.
+///
+/// This is the shape `private/affirmations.groups` is stored in — see
+/// `writeAffirmations` there. Parsed defensively, the same way [Story] and
+/// [UserProfile] are: a field of the wrong type is dropped rather than
+/// thrown on, because a malformed group should degrade the deck, not crash
+/// the screen showing it.
+class AffirmationGroup {
+  const AffirmationGroup({
+    required this.intention,
+    required this.lines,
+    required this.shortVersion,
+  });
+
+  final Intention intention;
+  final List<String> lines;
+  final String shortVersion;
+
+  static AffirmationGroup? fromMap(Object? raw) {
+    if (raw is! Map) return null;
+
+    final areaKey = raw['areaKey'] as String?;
+    final shortVersion = (raw['shortVersion'] as String?)?.trim();
+    final lines = (raw['lines'] as List?)
+            ?.whereType<String>()
+            .map((l) => l.trim())
+            .where((l) => l.isNotEmpty)
+            .toList() ??
+        const <String>[];
+
+    if (areaKey == null || shortVersion == null || shortVersion.isEmpty) {
+      return null;
+    }
+
+    return AffirmationGroup(
+      intention: Intention.fromName(areaKey),
+      lines: lines,
+      shortVersion: shortVersion,
+    );
+  }
+
+  /// This group as deck cards: the short version first and marked, then the
+  /// eight variations behind it — the order a person should meet them in,
+  /// most concentrated line first.
+  List<Affirmation> toCards() => [
+    Affirmation(line: shortVersion, intention: intention, isShortVersion: true),
+    for (final line in lines) Affirmation(line: line, intention: intention),
+  ];
 }
 
 /// The affirmation pool.

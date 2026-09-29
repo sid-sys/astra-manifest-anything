@@ -26,7 +26,7 @@ class AccountService {
 
   /// Ends the session.
   ///
-  /// Astra signs people in anonymously, which makes this one-way: an anonymous
+  /// Maya signs people in anonymously, which makes this one-way: an anonymous
   /// account has no password, no email and no second device to get back in
   /// from, so signing out abandons the cloud copy rather than parking it. The
   /// confirmation screen has to say so — this method is not the place to
@@ -37,7 +37,7 @@ class AccountService {
     } catch (error) {
       // Nothing to sign out of, or Firebase never started. The local wipe the
       // caller does next is the part the user actually asked for.
-      debugPrint('Astra: sign-out failed, clearing this device anyway — $error');
+      debugPrint('Maya: sign-out failed, clearing this device anyway — $error');
     }
   }
 

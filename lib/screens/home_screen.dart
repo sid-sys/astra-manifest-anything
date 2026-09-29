@@ -1,20 +1,22 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../demo/demo_data.dart';
 import '../models/intention.dart';
+import '../models/plan.dart';
+import '../models/wish_text.dart';
 import '../models/story.dart';
-import '../models/story_preferences.dart';
 import '../providers.dart';
-import '../services/trending_manifestations.dart';
 import '../services/wish_prompts.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/allowance_ring.dart';
 import '../widgets/astra_widgets.dart';
 import '../widgets/streak_card.dart';
+import 'desire_flow_screen.dart';
 import 'paywall_screen.dart';
 import 'player_screen.dart';
-import 'profile_screen.dart';
-import 'story_flow.dart';
 
 /// The daily ritual, arranged as one question.
 ///
@@ -25,12 +27,10 @@ import 'story_flow.dart';
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({
     super.key,
-    required this.onCreate,
     required this.onLibrary,
     required this.onProfile,
   });
 
-  final VoidCallback onCreate;
   final VoidCallback onLibrary;
   final VoidCallback onProfile;
 
@@ -46,86 +46,108 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// What today's story is about. Resets to the main storyline every launch,
   /// because "continue where we were" is the answer nearly every day and the
   /// other two are deliberate choices.
-  StoryFocus _focus = StoryFocus.desire;
+  /// Which onboarding answers this manifestation is written from.
+  ///
+  /// Everything, until the user says otherwise. The answers were given for
+  /// exactly this and leaving them off by default would make four questions
+  /// a thing that happened once and never mattered.
+  ///
+  /// Filled on first build rather than in `initState`, because the profile it
+  /// depends on is still being restored from Firestore at that point.
 
-  /// Whether the moment box is open. Closed by default — the whole point is
-  /// that a story costs one tap, and a text field sitting open is a text field
-  /// that looks like it has to be filled in.
-  bool _addingMoment = false;
+  /// The selection, seeded with every answer the first time it is needed.
 
-  /// Set when a trending chip is tapped, so the story is written against that
-  /// chip's intention rather than the user's default one — tapping "Marry her"
-  /// under a Career profile should still produce a love story.
-  Intention? _chipIntention;
+
+
 
   @override
   void initState() {
     super.initState();
     _suggestion = WishPrompts.next(_intention);
+
+    // The store frame for Home is "a wish already typed into the box", so the
+    // demo starts with one in it. The hint text underneath is grey placeholder
+    // and photographs as an empty box, which is the one thing that frame is
+    // not allowed to be.
+    if (Demo.on) _wishController.text = Demo.wish;
+
+    // Nothing writes itself here any more.
+    //
+    // Arriving on Home used to start a manifestation unasked, on the reasoning
+    // that somebody who has answered twelve questions and paid should not have
+    // to press one more button. What that actually produced was a person who
+    // had just paid staring at a locked writing screen for ninety seconds,
+    // unable to look at the thing they had bought — and the same again for a
+    // returning subscriber who only wanted their library.
+    //
+    // The button is one tap and it is theirs.
   }
 
-  @override
-  void dispose() {
-    _wishController.dispose();
-    super.dispose();
-  }
-
+  /// The life area this account is about, for the prompt suggestions.
   Intention get _intention {
     final chosen = ref.read(profileProvider).intentions;
     return chosen.isEmpty ? Intention.career : chosen.first;
   }
 
-  /// Today's story: one tap, with the moment optional.
+  /// Opens the four questions written for whatever was just typed.
   ///
-  /// The box used to be required — every story started by retyping a desire
-  /// the app already had written down. Now onboarding does that work once, and
-  /// this is a button. What the field adds is today: "we went to the movies",
-  /// "she called me", which the generator lays on top of the same life.
+  /// Nothing is generated from this screen any more. The desire goes to the
+  /// server, four questions come back about *that* desire, and the answers to
+  /// those are what the writer actually works from — which is the whole reason
+  /// onboarding could be deleted rather than shortened.
   Future<void> _weaveToday() async {
     if (_weaving) return;
 
+    final desire = _wishController.text.trim();
+    if (!looksMeaningful(desire)) return;
+    unawaited(ref.read(trackingProvider).log('wish_typed', wish: desire));
+
+    // The subscription is checked here, at the button, and not at the door.
+    //
+    // Signing up no longer lands on a price — see [AstraApp]. So this is where
+    // the ask happens, and it happens after the wish is typed, which is the
+    // only moment the person knows what they would be paying for. The wish
+    // stays in the box while they decide, and pressing Continue again writes
+    // it.
+    //
+    // The server checks the same thing. This is here so the answer arrives
+    // before a minute of waiting rather than after it.
+    if (!ref.read(isSubscribedProvider)) {
+      final bought = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => const PaywallScreen()),
+      );
+      if (!mounted || bought != true) return;
+    }
+
     setState(() => _weaving = true);
 
-    final made = await weaveStory(
-      Navigator.of(context),
-      ScaffoldMessenger.of(context),
-      ProviderScope.containerOf(context),
-      intention: _chipIntention ?? _intention,
-      scene: _wishController.text.trim(),
-      focus: _focus,
+    final made = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => DesireFlowScreen(desire: desire),
+      ),
     );
 
     if (!mounted) return;
-    if (made) {
-      _wishController.clear();
-      _chipIntention = null;
-    }
+    if (made == true) _wishController.clear();
     setState(() => _weaving = false);
   }
 
-  /// Fills the box rather than generating immediately.
-  ///
-  /// A chip that spent a story on one tap would be a trap next to a text field
-  /// — the user gets to read it, edit it, and press the button themselves.
-  void _useTrending(TrendingWish trending) {
-    setState(() {
-      _wishController.text = trending.wish;
-      _chipIntention = trending.intention;
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
+
     final profile = ref.watch(profileProvider);
-    final stories = ref.watch(storiesProvider);
+
+    // Manifestations and old stories in one row, newest first — the same list
+    // the Library shows, for the same reason. Nothing new is written as a
+    // story any more, but every story ever written still plays, and to the
+    // person listening they are the same thing. Home showed only the stories,
+    // so somebody whose whole library was manifestations opened the app to
+    // "nothing written yet" with eight of them in the Library.
+    final stories = ref.watch(everythingWrittenProvider);
     final streak = ref.watch(streakProvider);
     final minutes = ref.watch(minutesInLibraryProvider);
     final keptCount = ref.watch(tasteProvider).liked.length;
-    final trending = TrendingManifestations.forDay(
-      DateTime.now(),
-      profile.intentions,
-    );
-
     // The list pads nothing horizontally: the trending row and the story row
     // run to both edges so a card sitting half off-screen advertises the swipe.
     // Everything else asks for the inset it wants.
@@ -136,7 +158,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         // heart to favourites, a clock to the library — all pointed at places
         // the nav bar and the Profile tab already reach. Three ways to the
         // same screen is not three features.
-        const _Inset(child: Wordmark('Astra', align: TextAlign.left)),
+        const _Inset(child: Wordmark('Maya', align: TextAlign.left)),
         const SizedBox(height: AstraSpacing.xxl),
 
         // The daily ritual, in one object: open, choose or don't, generate,
@@ -146,14 +168,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         _Inset(
           child: _TodayCard(
             name: profile.name,
-            focus: _focus,
             busy: _weaving,
             controller: _wishController,
-            momentOpen: _addingMoment,
             hint: _suggestion,
-            onFocus: (focus) => setState(() => _focus = focus),
-            onToggleMoment: () =>
-                setState(() => _addingMoment = !_addingMoment),
+            // Zero for anyone not paying, which reads as "you have none" —
+            // true, and the button then opens the plans rather than refusing.
+            left: ref.watch(manifestsLeftProvider),
+            subscribed: ref.watch(isSubscribedProvider),
             onGenerate: _weaveToday,
           ),
         ),
@@ -174,51 +195,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
         const SizedBox(height: AstraSpacing.lg),
 
-        _Inset(
-          child: Row(
-            children: [
-              const Text('🔥', style: TextStyle(fontSize: 11)),
-              const SizedBox(width: 6),
-              Text('TRENDING MANIFESTATIONS', style: AstraTextStyles.eyebrow),
-            ],
-          ),
-        ),
-        const SizedBox(height: AstraSpacing.sm),
-        SizedBox(
-          height: 38,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            itemCount: trending.length,
-            separatorBuilder: (_, _) => const SizedBox(width: AstraSpacing.sm),
-            itemBuilder: (_, i) => TagChip(
-              label: trending[i].label,
-              accent: trending[i].intention.accent,
-              selected: _wishController.text == trending[i].wish,
-              onTap: () => _useTrending(trending[i]),
-            ),
-          ),
-        ),
-        const SizedBox(height: AstraSpacing.xl),
-
-        _Inset(
-          child: Row(
-            children: [
-              Expanded(
-                child: Text('For you', style: AstraTextStyles.display(22)),
-              ),
-              _PillButton(
-                label: 'Edit desires',
-                icon: Icons.edit_outlined,
-                onTap: () => editIntentions(context, ref),
-              ),
-            ],
-          ),
-        ),
+        // What used to sit here: a row of "trending manifestations", and an
+        // "Edit desires" pill next to the heading below.
+        //
+        // The chips were other people's wishes offered as a shortcut, on a
+        // screen whose whole argument is that the story is about *your* life —
+        // and the app already holds twelve answers about that life, so a chip
+        // reading "Marry her" was a worse prompt than the one on file. The
+        // edit pill pointed at a screen the Profile tab already reaches, which
+        // is the same objection the avatar and the two icons above it lost to.
+        _Inset(child: Text('For you', style: AstraTextStyles.display(22))),
         const SizedBox(height: AstraSpacing.md),
 
         if (stories.isEmpty)
-          _Inset(child: _FirstStoryCard(onCreate: widget.onCreate))
+          const _Inset(child: _FirstStoryCard())
         else
           SizedBox(
             height: 186,
@@ -269,7 +259,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           child: Row(
             children: [
               Expanded(
-                child: _Stat(label: 'Stories', value: '${stories.length}'),
+                child: _Stat(label: 'Written', value: '${stories.length}'),
               ),
               const SizedBox(width: AstraSpacing.sm),
               Expanded(child: _Stat(label: 'Minutes', value: '$minutes')),
@@ -285,7 +275,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// Plays [story] with everything else queued behind it, so the player never
   /// runs dry at the end of one track.
   void _open(Story story) {
-    final stories = ref.read(storiesProvider);
+    final stories = ref.read(everythingWrittenProvider);
     ref
         .read(playbackProvider)
         .play(story, queue: stories.where((s) => s.id != story.id).toList());
@@ -320,28 +310,64 @@ class _Inset extends StatelessWidget {
 /// somewhere new in the same life, or hand the choice over. "Add a moment"
 /// is folded away until asked for, because a field standing open reads as a
 /// field that must be filled.
+/// What Maya will write, and what it will write it from.
+///
+/// The wish is typed here every time rather than answered once at signup. A
+/// person manifests a different thing in March than they did in January, and a
+/// desire saved during onboarding quietly became the answer to every question
+/// they ever asked afterwards.
+///
+/// The chips underneath are the onboarding answers, and they are a multi-select
+/// rather than a switch: somebody writing about their career this week may want
+/// the people and the feelings but not the place, and that is a per-manifest
+/// decision. The name has no chip because there is no version of this that
+/// works without one — the script opens by saying it.
 class _TodayCard extends StatelessWidget {
   const _TodayCard({
     required this.name,
-    required this.focus,
     required this.busy,
     required this.controller,
-    required this.momentOpen,
     required this.hint,
-    required this.onFocus,
-    required this.onToggleMoment,
+    required this.left,
+    required this.subscribed,
     required this.onGenerate,
   });
 
   final String name;
-  final StoryFocus focus;
   final bool busy;
   final TextEditingController controller;
-  final bool momentOpen;
   final String hint;
-  final ValueChanged<StoryFocus> onFocus;
-  final VoidCallback onToggleMoment;
+
+  /// Manifestations still available this month. Zero without a subscription.
+  final int left;
+
+  /// Whether this account is paying. Kept apart from [left] because zero means
+  /// two different things: nothing bought yet, or everything used up.
+  final bool subscribed;
+
+  /// Used up, as opposed to never started. Only this one greys the button out
+  /// — there is nothing a person can do about it until the 1st, so offering
+  /// them a live button would be offering a refusal.
+  bool get _spent => subscribed && left <= 0;
+
   final VoidCallback onGenerate;
+
+  /// Whether there is a wish in the box, rather than enough characters in it.
+  bool _ready() => looksMeaningful(controller.text);
+
+  /// The line under the box.
+  ///
+  /// Ordered by what the person most needs to know: that they cannot write
+  /// one right now, then that the box is empty, then how many they have left.
+  String _underline(bool ready) {
+    if (_spent) {
+      return 'All ${PricingCatalog.manifestMonthly} written this month. '
+          'Affirmations are free and still work, and everything replays.';
+    }
+    if (!ready) return 'Write it in your own words — "I want a place of my own"';
+    if (!subscribed) return 'Maya will ask you four things, then write it';
+    return '$left of ${PricingCatalog.manifestMonthly} left this month';
+  }
 
   @override
   Widget build(BuildContext context) => AstraCard(
@@ -349,191 +375,90 @@ class _TodayCard extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('TODAY’S STORY', style: AstraTextStyles.eyebrow),
+        Text('TODAY’S MANIFESTATION', style: AstraTextStyles.eyebrow),
         const SizedBox(height: AstraSpacing.sm),
-        // The one flourish on the screen: the verb in italic serif, which is
-        // what makes this read as an invitation rather than a form label.
         Text.rich(
           TextSpan(
             children: [
-              TextSpan(text: name.isEmpty ? 'Your future is ' : '$name, your future is '),
+              TextSpan(
+                text: name.isEmpty
+                    ? 'Say it like it is '
+                    : '$name, say it like it is ',
+              ),
               TextSpan(
                 text: 'already',
                 style: AstraTextStyles.displayItalic(26),
               ),
-              const TextSpan(text: ' unfolding.'),
+              const TextSpan(text: ' done.'),
             ],
           ),
           style: AstraTextStyles.display(26),
         ),
         const SizedBox(height: AstraSpacing.lg),
 
-        AstraButton(
-          label: '✨  Generate today’s story',
-          busy: busy,
-          onPressed: busy ? null : onGenerate,
-        ),
-        const SizedBox(height: AstraSpacing.lg),
-
-        Text('WHAT SHOULD IT BE ABOUT?', style: AstraTextStyles.eyebrow),
-        const SizedBox(height: AstraSpacing.sm),
-        for (final option in StoryFocus.values) ...[
-          InkWell(
-            onTap: busy ? null : () => onFocus(option),
-            borderRadius: BorderRadius.circular(12),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 7),
-              child: Row(
-                children: [
-                  Icon(
-                    option == focus
-                        ? Icons.radio_button_checked
-                        : Icons.radio_button_unchecked,
-                    size: 18,
-                    color: option == focus
-                        ? AstraColors.accent
-                        : AstraColors.dim,
-                  ),
-                  const SizedBox(width: AstraSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          option.label,
-                          style: AstraTextStyles.body.copyWith(
-                            fontWeight: option == focus
-                                ? FontWeight.w600
-                                : FontWeight.w400,
-                          ),
-                        ),
-                        Text(option.detail, style: AstraTextStyles.small),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+        TextField(
+          controller: controller,
+          style: AstraTextStyles.body,
+          cursorColor: AstraColors.accent,
+          minLines: 3,
+          maxLines: 6,
+          enabled: !busy,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: AstraTextStyles.bodyDim,
+            filled: true,
+            fillColor: AstraColors.canvas,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: AstraColors.line),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: AstraColors.line),
             ),
           ),
-        ],
+        ),
+        const SizedBox(height: AstraSpacing.xs),
 
-        const SizedBox(height: AstraSpacing.sm),
-        InkWell(
-          onTap: busy ? null : onToggleMoment,
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 7),
-            child: Row(
+        // Rebuilt on every keystroke, because these two are the only things on
+        // the screen that answer to what is in the box.
+        //
+        // This card is a StatelessWidget with the controller handed in, which
+        // means nothing here redraws unless something above it does. The button
+        // stayed grey while a perfectly good wish sat in the box, and only came
+        // alive after a trip to another tab forced a rebuild. Listening to the
+        // controller is what makes the button track the typing.
+        ListenableBuilder(
+          listenable: controller,
+          builder: (context, _) {
+            final ready = _ready();
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  momentOpen ? Icons.remove_rounded : Icons.add_rounded,
-                  size: 18,
-                  color: AstraColors.accent,
-                ),
-                const SizedBox(width: AstraSpacing.md),
+                // One line, and it says whichever thing is currently true:
+                // how many are left, why the button is dead, or what to type.
+                // Says what is missing, not how much — a character count told
+                // people to pad a finished wish out to length, and what is
+                // actually needed is words.
                 Text(
-                  'Add a moment',
-                  style: AstraTextStyles.body.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                  _underline(ready),
+                  style: AstraTextStyles.small.copyWith(color: AstraColors.dim),
+                ),
+                const SizedBox(height: AstraSpacing.lg),
+                AstraButton(
+                  label: _spent ? 'Used up this month' : '✨  Continue',
+                  busy: busy,
+                  onPressed: busy || !ready || _spent ? null : onGenerate,
                 ),
               ],
-            ),
-          ),
+            );
+          },
         ),
-
-        if (momentOpen) ...[
-          const SizedBox(height: AstraSpacing.sm),
-          TextField(
-            controller: controller,
-            style: AstraTextStyles.body,
-            cursorColor: AstraColors.accent,
-            minLines: 1,
-            maxLines: 3,
-            autofocus: true,
-            textInputAction: TextInputAction.done,
-            decoration: InputDecoration(
-              isDense: true,
-              hintText: hint,
-              hintStyle: AstraTextStyles.bodyDim.copyWith(
-                fontStyle: FontStyle.italic,
-              ),
-              filled: true,
-              fillColor: AstraColors.canvas,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 12,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: AstraColors.line),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: AstraColors.accent),
-              ),
-            ),
-          ),
-          const SizedBox(height: AstraSpacing.sm),
-          Text(
-            'One thing that happened, in your words. “We went to the movies.” '
-            '“She called me.” “I ran five kilometres.”',
-            style: AstraTextStyles.small,
-          ),
-        ],
       ],
     ),
   );
 }
-
-/// Small bordered pill — "Edit desires" and anything else that sits beside a
-/// section title.
-class _PillButton extends StatelessWidget {
-  const _PillButton({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AstraSpacing.pillRadius),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: AstraColors.card,
-          boxShadow: AstraColors.softShadow,
-          borderRadius: BorderRadius.circular(AstraSpacing.pillRadius),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: AstraColors.accent),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: AstraTextStyles.small.copyWith(color: AstraColors.text),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
-/// A story in the "For you" row.
-///
-/// White card, black type, one glyph. It used to be tinted with the
-/// intention's colour, which was carrying the whole job of telling the cards
-/// apart — with the palette gone that job falls to the title, which is what
-/// anyone was actually reading anyway.
 class _StoryCard extends StatelessWidget {
   const _StoryCard({required this.story, required this.onTap});
 
@@ -575,7 +500,7 @@ class _StoryCard extends StatelessWidget {
                         ),
                       ),
                       if (story.favorite)
-                        const Icon(
+                        Icon(
                           Icons.favorite,
                           size: 13,
                           color: AstraColors.accent,
@@ -592,7 +517,7 @@ class _StoryCard extends StatelessWidget {
                   const SizedBox(height: AstraSpacing.md),
                   Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.play_circle_fill_rounded,
                         size: 26,
                         color: AstraColors.accent,
@@ -635,13 +560,13 @@ class _SeeAllCard extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
+              Icon(
                 Icons.library_music_outlined,
                 color: AstraColors.accent,
                 size: 24,
               ),
               const SizedBox(height: AstraSpacing.sm),
-              Text('All stories', style: AstraTextStyles.small),
+              Text('See all', style: AstraTextStyles.small),
             ],
           ),
         ),
@@ -652,9 +577,7 @@ class _SeeAllCard extends StatelessWidget {
 
 /// What "For you" shows before there is anything to show.
 class _FirstStoryCard extends StatelessWidget {
-  const _FirstStoryCard({required this.onCreate});
-
-  final VoidCallback onCreate;
+  const _FirstStoryCard();
 
   @override
   Widget build(BuildContext context) => AstraCard(
@@ -662,7 +585,7 @@ class _FirstStoryCard extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('YOUR FIRST STORY', style: AstraTextStyles.eyebrow),
+        Text('YOUR FIRST ONE', style: AstraTextStyles.eyebrow),
         const SizedBox(height: AstraSpacing.sm),
         Text(
           'Nothing written yet',
@@ -670,12 +593,10 @@ class _FirstStoryCard extends StatelessWidget {
         ),
         const SizedBox(height: 2),
         Text(
-          'Say what you want above, or tap one of the manifestations. '
-          'Your first story is free.',
+          'Say what you want in the box above. Maya asks four questions '
+          'about it, then writes. Your first one is free.',
           style: AstraTextStyles.small,
         ),
-        const SizedBox(height: AstraSpacing.md),
-        AstraGhostButton(label: 'More options', onPressed: onCreate),
       ],
     ),
   );

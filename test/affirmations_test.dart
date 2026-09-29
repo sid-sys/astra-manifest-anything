@@ -72,6 +72,25 @@ void main() {
 
       expect(Affirmations.deck({Intention.peace}, taste), isEmpty);
     });
+
+    // The bug the "Show the passed ones again" button had: when every card
+    // was liked and none were passed, reshuffling — clear `passed`, keep
+    // `liked` — changes nothing, because there was nothing in `passed` to
+    // begin with. The deck stays empty and the button looks broken.
+    test('reshuffling alone cannot revive a deck kept entirely by liking', () {
+      var taste = _noTaste;
+      for (final card in Affirmations.deck({Intention.peace}, _noTaste)) {
+        taste = taste.like(card.line);
+      }
+
+      expect(Affirmations.deck({Intention.peace}, taste), isEmpty);
+      expect(taste.passed, isEmpty);
+
+      // What `TasteNotifier.reshuffle` does: clear passed, keep liked.
+      final reshuffled = AffirmationTaste(liked: taste.liked, passed: const {});
+
+      expect(Affirmations.deck({Intention.peace}, reshuffled), isEmpty);
+    });
   });
 
   group('affirmation taste', () {
@@ -95,6 +114,46 @@ void main() {
       final restored = AffirmationTaste.fromMap(_noTaste.like(line).toMap());
 
       expect(restored.liked, contains(line));
+    });
+  });
+
+  group('a generated group', () {
+    test('parses a well-formed group from the server', () {
+      final group = AffirmationGroup.fromMap({
+        'areaKey': 'love',
+        'lines': ['I am worthy of a loving relationship with Amaya.'],
+        'shortVersion': 'Amaya and I love each other.',
+      });
+
+      expect(group, isNotNull);
+      expect(group!.intention, Intention.love);
+      expect(group.lines, ['I am worthy of a loving relationship with Amaya.']);
+      expect(group.shortVersion, 'Amaya and I love each other.');
+    });
+
+    test('drops a group missing its short version rather than crashing', () {
+      expect(
+        AffirmationGroup.fromMap({'areaKey': 'love', 'lines': ['x']}),
+        isNull,
+      );
+      expect(AffirmationGroup.fromMap('not a map'), isNull);
+      expect(AffirmationGroup.fromMap(null), isNull);
+    });
+
+    test('the short version leads its own cards, marked', () {
+      const group = AffirmationGroup(
+        intention: Intention.love,
+        lines: ['a', 'b'],
+        shortVersion: 'the distilled line',
+      );
+
+      final cards = group.toCards();
+
+      expect(cards, hasLength(3));
+      expect(cards.first.line, 'the distilled line');
+      expect(cards.first.isShortVersion, isTrue);
+      expect(cards.skip(1).every((c) => !c.isShortVersion), isTrue);
+      expect(cards.every((c) => c.intention == Intention.love), isTrue);
     });
   });
 

@@ -121,7 +121,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                   decoration: InputDecoration(
                     hintText: 'you@example.com',
                     hintStyle: AstraTextStyles.bodyDim,
-                    prefixIcon: const Icon(
+                    prefixIcon: Icon(
                       Icons.alternate_email_rounded,
                       size: 18,
                       color: AstraColors.dim,
@@ -133,13 +133,13 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                       borderRadius: BorderRadius.circular(
                         AstraSpacing.cardRadius,
                       ),
-                      borderSide: const BorderSide(color: AstraColors.line),
+                      borderSide: BorderSide(color: AstraColors.line),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(
                         AstraSpacing.cardRadius,
                       ),
-                      borderSide: const BorderSide(color: AstraColors.accent),
+                      borderSide: BorderSide(color: AstraColors.accent),
                     ),
                   ),
                 ),

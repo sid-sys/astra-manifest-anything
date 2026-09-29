@@ -75,12 +75,29 @@ android {
                 signingConfigs.getByName("debug")
             }
 
-            // Shrinking is off. It is worth turning on later, but R8 needs
-            // keep rules for the reflective bits of the Firebase and audio
-            // plugins, and a release that crashes only after minification is
-            // the worst possible first build to debug.
-            isMinifyEnabled = false
-            isShrinkResources = false
+            // Shrinking and obfuscation, on, with hand-written keep rules in
+            // proguard-rules.pro.
+            //
+            // This was off, and the note here said it was worth turning on
+            // later — R8 needs keep rules for the reflective parts of Firebase,
+            // billing and the audio service, and a release that crashes only
+            // after minification is a miserable thing to debug. That reasoning
+            // was right and the bill came due anyway: Play measures how much of
+            // an app is obfuscated and warns below 25%, and Astra measured 2%,
+            // which is exactly what an unminified build looks like from the
+            // outside. Left alone it costs search visibility and, eventually,
+            // the ability to publish.
+            //
+            // So the keep rules are written rather than the setting flipped and
+            // hoped over. Read them before adding a plugin: anything reached by
+            // reflection, by native code, or by class name from the Android
+            // manifest is invisible to R8 and will be renamed away.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }

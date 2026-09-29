@@ -20,6 +20,48 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }
 
+      // Manifestations. Read and delete by the owner; never created or edited
+      // from a device.
+      //
+      // The asymmetry is the point. A manifestation costs real money to make —
+      // an ElevenLabs render against a monthly allowance — so the only thing
+      // that may write one is `writeManifest`, which counts it first. The
+      // Admin SDK bypasses these rules, so the function is unaffected; a client
+      // that tried would be creating audio nobody paid for.
+      //
+      // Deleting is the owner's to do. It gives back shelf space, not
+      // allowance: the monthly count is a query over what was created, so
+      // removing one does not buy another.
+      //
+      // Without this block at all — which is how it shipped — Firestore denied
+      // every read, the app caught the denial, and the list simply looked
+      // empty. A permission error and "you have none" are not the same thing
+      // and must never look the same again.
+      match /manifestations/{manifestId} {
+        allow read, delete: if request.auth != null && request.auth.uid == uid;
+        allow create, update: if false;
+      }
+
+      // How sessions felt. Write-only from the app's point of view: it adds a
+      // mood and never reads one back, because the question it answers — does
+      // this make people feel better — is about the product rather than about
+      // any one person's screen.
+      match /sessions/{sessionId} {
+        allow create: if request.auth != null && request.auth.uid == uid;
+        allow read, update, delete: if false;
+      }
+
+      // Affirmation sets. Read and delete by the owner; written only by the
+      // function that counts them against the monthly allowance.
+      //
+      // Same asymmetry as the manifestations, for the same reason: a set costs
+      // a real call to write, so the only thing that may create one is the code
+      // that has already decided the account is allowed another.
+      match /affirmationSets/{setId} {
+        allow read, delete: if request.auth != null && request.auth.uid == uid;
+        allow create, update: if false;
+      }
+
       // Server-owned. Usage counters, rate-limit windows and the subscription
       // entitlement live here.
       //
@@ -39,6 +81,44 @@ service cloud.firestore {
     match /affirmations/{docId} {
       allow read: if request.auth != null;
       allow write: if false;
+    }
+
+    // Reports of generated content — Play's Generative AI policy requires a way
+    // to flag it, and this is that path.
+    //
+    // Create-only, and only under the reporter's own uid: a report is not
+    // something the person who filed it should be able to edit or delete after
+    // the fact, and it is not something any other signed-in user should be able
+    // to read — this is not a public moderation queue, it is a mailbox to the
+    // people running the app. Nobody can read it back through client rules,
+    // including the reporter; review happens through the console or the Admin
+    // SDK, which bypasses rules entirely.
+    match /reports/{reportId} {
+      allow create: if request.auth != null &&
+        request.resource.data.uid == request.auth.uid;
+      allow read, update, delete: if false;
+    }
+
+    // Accounts closed by an admin, waiting out the week before their data is
+    // destroyed. Named explicitly rather than left to the catch-all below,
+    // because this collection holds the email addresses of people who no
+    // longer have accounts — the last place a stray rule should ever reach.
+    // Only the Admin SDK inside Cloud Functions touches it.
+    match /deletedAccounts/{uid} {
+      allow read, write: if false;
+    }
+
+    // Announcements sent to everybody, and the row per person saying whether
+    // they opened one. Named explicitly rather than left to the catch-all
+    // because the recipient rows are a list of who read what, which is the
+    // kind of thing that should never be one loose rule away from readable.
+    // Only the Admin SDK inside Cloud Functions touches it.
+    match /broadcasts/{broadcastId} {
+      allow read, write: if false;
+
+      match /recipients/{uid} {
+        allow read, write: if false;
+      }
     }
 
     // Anything not named above.

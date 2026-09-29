@@ -54,21 +54,39 @@ The product ids must match these strings exactly. They are hardcoded in
 typo means the paywall finds no product and shows "Purchases are not available
 on this device yet."
 
+**They still say `astra_`, and they have to.** Google Play does not let a
+subscription id be renamed or deleted once it exists, and every live receipt is
+tied to the id that sold it. Renaming these in the app would not rename them in
+Play — it would make the app ask for products that do not exist, and the paywall
+would show that same "Purchases are not available" message to everybody,
+including people already paying.
+
+An id is never shown to a user. It appears in the Play Console and in receipts,
+nowhere else. So the brand change stops at the app and the listing, which is
+the whole of what anyone sees.
+
+If they must change, it is a migration and not a rename: create
+`maya_plus_monthly` and `maya_plus_yearly` alongside, sell only the new ones,
+and keep honouring the old ones until the last yearly subscription bought under
+them has run its course — a year at minimum.
+
 | Product ID             | Name        | Base plan ID       | Billing period |
 | ---------------------- | ----------- | ------------------ | -------------- |
-| `astra_plus_monthly`   | Astra Plus  | `monthly-autorenew`| 1 month        |
-| `astra_plus_yearly`    | Astra Plus  | `yearly-autorenew` | 1 year         |
+| `astra_plus_monthly`   | Maya Plus  | `monthly-autorenew`| 1 month        |
+| `astra_plus_yearly`    | Maya Plus  | `yearly-autorenew` | 1 year         |
 
-For each base plan: **auto-renewing**, no free trial, no introductory price.
-(There is no trial anywhere in this product on purpose — three free stories is
-the trial, and it has no clock to expire.)
+For each base plan: **auto-renewing**. If a free trial offer is configured,
+the app shows it automatically and the server caps the first three days at
+three manifestations — see `TRIAL_MANIFEST_LIMIT` in `functions/index.js`.
+Without that cap a three-day trial is ten manifestations given to somebody who
+can cancel on the third day.
 
 Prices, matching `lib/models/plan.dart`:
 
 | Base plan | India (INR) | United States (USD) |
 | --------- | ----------- | ------------------- |
-| Monthly   | ₹649        | $7.99               |
-| Yearly    | ₹6,499      | $79.99              |
+| Monthly   | ₹699        | $7.99               |
+| Yearly    | ₹6,999      | $79.99              |
 
 Set those two explicitly and let Play convert the rest. Then **activate** both
 base plans — a subscription created but left inactive is invisible to the app
@@ -93,7 +111,7 @@ The account is:
 
 1. Play Console → **Users and permissions → Invite new users**
 2. Email: the address above
-3. App permissions: add **Astra** only
+3. App permissions: add **Maya** only
 4. Grant **View financial data, orders, and cancellation survey responses**
 5. Also enable the Google Play Android Developer API for the
    `astra-manifest` project if it is not already on:

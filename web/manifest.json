@@ -1,11 +1,11 @@
 {
-    "name": "astra",
-    "short_name": "astra",
+    "name": "Maya — Personal Manifestation",
+    "short_name": "Maya",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#FFFFFF",
-    "theme_color": "#121212",
-    "description": "A new Flutter project.",
+    "background_color": "#05060F",
+    "theme_color": "#05060F",
+    "description": "Maya writes you a manifestation from the life you are calling in, and reads it to you.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

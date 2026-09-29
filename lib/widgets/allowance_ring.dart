@@ -37,8 +37,8 @@ class AllowanceRing extends StatelessWidget {
 
     final ring = Semantics(
       label: limit == null
-          ? '${usage.plan} plan, no stories left'
-          : '${usage.plan} plan, $left of $limit stories left',
+          ? '${usage.plan} plan, manifestations need Maya Plus'
+          : '${usage.plan} plan, $left of $limit manifestations left',
       child: SizedBox(
         width: size,
         height: size,
@@ -126,7 +126,7 @@ class _RingPainter extends CustomPainter {
 /// The ring, the plan it belongs to, and what the other plans allow.
 ///
 /// The comparison is the point: a number on its own ("2 left") says nothing
-/// about whether that is generous, but "2 left · Plus writes 20 a month" tells
+/// about whether that is generous, but "2 left · Plus writes 10 a month" tells
 /// someone both where they stand and what the upgrade buys.
 class AllowanceCard extends StatelessWidget {
   const AllowanceCard({super.key, required this.usage, this.onTap});
@@ -151,7 +151,7 @@ class AllowanceCard extends StatelessWidget {
           ),
         ),
         if (onTap != null)
-          const Icon(
+          Icon(
             Icons.chevron_right_rounded,
             size: 18,
             color: AstraColors.dim,

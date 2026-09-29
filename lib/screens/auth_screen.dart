@@ -33,33 +33,45 @@ class AuthScreen extends ConsumerStatefulWidget {
 }
 
 class _AuthScreenState extends ConsumerState<AuthScreen> {
+  final _name = TextEditingController();
   final _email = TextEditingController();
   final _password = TextEditingController();
 
-  bool _creating = false;
+  /// Opens on the sign-up form, both ways in.
+  ///
+  /// This screen is the app's front door now — it comes before onboarding —
+  /// and nearly everyone who reaches it has no account yet. A returning user
+  /// has a persisted session and never sees it; the ones who do signed out
+  /// deliberately, and the toggle at the bottom is one tap away.
+  ///
+  /// Someone arriving by the upgrade route has already decided to have an
+  /// account, so they want the same form. There is no case left that wants to
+  /// open on log-in, which is why `initState` no longer sets this — it used to
+  /// assign `widget.asUpgrade` here and quietly won against this initializer.
+  bool _creating = true;
   bool _obscured = true;
   bool _busy = false;
   String? _error;
 
   @override
-  void initState() {
-    super.initState();
-    // Someone upgrading has already decided to have an account; open on the
-    // form that makes one.
-    _creating = widget.asUpgrade;
-  }
-
-  @override
   void dispose() {
+    _name.dispose();
     _email.dispose();
     _password.dispose();
     super.dispose();
   }
 
+  /// The name is asked for on sign-up only, and it is required.
+  ///
+  /// Every manifestation opens by saying it. Without one the writer is told to
+  /// use "friend", and the very first thing a new user ever hears is a
+  /// stranger calling them friend — which is the one line that had to land.
+  /// Google accounts skip this box; the name comes off the credential.
   bool get _ready =>
       !_busy &&
       _email.text.contains('@') &&
-      _password.text.trim().length >= 6;
+      _password.text.trim().length >= 6 &&
+      (!_creating || _name.text.trim().length >= 2);
 
   /// Runs [action], turning any auth failure into a line the user can act on.
   ///
@@ -90,11 +102,22 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     if (!_ready) return;
     final auth = ref.read(authServiceProvider);
 
+    // Read before the await. A successful sign-up swaps this whole screen out
+    // from under itself — the app watches the auth stream — so `ref` may be
+    // dead by the time the name is written. The notifier outlives the widget.
+    final profile = ref.read(profileProvider.notifier);
+    final creating = _creating;
+    final name = _name.text;
+
     final done = await _run(
-      () async => _creating
+      () async => creating
           ? await auth.signUpWithEmail(_email.text, _password.text)
           : await auth.signInWithEmail(_email.text, _password.text),
     );
+
+    // Saved after the account exists, so it is written against a real uid and
+    // mirrors to Firestore rather than sitting on this one phone.
+    if (done && creating) await profile.setName(name);
 
     // Only an upgrade navigates. Arriving here from the door needs nothing:
     // the app watches the auth stream and swaps this screen out the moment a
@@ -137,7 +160,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   const SizedBox(height: AstraSpacing.xxl),
 
                 const SizedBox(height: AstraSpacing.lg),
-                const Wordmark('Astra'),
+                const Wordmark('Maya'),
                 const SizedBox(height: AstraSpacing.xl),
                 Text(
                   widget.asUpgrade
@@ -165,6 +188,22 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 ),
                 const SizedBox(height: AstraSpacing.xl),
 
+                // Sign-up only. Someone logging back in has a name already,
+                // and asking again would be asking them to confirm a fact the
+                // app is holding.
+                if (_creating) ...[
+                  _Field(
+                    controller: _name,
+                    label: 'Your first name',
+                    hint: 'What should Maya call you?',
+                    icon: Icons.person_outline_rounded,
+                    keyboardType: TextInputType.name,
+                    autofillHints: const [AutofillHints.givenName],
+                    textCapitalization: TextCapitalization.words,
+                    onChanged: () => setState(() {}),
+                  ),
+                  const SizedBox(height: AstraSpacing.md),
+                ],
                 _Field(
                   controller: _email,
                   label: 'Email',
@@ -253,33 +292,27 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   onTap: () => _federated(auth.signInWithGoogle),
                 ),
 
-                if (!widget.asUpgrade) ...[
-                  const SizedBox(height: AstraSpacing.sm),
-                  _ProviderButton(
-                    label: 'Continue as guest',
-                    icon: Icons.person_outline_rounded,
-                    enabled: !_busy,
-                    onTap: () => _federated(auth.continueAsGuest),
-                  ),
-                  const SizedBox(height: AstraSpacing.sm),
-                  // Said here rather than found out later. A guest account has
-                  // no password, so it cannot be reached from another phone —
-                  // and the offer to add an email stays open in Profile.
-                  Text(
-                    'A guest account works exactly the same, but it only lives '
-                    'on this phone. Add an email any time to keep it.',
-                    textAlign: TextAlign.center,
-                    style: AstraTextStyles.small,
-                  ),
-                ] else ...[
-                  const SizedBox(height: AstraSpacing.sm),
-                  Text(
-                    'Your stories are saved to your account, so they follow '
-                    'you to a new phone.',
-                    textAlign: TextAlign.center,
-                    style: AstraTextStyles.small,
-                  ),
-                ],
+                // The guest door was here, twice, and is closed again.
+                //
+                // An anonymous account has no password and no address, so the
+                // library it holds cannot be reached from any other phone and
+                // nobody can return it to its owner — a reinstall loses
+                // everything, silently.
+                //
+                // The second attempt failed for a subtler reason worth keeping.
+                // Signing in with Google while a guest was active *links* the
+                // two rather than replacing one, so the guest's sample profile
+                // survived onto the real account: a brand new user was carried
+                // past onboarding on somebody else's answers and dropped
+                // straight onto the paywall, never having been asked a single
+                // question.
+                const SizedBox(height: AstraSpacing.sm),
+                Text(
+                  'Your stories are saved to your account, so they follow you '
+                  'to a new phone.',
+                  textAlign: TextAlign.center,
+                  style: AstraTextStyles.small,
+                ),
 
                 const SizedBox(height: AstraSpacing.lg),
                 Center(
@@ -331,12 +364,14 @@ class _Field extends StatelessWidget {
     required this.onChanged,
     this.keyboardType,
     this.autofillHints,
+    this.textCapitalization = TextCapitalization.none,
     this.obscure = false,
     this.trailing,
     this.onSubmitted,
   });
 
   final TextEditingController controller;
+  final TextCapitalization textCapitalization;
   final String label;
   final String hint;
   final IconData icon;
@@ -358,6 +393,7 @@ class _Field extends StatelessWidget {
         obscureText: obscure,
         keyboardType: keyboardType,
         autofillHints: autofillHints,
+        textCapitalization: textCapitalization,
         autocorrect: false,
         enableSuggestions: false,
         style: AstraTextStyles.body,
@@ -374,11 +410,11 @@ class _Field extends StatelessWidget {
           contentPadding: const EdgeInsets.symmetric(vertical: 14),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(AstraSpacing.cardRadius),
-            borderSide: const BorderSide(color: AstraColors.line),
+            borderSide: BorderSide(color: AstraColors.line),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(AstraSpacing.cardRadius),
-            borderSide: const BorderSide(color: AstraColors.accent),
+            borderSide: BorderSide(color: AstraColors.accent),
           ),
         ),
       ),
@@ -392,12 +428,12 @@ class _Divider extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(
     children: [
-      const Expanded(child: Divider(color: AstraColors.line)),
+      Expanded(child: Divider(color: AstraColors.line)),
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: AstraSpacing.md),
         child: Text('or', style: AstraTextStyles.small),
       ),
-      const Expanded(child: Divider(color: AstraColors.line)),
+      Expanded(child: Divider(color: AstraColors.line)),
     ],
   );
 }
@@ -409,18 +445,16 @@ class _ProviderButton extends StatelessWidget {
     required this.label,
     required this.enabled,
     required this.onTap,
-    this.icon,
-    this.glyph,
+    required this.glyph,
   });
 
   final String label;
   final bool enabled;
   final VoidCallback onTap;
 
-  final IconData? icon;
-
-  /// Used for Google, whose mark is a letter rather than a Material icon.
-  final String? glyph;
+  /// The provider's mark, as a letter. Google is the only provider left since
+  /// the guest door closed, and its mark is a "G" rather than a Material icon.
+  final String glyph;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -445,13 +479,10 @@ class _ProviderButton extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (glyph != null)
-                  Text(
-                    glyph!,
-                    style: AstraTextStyles.label.copyWith(fontSize: 17),
-                  )
-                else
-                  Icon(icon, size: 19, color: AstraColors.text),
+                Text(
+                  glyph,
+                  style: AstraTextStyles.label.copyWith(fontSize: 17),
+                ),
                 const SizedBox(width: AstraSpacing.md),
                 Text(label, style: AstraTextStyles.body),
               ],

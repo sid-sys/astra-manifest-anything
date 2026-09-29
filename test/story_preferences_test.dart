@@ -15,8 +15,8 @@ void main() {
       timeframe: Timeframe.threeMonths,
       place: StoryPlace.cafe,
       placeDetail: 'Kochi',
-      cast: {StoryCast.someone},
-      personName: 'Abhirami',
+      cast: {StoryCast.someone, StoryCast.friends},
+      castNames: {'someone': 'Abhirami', 'friends': 'Arjun, Nithya'},
       feelings: {Feeling.loved, Feeling.peaceful},
       futureShape: FutureShape.oneThing,
       style: StoryStyle.romantic,
@@ -32,14 +32,28 @@ void main() {
     expect(restored.timeframe, Timeframe.threeMonths);
     expect(restored.place, StoryPlace.cafe);
     expect(restored.placeDetail, 'Kochi');
-    expect(restored.cast, {StoryCast.someone});
+    expect(restored.cast, {StoryCast.someone, StoryCast.friends});
     expect(restored.personName, 'Abhirami');
+    expect(restored.nameFor(StoryCast.friends), 'Arjun, Nithya');
     expect(restored.feelings, {Feeling.loved, Feeling.peaceful});
     expect(restored.futureShape, FutureShape.oneThing);
     expect(restored.style, StoryStyle.romantic);
     expect(restored.realism, Realism.memory);
     expect(restored.extras, preferences.extras);
     expect(restored.authenticity, Authenticity.conversations);
+  });
+
+  test('a name given before the other groups could be named survives', () {
+    // Profiles from that window store only `personName`. Dropping it on read
+    // would silently delete the one name those accounts had given, and the
+    // stories would go back to calling that person "my partner".
+    final restored = StoryPreferences.fromMap({
+      'cast': ['someone'],
+      'personName': 'Abhirami',
+    });
+
+    expect(restored.personName, 'Abhirami');
+    expect(restored.nameFor(StoryCast.someone), 'Abhirami');
   });
 
   test('a profile written before onboarding asked still reads', () {

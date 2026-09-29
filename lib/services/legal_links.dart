@@ -25,6 +25,19 @@ class LegalLinks {
 
   static const supportEmail = 'support@coreinteractive.live';
 
+  /// Google Play's own subscription page for this app.
+  ///
+  /// Deep-linked to Maya rather than to the list of every subscription the
+  /// user has, because "go to Play, find us among fourteen others, then cancel"
+  /// is the shape of a dark pattern even when it is only laziness.
+  ///
+  /// Cancelling has to happen at Play. The app cannot do it — Google owns the
+  /// billing relationship — so the honest thing is to put them one tap from the
+  /// button rather than pretend the app has one.
+  static String playSubscription(String productId, String packageName) =>
+      'https://play.google.com/store/account/subscriptions'
+      '?sku=$productId&package=$packageName';
+
   /// Opens [url] in the browser, outside the app.
   ///
   /// Failure is swallowed to a snackbar rather than thrown: a device with no

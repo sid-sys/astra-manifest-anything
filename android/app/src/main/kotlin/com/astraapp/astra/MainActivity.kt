@@ -1,5 +1,8 @@
 package com.astraapp.astra
 
-import io.flutter.embedding.android.FlutterActivity
+import com.ryanheise.audioservice.AudioServiceActivity
 
-class MainActivity : FlutterActivity()
+// AudioServiceActivity rather than plain FlutterActivity: just_audio_background
+// binds the notification-center/lock-screen media session through it, and a
+// plain FlutterActivity never receives the button presses it posts.
+class MainActivity : AudioServiceActivity()

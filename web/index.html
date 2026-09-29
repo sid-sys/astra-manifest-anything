@@ -18,19 +18,42 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="Maya writes you a manifestation from the life you are calling in, and reads it to you.">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="astra">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Maya">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- The browser chrome, painted the same paper as the app. -->
+  <meta name="theme-color" content="#F4EFE6">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>astra</title>
+  <title>Maya</title>
   <link rel="manifest" href="manifest.json">
+
+  <!--
+    The page behind the Flutter view.
+
+    Flutter paints only the area it lays out; everything around it is this
+    document, which defaulted to the browser's own background and showed as a
+    black band beside and below the app. It is also what fills the screen for
+    the second before the engine starts, so it is the app's paper rather than
+    any neutral colour.
+  -->
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background-color: #F4EFE6;
+      overscroll-behavior: none;
+    }
+  </style>
 </head>
 <body>
   <!--

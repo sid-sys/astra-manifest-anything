@@ -3,13 +3,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../demo/demo_data.dart';
 import '../providers.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/aura_background.dart';
 import 'affirmations_screen.dart';
-import 'create_screen.dart';
+import 'desire_flow_screen.dart';
 import 'home_screen.dart';
 import 'library_screen.dart';
+import 'player_screen.dart';
 import 'profile_screen.dart';
 
 /// The four-tab frame.
@@ -28,9 +30,22 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
   int _tab = 0;
   StreamSubscription<String>? _tokenRefresh;
 
+  /// Which tab the demo asked for in the URL. Always 0 in a real build.
+  static const _demoTabs = {
+    'home': 0,
+    'library': 1,
+    'affirm': 2,
+    'profile': 3,
+  };
+
   @override
   void initState() {
     super.initState();
+
+    if (Demo.on) {
+      _tab = _demoTabs[Demo.screen] ?? 0;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _openDemoScreen());
+    }
 
     // Re-registers this device for the morning push. Tokens rotate on
     // reinstall and restore, and a rotated token nobody told the server about
@@ -53,6 +68,32 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
     });
   }
 
+  /// The two screenshots that are not tabs: the four questions, and the player.
+  ///
+  /// Pushed after the first frame rather than routed to, because both sit on
+  /// top of the shell in the real app — a screenshot of either one taken any
+  /// other way would show a screen the user cannot actually reach from there.
+  Future<void> _openDemoScreen() async {
+    if (!mounted) return;
+
+    switch (Demo.screen) {
+      case 'questions':
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => DesireFlowScreen(desire: Demo.wish),
+          ),
+        );
+
+      case 'player':
+        final made = Demo.manifestations.first.asStory();
+        await ref.read(playbackProvider).open(made);
+        if (!mounted) return;
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const PlayerScreen()),
+        );
+    }
+  }
+
   @override
   void dispose() {
     _tokenRefresh?.cancel();
@@ -68,21 +109,16 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
 
   void _goTo(int tab) => setState(() => _tab = tab);
 
-  /// Create is a route rather than a tab. Home already takes a wish in one
-  /// line, so the full set of knobs is the exception, not the main path.
-  void _openCreate() => Navigator.of(context).push(
-    MaterialPageRoute<void>(builder: (_) => const CreateRoute()),
-  );
-
   @override
   Widget build(BuildContext context) {
     final screens = [
       HomeScreen(
-        onCreate: _openCreate,
         onLibrary: () => _goTo(1),
         onProfile: () => _goTo(3),
       ),
-      LibraryScreen(onCreate: _openCreate),
+      // Writing starts on Home, and now only there. The old "New story" route
+      // is gone with the story feature it belonged to.
+      LibraryScreen(onWrite: () => _goTo(0)),
       const AffirmationsScreen(),
       const ProfileScreen(),
     ];

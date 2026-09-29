@@ -59,16 +59,21 @@ class _ConfirmScreenState extends ConsumerState<ConfirmScreen> {
 
     final account = ref.read(accountServiceProvider);
 
+    // Both of these end the session, which rebuilds the app out from under this
+    // screen — so the container is taken while there is still a screen to take
+    // it from. See [forgetEverythingLocal].
+    final container = ProviderScope.containerOf(context);
+
     try {
       if (_isDelete) {
         // Server first. If it throws, the device keeps its copy and the user
         // is told the truth — a local wipe over a failed delete would leave
         // them believing data is gone while it sits in Firestore.
         await account.deleteEverything();
-        await forgetEverythingLocal(ref);
+        await forgetEverythingLocal(container);
       } else {
         await account.signOut();
-        await forgetEverythingLocal(ref);
+        await forgetEverythingLocal(container);
       }
     } catch (error) {
       if (!mounted) return;
@@ -124,7 +129,7 @@ class _ConfirmScreenState extends ConsumerState<ConfirmScreen> {
                 Text(
                   _isDelete
                       ? 'This removes your account and everything in it, from '
-                            'this device and from Astra\'s servers. It cannot '
+                            'this device and from Maya\'s servers. It cannot '
                             'be undone and there is no copy to restore from.'
                       : isGuest
                       // The warning only applies to guests. Saying it to
@@ -204,13 +209,13 @@ class _ConfirmScreenState extends ConsumerState<ConfirmScreen> {
                         borderRadius: BorderRadius.circular(
                           AstraSpacing.cardRadius,
                         ),
-                        borderSide: const BorderSide(color: AstraColors.line),
+                        borderSide: BorderSide(color: AstraColors.line),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(
                           AstraSpacing.cardRadius,
                         ),
-                        borderSide: const BorderSide(color: AstraColors.accent),
+                        borderSide: BorderSide(color: AstraColors.accent),
                       ),
                     ),
                   ),
@@ -269,7 +274,7 @@ class _Item extends StatelessWidget {
 
 /// The destructive action, in the app's error colour rather than its gold.
 ///
-/// Gold is the colour of everything Astra wants you to press. This one it does
+/// Gold is the colour of everything Maya wants you to press. This one it does
 /// not, so it does not get the house button.
 class _DangerButton extends StatelessWidget {
   const _DangerButton({

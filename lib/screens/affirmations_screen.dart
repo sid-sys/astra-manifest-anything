@@ -1,17 +1,27 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/affirmation_set.dart';
+import '../models/wish_text.dart';
 import '../providers.dart';
-import '../services/affirmations.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
+import 'desire_flow_screen.dart';
+import 'player_screen.dart';
 
-/// A deck of affirmations, kept or discarded one at a time.
+/// Five lines a person can actually believe, written for one goal.
 ///
-/// Swipe right to keep, left to drop. Both answers feed back into the deck:
-/// what gets kept decides which life areas come up next, and nothing already
-/// decided on is offered again. A card at a time rather than a scrolling list
-/// because an affirmation you skim past is one you did not read.
+/// The same shape as the manifestation box on Home — type the goal, decide
+/// whether Maya should use what it knows about you, press the button — because
+/// they are the same decision and two different arrangements of it would be two
+/// things to learn.
+///
+/// What differs is the writing. A manifestation is a scene to listen to; these
+/// are sentences to say. The brief behind them is built around believability
+/// rather than vividness: an affirmation that overshoots does not inspire, it
+/// produces resistance, because the person saying it knows it is not true.
 class AffirmationsScreen extends ConsumerStatefulWidget {
   const AffirmationsScreen({super.key});
 
@@ -19,315 +29,258 @@ class AffirmationsScreen extends ConsumerStatefulWidget {
   ConsumerState<AffirmationsScreen> createState() => _AffirmationsScreenState();
 }
 
-class _AffirmationsScreenState extends ConsumerState<AffirmationsScreen>
-    with SingleTickerProviderStateMixin {
-  /// How far the top card has been dragged, in pixels.
-  Offset _drag = Offset.zero;
-
-  /// Distance past which releasing counts as a decision rather than a nudge.
-  static const _threshold = 96.0;
-
-  void _decide(String line, {required bool liked}) {
-    final taste = ref.read(tasteProvider.notifier);
-    liked ? taste.like(line) : taste.pass(line);
-    setState(() => _drag = Offset.zero);
-  }
+class _AffirmationsScreenState extends ConsumerState<AffirmationsScreen> {
+  final _controller = TextEditingController();
+  bool _busy = false;
 
   @override
-  Widget build(BuildContext context) {
-    final deck = ref.watch(affirmationDeckProvider);
-    final taste = ref.watch(tasteProvider);
-
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Wordmark('Affirmations', align: TextAlign.left),
-              const SizedBox(height: AstraSpacing.lg),
-              Text('Keep what fits', style: AstraTextStyles.display(28)),
-              const SizedBox(height: AstraSpacing.sm),
-              Text(
-                deck.isEmpty
-                    ? '${taste.liked.length} kept'
-                    : 'Swipe right to keep, left to pass. '
-                          '${deck.length} left.',
-                style: AstraTextStyles.small,
-              ),
-            ],
-          ),
-        ),
-
-        Expanded(
-          child: deck.isEmpty
-              ? _DeckEmpty(
-                  kept: taste.liked.length,
-                  onReshuffle: ref.read(tasteProvider.notifier).reshuffle,
-                )
-              : _Deck(
-                  deck: deck,
-                  drag: _drag,
-                  threshold: _threshold,
-                  onDragUpdate: (delta) => setState(() => _drag += delta),
-                  onDragEnd: () {
-                    if (_drag.dx.abs() < _threshold) {
-                      setState(() => _drag = Offset.zero);
-                      return;
-                    }
-                    _decide(deck.first.line, liked: _drag.dx > 0);
-                  },
-                ),
-        ),
-
-        if (deck.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _DecisionButton(
-                  icon: Icons.close_rounded,
-                  color: AstraColors.dim,
-                  tooltip: 'Pass',
-                  onTap: () => _decide(deck.first.line, liked: false),
-                ),
-                const SizedBox(width: AstraSpacing.xl),
-                _DecisionButton(
-                  icon: Icons.favorite_rounded,
-                  color: AstraColors.accent,
-                  tooltip: 'Keep',
-                  onTap: () => _decide(deck.first.line, liked: true),
-                ),
-              ],
-            ),
-          ),
-      ],
-    );
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
-}
 
-/// The card stack. Only the top card moves; the one behind it sits slightly
-/// smaller so the pile reads as a pile.
-class _Deck extends StatelessWidget {
-  const _Deck({
-    required this.deck,
-    required this.drag,
-    required this.threshold,
-    required this.onDragUpdate,
-    required this.onDragEnd,
-  });
 
-  final List<Affirmation> deck;
-  final Offset drag;
-  final double threshold;
-  final ValueChanged<Offset> onDragUpdate;
-  final VoidCallback onDragEnd;
+  /// Whether there is a goal in the box, rather than enough characters in it.
+  bool get _ready => looksMeaningful(_controller.text);
 
-  @override
-  Widget build(BuildContext context) {
-    final top = deck.first;
-    final beneath = deck.length > 1 ? deck[1] : null;
+  /// Opens the four questions written for whatever was just typed.
+  ///
+  /// The same flow Home uses, entered on affirmations rather than on a
+  /// manifestation. Both come out of the same four answers, and the last step
+  /// lets either be swapped for the other — or for both — so asking the
+  /// questions twice never happens.
+  Future<void> _write() async {
+    if (!_ready || _busy) return;
 
-    // Rotation follows the drag, capped so the card tilts rather than spins.
-    final angle = (drag.dx / 1400).clamp(-0.12, 0.12);
-    final decided = drag.dx.abs() / threshold;
+    final goal = _controller.text.trim();
+    unawaited(ref.read(trackingProvider).log('wish_typed', wish: goal));
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, AstraSpacing.lg, 20, AstraSpacing.lg),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          if (beneath != null)
-            Transform.scale(
-              scale: 0.94,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 18),
-                child: _Card(card: beneath, faded: true),
-              ),
-            ),
-          GestureDetector(
-            onPanUpdate: (details) => onDragUpdate(details.delta),
-            onPanEnd: (_) => onDragEnd(),
-            child: Transform.translate(
-              offset: drag,
-              child: Transform.rotate(
-                angle: angle,
-                child: _Card(
-                  card: top,
-                  // The verdict shows on the card itself while dragging, so
-                  // the user knows which way they are committing before they
-                  // let go rather than after.
-                  verdict: decided < 0.35
-                      ? null
-                      : (drag.dx > 0 ? _Verdict.keep : _Verdict.pass),
-                  verdictStrength: decided.clamp(0.0, 1.0),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+    // No paywall here, and no cap. Affirmations are free to everybody.
+    //
+    // They are the habit rather than the product: five lines somebody says in
+    // the morning, costing well under a cent to write. Charging for those was
+    // charging for the part that brings people back, while the thing that
+    // actually costs money — a four-minute narration — stays behind the plan.
+    // The server agrees; it stopped checking too.
 
-enum _Verdict { keep, pass }
+    setState(() => _busy = true);
 
-class _Card extends StatelessWidget {
-  const _Card({
-    required this.card,
-    this.faded = false,
-    this.verdict,
-    this.verdictStrength = 0,
-  });
-
-  final Affirmation card;
-  final bool faded;
-  final _Verdict? verdict;
-  final double verdictStrength;
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = switch (verdict) {
-      _Verdict.keep => AstraColors.accent,
-      _Verdict.pass => AstraColors.dim,
-      null => card.intention.accent.withValues(alpha: 0.35),
-    };
-
-    return Opacity(
-      opacity: faded ? 0.45 : 1,
-      child: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [AstraColors.cardRaised, AstraColors.card],
-          ),
-          border: Border.all(color: accent, width: verdict == null ? 1 : 2),
-          borderRadius: BorderRadius.circular(AstraSpacing.cardRadius),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    card.intention.glyph,
-                    style: TextStyle(fontSize: 24, color: card.intention.accent),
-                  ),
-                  const Spacer(),
-                  if (verdict != null)
-                    Opacity(
-                      opacity: verdictStrength,
-                      child: Text(
-                        verdict == _Verdict.keep ? 'KEEP' : 'PASS',
-                        style: AstraTextStyles.eyebrow.copyWith(
-                          color: verdict == _Verdict.keep
-                              ? AstraColors.accent
-                              : AstraColors.dim,
-                          fontSize: 15,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              Expanded(
-                child: Center(
-                  child: Text(
-                    card.line,
-                    style: AstraTextStyles.quote.copyWith(
-                      fontSize: 21,
-                      height: 1.5,
-                    ),
-                  ),
-                ),
-              ),
-              Text(
-                card.intention.label.toUpperCase(),
-                style: AstraTextStyles.eyebrow,
-              ),
-            ],
-          ),
+    final made = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => DesireFlowScreen(
+          desire: goal,
+          initialChoice: MakeChoice.affirmations,
         ),
       ),
     );
+
+    if (!mounted) return;
+    if (made == true) _controller.clear();
+    setState(() => _busy = false);
   }
-}
 
-class _DeckEmpty extends StatelessWidget {
-  const _DeckEmpty({required this.kept, required this.onReshuffle});
-
-  final int kept;
-  final VoidCallback onReshuffle;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: AstraSpacing.screenPadding,
-    child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
+  Widget build(BuildContext context) {
+    final profile = ref.watch(profileProvider);
+    final sets = ref.watch(affirmationSetsProvider);
+
+    return ListView(
+      padding: AstraSpacing.screenPadding,
       children: [
-        Text('✦', style: TextStyle(fontSize: 34, color: AstraColors.accent)),
         const SizedBox(height: AstraSpacing.lg),
+        Text('AFFIRMATIONS', style: AstraTextStyles.eyebrow),
+        const SizedBox(height: AstraSpacing.xs),
         Text(
-          kept == 0 ? 'Nothing kept yet' : 'You have been through them all',
-          textAlign: TextAlign.center,
-          style: AstraTextStyles.display(22),
+          profile.name.isEmpty
+              ? 'What are you working towards?'
+              : '${profile.name}, what are you working towards?',
+          style: AstraTextStyles.display(26),
         ),
         const SizedBox(height: AstraSpacing.sm),
         Text(
-          kept == 0
-              ? 'Swipe through the deck and keep the ones that land.'
-              : '$kept kept. They are in your profile, and the one on Home '
-                    'comes from them.',
-          textAlign: TextAlign.center,
-          style: AstraTextStyles.small,
+          'Five lines you can say and believe.',
+          style: AstraTextStyles.bodyDim,
         ),
-        const SizedBox(height: AstraSpacing.xl),
-        AstraGhostButton(label: 'Show the passed ones again', onPressed: onReshuffle),
+        const SizedBox(height: AstraSpacing.lg),
+
+        AstraCard(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: _controller,
+                style: AstraTextStyles.body,
+                cursorColor: AstraColors.accent,
+                minLines: 3,
+                maxLines: 6,
+                enabled: !_busy,
+                textCapitalization: TextCapitalization.sentences,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  hintText: 'I want to become a millionaire…',
+                  hintStyle: AstraTextStyles.bodyDim,
+                  filled: true,
+                  fillColor: AstraColors.canvas,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: AstraColors.line),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: AstraColors.line),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AstraSpacing.xs),
+              Text(
+                _ready
+                    ? 'Maya will ask you four things about this'
+                    : 'Write it in your own words — "I want to feel calm"',
+                style: AstraTextStyles.small.copyWith(color: AstraColors.dim),
+              ),
+
+
+              const SizedBox(height: AstraSpacing.lg),
+              AstraButton(
+                label: '✨  Continue',
+                busy: _busy,
+                onPressed: _busy || !_ready ? null : _write,
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: AstraSpacing.xxl),
+        Text('YOURS', style: AstraTextStyles.eyebrow),
+        const SizedBox(height: AstraSpacing.sm),
+
+        sets.when(
+          loading: () => Text('Loading…', style: AstraTextStyles.small),
+          error: (error, _) => Text(
+            'Could not load your affirmations — $error',
+            style: AstraTextStyles.small,
+          ),
+          data: (list) => list.isEmpty
+              ? Text(
+                  'Nothing yet. Write your first five above — they arrive on '
+                  'your phone each morning and night.',
+                  style: AstraTextStyles.small,
+                )
+              : Column(
+                  children: [
+                    for (final set in list) ...[
+                      _SetCard(
+                        set: set,
+                        onPlay: () async {
+                          final playback = ref.read(playbackProvider);
+                          final navigator = Navigator.of(context);
+                          // Opened, not started: pressing play is the user's
+                          // call. Loop is switched on because a set is meant to
+                          // be heard again and again.
+                          await playback.open(set.asStory());
+                          if (!playback.state.looping) {
+                            await playback.toggleLoop();
+                          }
+                          unawaited(
+                            navigator.push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => const PlayerScreen(),
+                              ),
+                            ),
+                          );
+                        },
+                        onDelete: () async {
+                          final sure = await confirmDelete(
+                            context,
+                            'Delete these affirmations?',
+                          );
+                          if (!sure || !mounted) return;
+                          final messenger = ScaffoldMessenger.of(context);
+                          try {
+                            await ref
+                                .read(affirmationServiceProvider)
+                                .delete(set.id);
+                            ref.invalidate(affirmationSetsProvider);
+                          } catch (error) {
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Could not delete — try again ($error).',
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                      const SizedBox(height: AstraSpacing.sm),
+                    ],
+                  ],
+                ),
+        ),
+        const SizedBox(height: AstraSpacing.xxl),
       ],
-    ),
-  );
+    );
+  }
 }
 
-class _DecisionButton extends StatelessWidget {
-  const _DecisionButton({
-    required this.icon,
-    required this.color,
-    required this.tooltip,
-    required this.onTap,
+class _SetCard extends StatelessWidget {
+  const _SetCard({
+    required this.set,
+    required this.onDelete,
+    required this.onPlay,
   });
 
-  final IconData icon;
-  final Color color;
-  final String tooltip;
-  final VoidCallback onTap;
+  final AffirmationSet set;
+  final Future<void> Function() onPlay;
+  final Future<void> Function() onDelete;
 
   @override
-  Widget build(BuildContext context) => Tooltip(
-    message: tooltip,
-    child: Semantics(
-      button: true,
-      label: tooltip,
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: Container(
-          width: 60,
-          height: 60,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: AstraColors.cardRaised,
-            border: Border.all(color: color.withValues(alpha: 0.55)),
-          ),
-          child: Icon(icon, size: 26, color: color),
+  Widget build(BuildContext context) => AstraCard(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                set.goal,
+                style: AstraTextStyles.small,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (set.hasAudio)
+              IconButton(
+                onPressed: onPlay,
+                tooltip: 'Play and loop',
+                visualDensity: VisualDensity.compact,
+                icon: Icon(
+                  Icons.play_circle_outline_rounded,
+                  size: 24,
+                  color: AstraColors.accent,
+                ),
+              ),
+            IconButton(
+              onPressed: onDelete,
+              tooltip: 'Delete',
+              visualDensity: VisualDensity.compact,
+              icon: Icon(
+                Icons.delete_outline_rounded,
+                size: 20,
+                color: AstraColors.dim,
+              ),
+            ),
+          ],
         ),
-      ),
+        const SizedBox(height: AstraSpacing.sm),
+        for (final line in set.lines) ...[
+          Text(line, style: AstraTextStyles.body),
+          const SizedBox(height: AstraSpacing.sm),
+        ],
+      ],
     ),
   );
 }

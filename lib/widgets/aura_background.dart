@@ -2,56 +2,55 @@ import 'package:flutter/material.dart';
 
 import '../theme/astra_theme.dart';
 
-/// The wash every screen sits on: a near-flat sweep of greys with light
-/// falling from the top right.
+/// The night sky every screen sits on.
 ///
-/// Two gradients rather than one. A single ramp reads as a flat swatch; a soft
-/// off-centre bloom over a vertical ramp gives the light somewhere to come
-/// from. In greyscale that matters more, not less — the difference between
-/// "paper" and "the renderer forgot the background" is entirely in the
-/// gradient.
+/// It was paper — a flat warm off-white, chosen when Maya wrote stories and
+/// the reading was the point. It writes manifestations now, which are listened
+/// to with the eyes closed, usually in bed, usually with the lights off. A
+/// bright screen is the wrong object for that; it is the thing you put down.
 ///
-/// [intensity] fades the whole thing toward white. Screens that are mostly
-/// cards — a settings list, the library — turn it down so the paper reads as
-/// paper rather than as tiles on wallpaper.
+/// One image rather than a painted gradient. A real long-exposure sky has
+/// thousands of stars at every brightness and a haze that is not a smooth ramp,
+/// and every attempt to draw that in code lands somewhere between a smear and a
+/// screensaver.
+///
+/// The scrim under the child is what makes it usable. Text over an
+/// unmodified photograph is unreadable wherever the photograph happens to be
+/// bright, and "happens to be" is not a thing type can be laid out against — so
+/// the bottom two thirds are darkened toward black, which is where the words
+/// and the controls live.
 class AuraBackground extends StatelessWidget {
   const AuraBackground({super.key, required this.child, this.intensity = 1});
 
   final Widget child;
+
+  /// Ignored. Kept so callers that turned the old wash down still compile.
   final double intensity;
 
   @override
-  Widget build(BuildContext context) {
-    final t = intensity.clamp(0.0, 1.0);
-
-    Color wash(Color color) => Color.lerp(AstraColors.canvas, color, t)!;
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: const BoxDecoration(
+      color: AstraColors.canvas,
+      image: DecorationImage(
+        image: AssetImage('assets/brand/night_sky.jpg'),
+        fit: BoxFit.cover,
+        alignment: Alignment.topCenter,
+      ),
+    ),
+    child: DecoratedBox(
+      decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            wash(AstraColors.auraTop),
-            wash(AstraColors.auraMid),
-            wash(AstraColors.auraBottom),
+            Color(0x0D000000),
+            Color(0x66000000),
+            Color(0xE6050510),
           ],
-          stops: const [0, 0.55, 1],
+          stops: [0.0, 0.45, 1.0],
         ),
       ),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: const Alignment(0.85, -0.75),
-            radius: 1.15,
-            colors: [
-              Colors.white.withValues(alpha: 0.55 * t),
-              Colors.white.withValues(alpha: 0),
-            ],
-          ),
-        ),
-        child: child,
-      ),
-    );
-  }
+      child: child,
+    ),
+  );
 }

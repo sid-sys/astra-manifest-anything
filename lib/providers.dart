@@ -2,25 +2,33 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'models/affirmation_set.dart';
 import 'models/affirmation_taste.dart';
 import 'models/intention.dart';
+import 'models/manifestation.dart';
 import 'models/plan.dart';
 import 'models/story.dart';
 import 'models/story_preferences.dart';
 import 'models/user_profile.dart';
 import 'services/account_service.dart';
+import 'services/admin_service.dart';
+import 'services/affirmation_service.dart';
 import 'services/affirmations.dart';
 import 'services/auth_service.dart';
 import 'services/billing_service.dart';
+import 'services/manifest_service.dart';
 import 'services/astra_repository.dart';
 import 'services/notification_service.dart';
+import 'services/plan_service.dart';
 import 'services/playback_controller.dart';
 import 'services/region_service.dart';
+import 'services/tracking_service.dart';
 import 'services/story_service.dart';
 
 /// Overridden in `main` once the platform is ready.
@@ -61,9 +69,30 @@ final accountServiceProvider = Provider<AccountService>(
   (ref) => AccountService(ref.watch(repositoryProvider)),
 );
 
-final notificationServiceProvider = Provider<NotificationService>(
-  (ref) => NotificationService(),
-);
+final notificationServiceProvider = Provider<NotificationService>((ref) {
+  final service = NotificationService();
+
+  // Tapping one of our announcements tells the server it was read.
+  //
+  // Wired here rather than inside the service so that class keeps knowing
+  // nothing about Cloud Functions. Fire and forget: a report that fails is a
+  // number slightly low in the admin panel, which is not worth showing the
+  // user an error about, and never worth blocking the screen they tapped
+  // through to.
+  service.onBroadcastOpened = (broadcastId) {
+    unawaited(
+      FirebaseFunctions.instanceFor(region: 'asia-south1')
+          .httpsCallable('markBroadcastOpened')
+          .call<Map<Object?, Object?>>({'broadcastId': broadcastId})
+          .catchError((Object error) {
+            debugPrint('Maya: could not report a broadcast open — $error');
+            throw error;
+          }),
+    );
+  };
+
+  return service;
+});
 
 /// Keeps the server's idea of this device in step with the profile.
 ///
@@ -102,6 +131,23 @@ Future<void> refreshPushRegistration(WidgetRef ref) async {
   );
 }
 
+final adminServiceProvider = Provider<AdminService>((ref) => AdminService());
+
+/// Whether to show the admin panel's door on this device.
+///
+/// Recomputed whenever the signed-in user changes, and false while it is being
+/// worked out — the check reads the ID token, which can need a network round
+/// trip, and a button that appears a moment late is better than one that
+/// appears for the wrong person a moment early.
+///
+/// This decides nothing but whether a button is drawn. `adminOverview` checks
+/// the same claims on the server and refuses on its own account, because an
+/// APK can be edited to return true here.
+final isAdminProvider = FutureProvider<bool>((ref) async {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  return AdminService.isAdmin(user);
+});
+
 final billingServiceProvider = Provider<BillingService>((ref) {
   final billing = BillingService();
   ref.onDispose(billing.dispose);
@@ -132,11 +178,126 @@ final entitlementProvider = StreamProvider<bool>((ref) {
         final data = snap.data();
         if (data == null || data['isSubscribed'] != true) return false;
 
-        final expiry = DateTime.tryParse(data['expiryTime'] as String? ?? '');
+        final expiry = entitlementExpiry(data['expiryTime']);
         return expiry == null || expiry.isAfter(DateTime.now());
       })
       .handleError((Object error) {
-        debugPrint('Astra: entitlement stream failed — $error');
+        debugPrint('Maya: entitlement stream failed — $error');
+      });
+});
+
+/// Reads an expiry out of whatever shape the field arrived in.
+///
+/// `verifyPurchase` writes Play's own ISO 8601 text, so a String is the shape
+/// this normally sees. The other two exist because the field can also be typed
+/// by hand — in the Firebase Console, or by `adminGrantTrial` — and a value
+/// entered there as a date comes back as a [Timestamp]. The previous
+/// `as String?` threw on that *inside* the stream's map, and the error handler
+/// below swallowed it, so the entitlement silently never arrived: a document
+/// that plainly said `isSubscribed: true` read as unsubscribed, with a paying
+/// account stuck on the paywall and nothing in the log naming the cause.
+///
+/// Null for anything unreadable, which the caller treats as "no expiry" —
+/// deliberately the same lenient reading the server takes, since `new Date()`
+/// on a junk value there yields NaN and compares as not-expired too. Two ends
+/// that disagree about an unparseable date is worse than either answer.
+@visibleForTesting
+DateTime? entitlementExpiry(Object? value) => switch (value) {
+  String text => DateTime.tryParse(text),
+  Timestamp stamp => stamp.toDate(),
+  int millis => DateTime.fromMillisecondsSinceEpoch(millis),
+  DateTime at => at,
+  _ => null,
+};
+
+/// What the server knows about this account's subscription, in full.
+///
+/// [entitlementProvider] flattens all of this to a yes/no, which is the right
+/// shape for a gate and the wrong shape for a screen that has to explain
+/// itself. Profile needs to say "you cancelled, and it runs until the 3rd",
+/// which is three separate facts: still entitled, no longer renewing, and the
+/// date it stops.
+class Entitlement {
+  const Entitlement({
+    required this.isSubscribed,
+    required this.expiryTime,
+    required this.state,
+    required this.isTestGrant,
+    required this.everSubscribed,
+  });
+
+  static const none = Entitlement(
+    isSubscribed: false,
+    expiryTime: null,
+    state: null,
+    isTestGrant: false,
+    everSubscribed: false,
+  );
+
+  /// Whether this account has ever paid, subscription live or long lapsed.
+  ///
+  /// True whenever the entitlement document exists at all, which only
+  /// `verifyPurchase` and `adminGrantTrial` can make happen — so it cannot be
+  /// faked from a device, and it does not decay when a plan runs out.
+  ///
+  /// It is the difference between two people the app was treating as one: a
+  /// stranger who has never paid, and a subscriber whose month ended. The
+  /// first has nothing to see. The second has a library, and was promised on
+  /// the paywall itself that it "replays without limit, forever".
+  final bool everSubscribed;
+
+  final bool isSubscribed;
+  final DateTime? expiryTime;
+
+  /// Google Play's own word for it — `SUBSCRIPTION_STATE_ACTIVE`,
+  /// `SUBSCRIPTION_STATE_CANCELED`, and so on. Stored verbatim rather than
+  /// interpreted server-side, so a state Play adds later is still readable.
+  final String? state;
+
+  /// Written by `adminGrantTrial` rather than by a purchase. Never counted as
+  /// revenue, and worth being able to see in the app.
+  final bool isTestGrant;
+
+  /// Cancelled, but still paid up.
+  ///
+  /// Play keeps a cancelled subscription `ACTIVE` until the period runs out,
+  /// which is correct — the user paid for that time and should keep it. So
+  /// "cancelled" and "still working" are both true at once, and the only
+  /// honest thing to show is the date the second one stops.
+  bool get isCancelled =>
+      isSubscribed && state == 'SUBSCRIPTION_STATE_CANCELED';
+}
+
+/// The whole entitlement document, for the screens that explain it.
+final entitlementDetailsProvider = StreamProvider<Entitlement>((ref) {
+  final uid = ref.watch(authStateProvider).valueOrNull?.uid;
+  if (uid == null) return Stream.value(Entitlement.none);
+
+  return FirebaseFirestore.instance
+      .collection('users')
+      .doc(uid)
+      .collection('private')
+      .doc('entitlement')
+      .snapshots()
+      .map((snap) {
+        final data = snap.data();
+        if (data == null) return Entitlement.none;
+
+        final expiry = entitlementExpiry(data['expiryTime']);
+        final live = data['isSubscribed'] == true &&
+            (expiry == null || expiry.isAfter(DateTime.now()));
+
+        return Entitlement(
+          isSubscribed: live,
+          expiryTime: expiry,
+          state: data['state'] as String?,
+          isTestGrant: data['source'] == 'admin-grant',
+          // The document exists, so somebody paid at some point.
+          everSubscribed: true,
+        );
+      })
+      .handleError((Object error) {
+        debugPrint('Maya: entitlement detail stream failed — $error');
       });
 });
 
@@ -145,21 +306,79 @@ final isSubscribedProvider = Provider<bool>(
   (ref) => ref.watch(entitlementProvider).valueOrNull ?? false,
 );
 
+/// Turns purchases into entitlements the moment an account exists.
+///
+/// Two cases, one mechanism. The hard paywall sells the trial *before* asking
+/// for a sign-up, so the purchase arrives with no uid to attach it to and
+/// [BillingService] deliberately leaves it unverified. And a paying user who
+/// reinstalls has a live subscription on their Google account that this
+/// install knows nothing about.
+///
+/// Both are answered by asking Play what this account already owns, at the
+/// first moment there is somewhere to put the answer. Re-running it on every
+/// sign-in is harmless — `verifyPurchase` is idempotent, it writes the same
+/// entitlement from the same receipt.
+final purchaseRestoreProvider = Provider<void>((ref) {
+  ref.listen<AsyncValue<User?>>(authStateProvider, (previous, next) {
+    final user = next.valueOrNull;
+    if (user == null || user.isAnonymous) return;
+    if (previous?.valueOrNull?.uid == user.uid) return;
+
+    unawaited(
+      ref
+          .read(billingServiceProvider)
+          .restore()
+          .catchError(
+            // A restore that fails is not something to interrupt a sign-in
+            // over: the user may simply have never subscribed. The paywall's
+            // own Restore button is the path for someone who has and is not
+            // seeing it.
+            (Object error) =>
+                debugPrint('Maya: restore on sign-in failed — $error'),
+          ),
+    );
+  });
+});
+
 /// Drops every trace of the current user from memory and disk.
 ///
-/// The app decides what to show from `profile.isOnboarded`, so emptying the
-/// profile is also the navigation: the tree rebuilds on the onboarding screen
-/// without anyone pushing a route. Each notifier is reset explicitly rather
-/// than by invalidating the providers, because a rebuilt notifier would read
-/// the same storage it is being asked to forget.
-Future<void> forgetEverythingLocal(WidgetRef ref) async {
-  await ref.read(repositoryProvider).clearLocal();
-  ref.read(storiesProvider.notifier).forget();
-  ref.read(tasteProvider.notifier).forget();
-  ref.read(avatarProvider.notifier).forget();
+/// Emptying the profile is also the navigation: the tree rebuilds against an
+/// empty `profile.isOnboarded` without anyone pushing a route. Each notifier is
+/// reset explicitly rather than by invalidating the providers, because a
+/// rebuilt notifier would read the same storage it is being asked to forget.
+///
+/// Where this lands the user is decided by [AstraApp], which routes on the
+/// account rather than on the profile — so an empty profile sends a signed-out
+/// user to sign-in and a signed-in one back through the questions.
+Future<void> forgetEverythingLocal(ProviderContainer container) async {
+  // A [ProviderContainer], not a [WidgetRef], and that is the entire point.
+  //
+  // A `WidgetRef` belongs to the widget that owns it and throws the moment that
+  // widget is gone. Signing out ends the session, which makes the app rebuild
+  // and destroy whatever screen the user pressed Log out on — so a wipe written
+  // as `ref.read(...)` after `await signOut()` was reaching for a dead ref and
+  // never ran. It failed silently, every time.
+  //
+  // What that looked like: sign out of one account, sign in as another, and the
+  // new user landed on the paywall having never been asked a question, wearing
+  // the previous person's name and answers. The account itself was clean — the
+  // server had nothing for them — the leftovers were entirely on the phone.
+  //
+  // The container is owned by `ProviderScope` and outlives every screen under
+  // it, so nothing here can be torn out mid-wipe.
+  final repository = container.read(repositoryProvider);
+  final stories = container.read(storiesProvider.notifier);
+  final taste = container.read(tasteProvider.notifier);
+  final avatar = container.read(avatarProvider.notifier);
+  final profiles = container.read(profileProvider.notifier);
+
+  await repository.clearLocal();
+  stories.forget();
+  taste.forget();
+  avatar.forget();
   // Profile last: it is what the app routes on, so nothing rebuilds against a
   // half-cleared library.
-  ref.read(profileProvider.notifier).forget();
+  profiles.forget();
 }
 
 /// Runs a generation end to end.
@@ -201,32 +420,131 @@ class StoryComposer {
   /// Runs after [compose] while the user is already reading. A failure here
   /// leaves a perfectly readable story behind, which is why it is logged
   /// rather than thrown — there is nothing for the reader to do about it.
-  Future<void> narrate(Story story) async {
+  /// Returns the story with its audio attached, or the story unchanged if the
+  /// narration failed — the caller opens a readable story either way.
+  Future<Story> narrate(Story story) async {
     try {
       final withAudio = await _ref.read(storyServiceProvider).narrate(story);
-      if (withAudio.audioUrl == null) return;
+      if (withAudio.audioUrl == null) return story;
 
       await _ref.read(storiesProvider.notifier).update(withAudio);
       _ref.read(playbackProvider).adoptAudio(withAudio);
+      return withAudio;
     } catch (error) {
-      debugPrint('Astra: narration failed, story stays readable — $error');
+      debugPrint('Maya: narration failed, story stays readable — $error');
+      return story;
     }
   }
 }
 
 final storyComposerProvider = Provider<StoryComposer>(StoryComposer.new);
 
+/// Reports what people do in the app to the admin panel.
+final trackingProvider = Provider<TrackingService>((ref) => TrackingService());
+
+// -------------------------------------------------------------- manifest
+
+final manifestServiceProvider = Provider<ManifestService>(
+  (ref) => ManifestService(),
+);
+
+/// Writes the four questions for a desire.
+final planServiceProvider = Provider<PlanService>((ref) => PlanService());
+
+/// Writes affirmation sets.
+final affirmationServiceProvider = Provider<AffirmationService>(
+  (ref) => AffirmationService(),
+);
+
+/// This account's affirmation sets, newest first.
+///
+/// Read from Firestore on demand for the same reason the manifestations are:
+/// they are few, they are small, and fetching fresh means a signed-out phone
+/// can never show the last account's list.
+final affirmationSetsProvider = FutureProvider<List<AffirmationSet>>((
+  ref,
+) async {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return const [];
+
+  return ref.read(affirmationServiceProvider).all();
+});
+
+/// This account's manifestations, newest first.
+///
+/// Read from Firestore on demand rather than mirrored to the device like
+/// stories are. There are at most ten a month, they are always played from a
+/// streamed URL anyway, and fetching fresh means a signed-out phone can never
+/// show the last account's list — which is the bug that cost the most time this
+/// week, arriving by a different door.
+final manifestationsProvider = FutureProvider<List<Manifestation>>((ref) async {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return const [];
+
+  return ref.read(manifestServiceProvider).all();
+});
+
 // ------------------------------------------------------------------ profile
 
 class ProfileNotifier extends StateNotifier<UserProfile> {
-  ProfileNotifier(this._repository)
-    : super(_repository.loadProfile() ?? UserProfile.empty());
+  ProfileNotifier(this._repository, Ref ref)
+    : super(_repository.loadProfile() ?? UserProfile.empty()) {
+    // Restores the profile the moment a real account signs in. Local storage
+    // is wiped on sign-out (`forgetEverythingLocal`), and nothing else in the
+    // app ever re-downloads it — `StoriesNotifier` has this same restore for
+    // the library, the profile never had the equivalent. Without it, signing
+    // back into the very Google account that wrote a profile looked exactly
+    // like a brand new one: `isOnboarded` read false against an empty local
+    // copy while the real answers sat untouched in Firestore the whole time.
+  }
 
   final AstraRepository _repository;
+
+  /// Never overwrites an answer this device already has — only fills in when
+  /// the device has nothing, which is exactly the signed-out-then-back-in
+  /// case this exists for. A profile mid-onboarding on this phone should not
+  /// be clobbered by an older one from the cloud.
+  ///
+  /// Driven by [profileRestoreProvider] rather than by a listener in here, so
+  /// the routing has something to wait on. See the note there.
+  Future<void> restoreFromCloud() async {
+    if (state.isOnboarded) return;
+
+    final cloud = await _repository.fetchCloudProfile();
+    if (cloud == null || !cloud.isOnboarded) return;
+
+    state = cloud;
+    await _repository.saveProfile(cloud);
+  }
 
   Future<void> update(UserProfile profile) async {
     state = profile;
     await _repository.saveProfile(profile);
+  }
+
+  /// What Maya calls this person, first name only.
+  ///
+  /// Taken on the sign-up form and spoken by every manifestation, so it is
+  /// trimmed to one word here rather than at each place that reads it.
+  Future<void> setName(String name) async {
+    final first = name.trim().split(RegExp(r'\s+')).first;
+    if (first.isEmpty) return;
+    await update(state.copyWith(name: first));
+  }
+
+  /// Adopts the display name from the sign-in provider, first name only.
+  ///
+  /// Only when there is nothing already — a name the user typed themselves is
+  /// what they want to be called, and a Google account carrying their full
+  /// legal name is not an improvement on it.
+  ///
+  /// First word, because this name is spoken aloud: the script opens with it,
+  /// and "Sidharth, close your eyes" is right where the full name would be
+  /// read out like a register.
+  Future<void> adoptProviderName(String? displayName) async {
+    if (state.name.trim().isNotEmpty) return;
+
+    await setName(displayName ?? '');
   }
 
   // There is no `subscribe()`. Granting Plus was a local write that the app
@@ -246,15 +564,47 @@ class ProfileNotifier extends StateNotifier<UserProfile> {
 }
 
 final profileProvider = StateNotifierProvider<ProfileNotifier, UserProfile>(
-  (ref) => ProfileNotifier(ref.watch(repositoryProvider)),
+  (ref) => ProfileNotifier(ref.watch(repositoryProvider), ref),
 );
+
+/// Pulls the signed-in account's profile down from Firestore, once per account.
+///
+/// A [FutureProvider] rather than a listener inside [ProfileNotifier], and the
+/// difference is the whole point: a future has a *loading* state, and the
+/// routing can wait on it.
+///
+/// It used to be fire-and-forget. The app chose a screen the instant somebody
+/// signed in, while the download was still in flight, so a returning user was
+/// routed on an empty local profile and landed on question one of onboarding —
+/// their real answers arriving from Firestore a moment later, after the wrong
+/// screen was already up. Worse on a bad connection, where the restore may not
+/// land at all and they are asked to fill in a profile they already have.
+///
+/// Keyed on the signed-in user, so switching accounts re-runs it and staying on
+/// one does not.
+final profileRestoreProvider = FutureProvider<void>((ref) async {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null || user.isAnonymous) return;
+
+  final profile = ref.read(profileProvider.notifier);
+  await profile.restoreFromCloud();
+
+  // Take the name Google already knows, if we have none.
+  //
+  // Onboarding used to ask for it. Nothing does now, and nothing was reading
+  // the one the provider hands over either — so a person who signed in with
+  // Google was called "friend" by every manifestation the app wrote them,
+  // while their real name sat one field away on the credential.
+  //
+  // After the cloud restore, never before: an account signing in on a second
+  // phone has a name saved already, and this must not overwrite it.
+  await profile.adoptProviderName(user.displayName);
+});
 
 // ------------------------------------------------------------------ stories
 
 class StoriesNotifier extends StateNotifier<List<Story>> {
-  StoriesNotifier(this._repository) : super(_repository.loadStories()) {
-    unawaited(_restoreFromCloud());
-  }
+  StoriesNotifier(this._repository) : super(_repository.loadStories());
 
   final AstraRepository _repository;
 
@@ -264,7 +614,7 @@ class StoriesNotifier extends StateNotifier<List<Story>> {
   /// story — so this only ever adds. It runs after the first frame has already
   /// been built from local state, which is why the library is never blocked on
   /// the network.
-  Future<void> _restoreFromCloud() async {
+  Future<void> restoreFromCloud() async {
     final cloud = await _repository.fetchCloudStories();
     if (cloud.isEmpty) return;
 
@@ -309,6 +659,27 @@ final storiesProvider = StateNotifierProvider<StoriesNotifier, List<Story>>(
   (ref) => StoriesNotifier(ref.watch(repositoryProvider)),
 );
 
+/// Downloads this account's library, once per account.
+///
+/// The restore used to run inside [StoriesNotifier]'s constructor, which meant
+/// it happened exactly once: at app launch, for whoever was signed in then. Log
+/// out and back in — or switch accounts — and it never ran again, because the
+/// notifier was already built. The local copy had just been wiped by
+/// [forgetEverythingLocal], so the library came up empty and stayed empty until
+/// the app was killed and reopened.
+///
+/// From the user's side that is indistinguishable from having lost everything.
+/// Nothing was ever deleted: four stories sat in Firestore the whole time, the
+/// app simply never asked for them again.
+///
+/// Keyed on the signed-in user, so switching accounts re-runs it.
+final storiesRestoreProvider = FutureProvider<void>((ref) async {
+  final user = ref.watch(authStateProvider).valueOrNull;
+  if (user == null) return;
+
+  await ref.read(storiesProvider.notifier).restoreFromCloud();
+});
+
 /// The story surfaced on Home. Newest first, so tonight's generation is
 /// tonight's ritual.
 final dailyStoryProvider = Provider<Story?>((ref) {
@@ -333,7 +704,7 @@ class AvatarNotifier extends StateNotifier<Uint8List?> {
     try {
       return base64Decode(base64);
     } catch (error) {
-      debugPrint('Astra: stored avatar could not be decoded — $error');
+      debugPrint('Maya: stored avatar could not be decoded — $error');
       return null;
     }
   }
@@ -365,8 +736,19 @@ class TasteNotifier extends StateNotifier<AffirmationTaste> {
 
   /// Puts every passed line back in the deck. The liked ones stay liked —
   /// starting over should not cost the user the answers they meant.
+  ///
+  /// A no-op, deliberately, when nothing has been passed: there is nothing to
+  /// bring back. The empty-state screen checks `passed.isNotEmpty` before
+  /// offering this button at all, so by the time it is called there is
+  /// something for it to do — see [resetAll] for the case where there isn't.
   Future<void> reshuffle() =>
       _save(AffirmationTaste(liked: state.liked, passed: const {}));
+
+  /// Clears kept and passed both, for when there is nothing left to reshuffle
+  /// — every card in the chosen life areas has already been liked. Unlike
+  /// [reshuffle], this does cost the user their answers, which is why the
+  /// screen confirms before calling it.
+  Future<void> resetAll() => _save(const AffirmationTaste());
 
   Future<void> _save(AffirmationTaste next) async {
     state = next;
@@ -381,12 +763,55 @@ final tasteProvider = StateNotifierProvider<TasteNotifier, AffirmationTaste>(
   (ref) => TasteNotifier(ref.watch(repositoryProvider)),
 );
 
+/// The server's grouped batch — see `writeAffirmations` in
+/// `functions/index.js` — read straight off the same document
+/// [sentAffirmationProvider] watches, so the push queue and the browsable
+/// deck are always drawn from the same week's writing.
+final generatedAffirmationGroupsProvider = StreamProvider<List<AffirmationGroup>>((
+  ref,
+) {
+  final uid = ref.watch(authStateProvider).valueOrNull?.uid;
+  if (uid == null) return Stream.value(const []);
+
+  return FirebaseFirestore.instance
+      .collection('users')
+      .doc(uid)
+      .collection('private')
+      .doc('affirmations')
+      .snapshots()
+      .map((snap) {
+        final raw = snap.data()?['groups'] as List?;
+        if (raw == null) return const <AffirmationGroup>[];
+        return raw.map(AffirmationGroup.fromMap).whereType<AffirmationGroup>().toList();
+      })
+      .handleError((Object error) {
+        debugPrint('Maya: generated affirmations unavailable — $error');
+      });
+});
+
 /// The cards still waiting to be swiped, best first.
+///
+/// Prefers the server's own generated groups — written from this person's
+/// actual name, desire and life areas — over the curated static pool. The
+/// curated pool is still what a build with no Firebase, no network at first
+/// launch, or a generation that failed falls back to: a line that failed to
+/// personalize should degrade to a real line, never to an empty deck.
 final affirmationDeckProvider = Provider<List<Affirmation>>((ref) {
+  final taste = ref.watch(tasteProvider);
+  final generated = ref.watch(generatedAffirmationGroupsProvider).valueOrNull;
+
+  if (generated != null && generated.isNotEmpty) {
+    final cards = [
+      for (final group in generated) ...group.toCards(),
+    ].where((card) => !taste.hasSeen(card.line)).toList();
+
+    if (cards.isNotEmpty) return cards;
+  }
+
   final intentions = ref.watch(
     profileProvider.select((profile) => profile.intentions),
   );
-  return Affirmations.deck(intentions, ref.watch(tasteProvider));
+  return Affirmations.deck(intentions, taste);
 });
 
 /// The line on the Home card.
@@ -429,7 +854,7 @@ final sentAffirmationProvider = StreamProvider<String?>((ref) {
         return (line == null || line.isEmpty) ? null : line;
       })
       .handleError((Object error) {
-        debugPrint('Astra: sent affirmation unavailable — $error');
+        debugPrint('Maya: sent affirmation unavailable — $error');
       });
 });
 
@@ -456,11 +881,22 @@ final playbackProvider = ChangeNotifierProvider<PlaybackController>(
 
 // ------------------------------------------------------------------ streaks
 
-/// Consecutive days ending today with at least one story made.
+/// The distinct days this account wrote something.
+///
+/// Manifestations *and* stories. The three providers below all used to count
+/// only stories, which was right when a story was the product and silently
+/// wrong the day manifestations replaced it: somebody who wrote one every
+/// morning for a week was shown a streak of zero, an empty week strip and
+/// nothing practised this month. The practice was working and the app said it
+/// was not, which is the one thing a streak must never do.
+Set<DateTime> _daysWritten(Ref ref) => {
+  for (final made in ref.watch(everythingWrittenProvider))
+    _dayOf(made.createdAt),
+};
+
+/// Consecutive days ending today with at least one thing written.
 final streakProvider = Provider<int>((ref) {
-  final days = <DateTime>{
-    for (final story in ref.watch(storiesProvider)) _dayOf(story.createdAt),
-  };
+  final days = _daysWritten(ref);
   if (days.isEmpty) return 0;
 
   var streak = 0;
@@ -482,23 +918,19 @@ final streakProvider = Provider<int>((ref) {
 /// Distinct days practised in the current calendar month.
 final daysPractisedThisMonthProvider = Provider<int>((ref) {
   final now = DateTime.now();
-  final days = <DateTime>{
-    for (final story in ref.watch(storiesProvider)) _dayOf(story.createdAt),
-  };
+  final days = _daysWritten(ref);
   return days
       .where((d) => d.year == now.year && d.month == now.month)
       .length;
 });
 
-/// Monday to Sunday of the current week: true where a story was made.
+/// Monday to Sunday of the current week: true where something was written.
 ///
 /// Days still ahead read as false and the UI draws them as empty rather than
 /// missed — a week that starts by showing four failures is a discouraging way
 /// to open an app about how things are already going well.
 final weekActivityProvider = Provider<List<bool>>((ref) {
-  final days = <DateTime>{
-    for (final story in ref.watch(storiesProvider)) _dayOf(story.createdAt),
-  };
+  final days = _daysWritten(ref);
 
   final today = _dayOf(DateTime.now());
   final monday = today.subtract(Duration(days: today.weekday - 1));
@@ -533,7 +965,7 @@ class Usage {
   /// allowance to draw a ring around.
   final int? limit;
 
-  /// 'Astra Plus', 'Free day', 'Free'.
+  /// 'Maya Plus', 'Free day', 'Free'.
   final String plan;
 
   /// The sentence under the meter, in whatever unit actually binds.
@@ -546,8 +978,14 @@ class Usage {
 }
 
 final usageProvider = Provider<Usage>((ref) {
-  final profile = ref.watch(profileProvider);
-  final stories = ref.watch(storiesProvider);
+  // Manifestations, not stories.
+  //
+  // This counted the library, which is now mostly old stories nobody can
+  // write any more — so a subscriber who had written twelve stories last year
+  // opened the app to "8 left this month" before touching anything, and a
+  // person with an empty library saw a full allowance they could not spend.
+  // The number has to count the thing the button actually makes.
+  final made = ref.watch(manifestationsProvider).valueOrNull ?? const [];
 
   final now = DateTime.now();
   final monthStart = DateTime(now.year, now.month);
@@ -555,47 +993,61 @@ final usageProvider = Provider<Usage>((ref) {
   // The server's answer, not the profile's. `profile.isSubscribed` is a local
   // field the app itself writes; this is a document only the purchase
   // verifier can touch.
-  if (ref.watch(isSubscribedProvider)) {
-    // Count from whichever is later: the start of the month, or the moment
-    // they subscribed. Someone who used their free stories and then paid on
-    // the same day was being billed a month's allowance for the stories that
-    // convinced them to pay.
-    final since = profile.subscribedAt == null
-        ? monthStart
-        : (profile.subscribedAt!.isAfter(monthStart)
-              ? profile.subscribedAt!
-              : monthStart);
-    final onPlan = stories
-        .where((story) => !story.createdAt.isBefore(since))
-        .length;
-    final left = PricingCatalog.plusMonthlyStories - onPlan;
+  if (!ref.watch(isSubscribedProvider)) {
+    // Nothing to meter. The free tier has no manifestations in it at all —
+    // writing one is what the subscription is for — so the honest thing to
+    // show is the price, not a ring at zero out of zero.
     return Usage(
-      used: onPlan,
-      limit: PricingCatalog.plusMonthlyStories,
-      plan: 'Astra Plus',
-      detail: left > 0
-          ? '$left left this month · unlimited listening · resets on the 1st'
-          : 'Used up this month · your library still replays',
+      used: 0,
+      limit: null,
+      plan: 'Free',
+      detail: 'Maya Plus writes ${PricingCatalog.manifestMonthly} '
+          'manifestations a month. Affirmations are free, always.',
     );
   }
 
-  // The free tier is a lifetime count, not a window: three stories, ever, and
-  // then a plan. Nothing expires, so there is no clock to display and no way
-  // to be caught out by one.
-  final free = PricingCatalog.freeStories;
-  final left = free - stories.length;
+  final thisMonth = made
+      .where((one) => !one.createdAt.isBefore(monthStart))
+      .length;
+  final left = PricingCatalog.manifestMonthly - thisMonth;
 
   return Usage(
-    used: stories.length.clamp(0, free),
-    limit: free,
-    plan: 'Free',
+    used: thisMonth,
+    limit: PricingCatalog.manifestMonthly,
+    plan: 'Maya Plus',
     detail: left > 0
-        ? '$left free ${left == 1 ? 'story' : 'stories'} left · Plus writes '
-              '${PricingCatalog.plusMonthlyStories} a month'
-        : 'Free stories used · Plus writes '
-              '${PricingCatalog.plusMonthlyStories} a month, and your library '
-              'replays without limit',
+        ? '$left of ${PricingCatalog.manifestMonthly} left this month · '
+              'affirmations are free and unlimited · resets on the 1st'
+        : 'All ${PricingCatalog.manifestMonthly} written this month · '
+              'affirmations are free and carry on · resets on the 1st',
   );
+});
+
+/// How many manifestations this account may still write this month.
+///
+/// Zero for anyone without a subscription, which is the same answer the server
+/// gives. The button reads this rather than the [Usage] sentence, because a
+/// screen that greys a button out has to be sure, and a sentence is for people.
+final manifestsLeftProvider = Provider<int>((ref) {
+  if (!ref.watch(isSubscribedProvider)) return 0;
+  final usage = ref.watch(usageProvider);
+  return usage.limit == null ? 0 : usage.left;
+});
+
+/// Everything this account can play, newest first.
+///
+/// Manifestations and old stories in one list. Nothing new is written as a
+/// story any more, but every story ever written still plays, and to the person
+/// listening they are the same thing — so Home, the Library and the "minutes"
+/// count all read this rather than each keeping its own opinion.
+final everythingWrittenProvider = Provider<List<Story>>((ref) {
+  final written = ref.watch(storiesProvider);
+  final manifested =
+      ref.watch(manifestationsProvider).valueOrNull?.map((m) => m.asStory()) ??
+      const <Story>[];
+
+  return [...manifested, ...written]
+    ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 });
 
 /// Minutes of audio in the library.
@@ -604,10 +1056,9 @@ final usageProvider = Provider<Usage>((ref) {
 /// that label, while actually summing the length of every story whether or not
 /// a second of it had ever been played.
 final minutesInLibraryProvider = Provider<int>((ref) {
-  final total = ref
-      .watch(storiesProvider)
+  return ref
+      .watch(everythingWrittenProvider)
       .fold<int>(0, (total, story) => total + story.duration.inMinutes);
-  return total;
 });
 
 DateTime _dayOf(DateTime value) => DateTime(value.year, value.month, value.day);

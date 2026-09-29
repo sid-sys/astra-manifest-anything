@@ -1,4 +1,4 @@
-/// A review from a real person who actually used Astra.
+/// A review from a real person who actually used Maya.
 class Testimonial {
   const Testimonial({
     required this.quote,

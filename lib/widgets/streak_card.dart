@@ -44,7 +44,7 @@ class StreakCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [AstraColors.cardRaised, AstraColors.card],
@@ -68,7 +68,7 @@ class StreakCard extends StatelessWidget {
                   width: 2,
                 ),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.local_fire_department_rounded,
                 size: 42,
                 color: AstraColors.accent,

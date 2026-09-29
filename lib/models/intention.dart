@@ -12,18 +12,22 @@ import '../theme/astra_theme.dart';
 /// out of the particular shade of blue on Confidence. Six accents in a
 /// monochrome app would be the exception that undoes the rule.
 enum Intention {
-  career('Career', '✦', AstraColors.text),
-  abundance('Abundance', '✧', AstraColors.text),
-  love('Love', '♡', AstraColors.text),
-  health('Health', '☘', AstraColors.text),
-  confidence('Confidence', '△', AstraColors.text),
-  peace('Peace', '☾', AstraColors.text);
+  career('Career', '✦'),
+  abundance('Abundance', '✧'),
+  love('Love', '♡'),
+  health('Health', '☘'),
+  confidence('Confidence', '△'),
+  peace('Peace', '☾');
 
-  const Intention(this.label, this.glyph, this.accent);
+  const Intention(this.label, this.glyph);
 
   final String label;
   final String glyph;
-  final Color accent;
+
+  /// A getter rather than a stored colour, because the palette moved when dark
+  /// mode arrived and an enum can only hold compile-time constants. Every
+  /// intention is ink either way; which ink depends on the paper.
+  Color get accent => AstraColors.text;
 
   static Intention fromName(String name) => Intention.values.firstWhere(
     (i) => i.name == name,

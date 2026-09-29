@@ -1,16 +1,17 @@
 # Launcher icons, generated from assets/brand/ by `dart run flutter_launcher_icons`.
 #
-# The sources come from tool/build_icon.dart, which crops the raw logo to its
-# ink and re-pads it — the original mark occupied 422x474 of a 1024 canvas, so
-# using it directly produced an icon that was mostly white space.
+# The sources are cropped from assets/brand/logo_source.png. The icon uses a
+# tighter crop than the in-app mark on purpose: at 48dp the medallion's ring
+# thins to a halo and the two hands read as red smudges, so the icon is the cat
+# alone, which is the part that survives being small.
 flutter_launcher_icons:
   android: "ic_launcher"
   image_path: "assets/brand/icon.png"
 
   # Adaptive icons are two layers the launcher animates and masks
-  # independently. White background, ink foreground: the mark keeps its paper
-  # whatever shape the launcher crops to.
-  adaptive_icon_background: "#FFFFFF"
+  # independently. The background is the app's own night, not white: the cat is
+  # dark purple and gold, drawn to sit on that, and on white it loses its edges.
+  adaptive_icon_background: "#05060F"
   adaptive_icon_foreground: "assets/brand/icon_foreground.png"
 
   # Play requires a 512x512 icon for the listing; this writes one so the store
@@ -18,5 +19,5 @@ flutter_launcher_icons:
   web:
     generate: true
     image_path: "assets/brand/icon.png"
-    background_color: "#FFFFFF"
-    theme_color: "#121212"
+    background_color: "#05060F"
+    theme_color: "#05060F"

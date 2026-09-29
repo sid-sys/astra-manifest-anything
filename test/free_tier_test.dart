@@ -5,11 +5,14 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// Who may write a story without paying.
 ///
-/// One rule now: three free stories, ever, then a plan. There is no trial and
-/// no clock. The version this replaced had a `trialActive` that returned true
-/// whenever the clock had never started, which handed anyone who never opened
-/// the paywall an unlimited free tier — the kind of mistake that only shows up
-/// on the bill, which is why the rule is pinned here.
+/// One rule now: nobody. The paywall is hard, the trial belongs to Play, and
+/// nothing generates without an entitlement the server verified.
+///
+/// An earlier version had a `trialActive` that returned true whenever the
+/// clock had never started, which handed anyone who never opened the paywall
+/// an unlimited free tier — the kind of mistake that only shows up on the
+/// bill. That is why this file exists: the trial is now Play's to track, and
+/// this app must never grow a second opinion about who is entitled.
 UserProfile _profile({bool subscribed = false, DateTime? subscribedAt}) =>
     UserProfile(
       name: 'Sana',
@@ -23,24 +26,15 @@ UserProfile _profile({bool subscribed = false, DateTime? subscribedAt}) =>
 
 void main() {
   group('the free tier', () {
-    test('allows exactly ${PricingCatalog.freeStories} stories', () {
-      final free = _profile();
-      for (var written = 0; written < PricingCatalog.freeStories; written++) {
-        expect(
-          free.canGenerate(storiesWritten: written),
-          isTrue,
-          reason: 'story ${written + 1} should be free',
-        );
-      }
+    test('does not exist — the paywall is hard', () {
+      expect(PricingCatalog.freeStories, 0);
     });
 
-    test('stops at the next one', () {
-      expect(
-        _profile().canGenerate(
-          storiesWritten: PricingCatalog.freeStories,
-        ),
-        isFalse,
-      );
+    test('refuses the very first story to anyone unsubscribed', () {
+      // The whole point of the hard paywall, pinned. If this ever passes at
+      // zero stories written, someone has reintroduced a free tier by
+      // accident and the trial is being given away twice.
+      expect(_profile().canGenerate(storiesWritten: 0), isFalse);
     });
 
     test('stays stopped however many are written', () {

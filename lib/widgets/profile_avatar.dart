@@ -46,7 +46,7 @@ class _ProfileAvatarState extends ConsumerState<ProfileAvatar> {
       // A picker that is unavailable — no gallery, permission refused, a
       // desktop without a photo library — is not worth an error dialog over a
       // decorative photo. The avatar simply stays as it was.
-      debugPrint('Astra: could not pick a profile photo — $error');
+      debugPrint('Maya: could not pick a profile photo — $error');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Could not open your photos.')),
@@ -118,7 +118,7 @@ class _ProfileAvatarState extends ConsumerState<ProfileAvatar> {
                       ? SizedBox(
                           width: badge * 0.42,
                           height: badge * 0.42,
-                          child: const CircularProgressIndicator(
+                          child: CircularProgressIndicator(
                             strokeWidth: 2,
                             color: AstraColors.accent,
                           ),

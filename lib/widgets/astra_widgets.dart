@@ -111,7 +111,7 @@ class AstraButton extends StatelessWidget {
                 height: 54,
                 alignment: Alignment.center,
                 child: busy
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
@@ -127,13 +127,31 @@ class AstraButton extends StatelessWidget {
                             Icon(icon, size: 18, color: AstraColors.onAccent),
                             const SizedBox(width: 8),
                           ],
-                          Text(
-                            label,
-                            style: TextStyle(
-                              color: AstraColors.onAccent,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 15,
-                              letterSpacing: 0.1,
+                          // Shrinks rather than overflows.
+                          //
+                          // The label is not a fixed string: the paywall's
+                          // reads "Start Maya Plus — ₹6,999 / year" in one
+                          // currency and something longer in the next, and a
+                          // Row of natural-width children on a 375pt phone ran
+                          // 43 points off the right edge of the button.
+                          //
+                          // Scaled down rather than wrapped or ellipsised: the
+                          // pill is a fixed 54 high so a second line has
+                          // nowhere to go, and a call to action that ends in
+                          // "…" is a call to action nobody can read.
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                label,
+                                maxLines: 1,
+                                style: TextStyle(
+                                  color: AstraColors.onAccent,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 15,
+                                  letterSpacing: 0.1,
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -250,7 +268,7 @@ class AstraProgressBar extends StatelessWidget {
       value: value.clamp(0.0, 1.0),
       minHeight: height,
       backgroundColor: AstraColors.line,
-      valueColor: const AlwaysStoppedAnimation(AstraColors.accent),
+      valueColor: AlwaysStoppedAnimation(AstraColors.accent),
     ),
   );
 }
@@ -261,13 +279,17 @@ class GlyphDot extends StatelessWidget {
     super.key,
     required this.glyph,
     this.size = 38,
-    this.color = AstraColors.accent,
+    this.color,
     this.background,
   });
 
   final String glyph;
   final double size;
-  final Color color;
+
+  /// Null means the ink of whichever world is being rendered. It cannot be a
+  /// default argument any more: the palette is a getter now, and a default has
+  /// to be a compile-time constant.
+  final Color? color;
   final Color? background;
 
   @override
@@ -282,7 +304,7 @@ class GlyphDot extends StatelessWidget {
     ),
     child: Text(
       glyph,
-      style: TextStyle(color: color, fontSize: size * 0.42),
+      style: TextStyle(color: color ?? AstraColors.accent, fontSize: size * 0.42),
     ),
   );
 }
@@ -327,4 +349,42 @@ class EmptyState extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// Asks before something is deleted for good. True only on an explicit yes.
+///
+/// Every colour is named explicitly rather than left to the ambient
+/// [AlertDialog] defaults — those defaults are what made an earlier version
+/// of this dialog unreadable, so nothing here is left for Material to guess.
+Future<bool> confirmDelete(BuildContext context, String title) async {
+  final answer = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      // Opaque, unlike [AstraColors.card] — a translucent dialog over the
+      // starfield background is what made this hard to read.
+      backgroundColor: AstraColors.canvasRaised,
+      title: Text(title, style: AstraTextStyles.display(20)),
+      content: Text('This cannot be undone.', style: AstraTextStyles.bodyDim),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: Text(
+            'Keep',
+            style: AstraTextStyles.small.copyWith(color: AstraColors.text),
+          ),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: Text(
+            'Delete',
+            style: AstraTextStyles.small.copyWith(
+              color: Theme.of(context).colorScheme.error,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+  return answer ?? false;
 }

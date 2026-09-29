@@ -54,7 +54,7 @@ class AstraRepository {
     try {
       return UserProfile.fromMap(jsonDecode(raw) as Map<String, dynamic>);
     } catch (error) {
-      debugPrint('Astra: could not decode stored profile — $error');
+      debugPrint('Maya: could not decode stored profile — $error');
       return null;
     }
   }
@@ -64,7 +64,65 @@ class AstraRepository {
     await _mirror(() => _userDoc.set(profile.toMap(), SetOptions(merge: true)));
   }
 
-  /// Removes everything Astra has stored on this device.
+  /// Records how far through onboarding this account has got.
+  ///
+  /// Cloud only, and deliberately so: this exists to be read by somebody other
+  /// than the person it describes, and a copy on their own phone would answer
+  /// nobody's question.
+  ///
+  /// It fills a real blind spot. The profile is not written until onboarding
+  /// *finishes*, so an account that stopped at question seven looked exactly
+  /// like one that stopped at question one — both are an auth record and
+  /// nothing else. Twelve questions is the longest thing this app asks anyone
+  /// to do, and until now there was no way to see where people gave up.
+  ///
+  /// Written into the user document rather than a collection of its own, so
+  /// the admin overview picks it up in a read it was already making.
+  ///
+  /// At most twelve tiny writes per account, and only while onboarding. This
+  /// is the furthest question of the *most recent* attempt, not of all time:
+  /// onboarding restarts at question one when the app is relaunched, so a
+  /// second abandoned run overwrites the first — which is the more useful of
+  /// the two answers anyway.
+  /// Records how a listening session felt.
+  ///
+  /// Cloud only, and fire-and-forget. Nothing in the app reads it back — it is
+  /// there to answer "does this actually make people feel better", which is a
+  /// question about the whole product rather than about one user's screen, and
+  /// storing it on the device would answer it for nobody.
+  Future<void> recordSessionMood({
+    required String about,
+    required String mood,
+  }) => _mirror(
+    () => _userDoc.collection('sessions').add({
+      'about': about,
+      'mood': mood,
+      'at': DateTime.now().toUtc().toIso8601String(),
+    }),
+  );
+
+  /// The profile as Firestore has it, or null if there is no account, no
+  /// network, or nothing has ever been saved there.
+  ///
+  /// The read half of the profile mirror — [fetchCloudStories] already had
+  /// one of these and the profile never did, which is exactly the bug it
+  /// caused: sign out wipes local storage, and without this, signing back
+  /// into the very account that wrote a profile looked like a brand new one.
+  /// Nothing else in the app re-downloaded it.
+  Future<UserProfile?> fetchCloudProfile() async {
+    if (uid == null) return null;
+    try {
+      final snapshot = await _userDoc.get();
+      final data = snapshot.data();
+      if (data == null) return null;
+      return UserProfile.fromMap(data);
+    } catch (error) {
+      debugPrint('Maya: could not read cloud profile — $error');
+      return null;
+    }
+  }
+
+  /// Removes everything Maya has stored on this device.
   ///
   /// Named keys rather than `prefs.clear()`: the preference store belongs to
   /// the whole app, and a wipe that also took out something a plugin had put
@@ -134,7 +192,7 @@ class AstraRepository {
           .map((doc) => Story.fromMap(doc.id, doc.data()))
           .toList();
     } catch (error) {
-      debugPrint('Astra: could not read cloud stories — $error');
+      debugPrint('Maya: could not read cloud stories — $error');
       return const [];
     }
   }
@@ -170,7 +228,7 @@ class AstraRepository {
     try {
       return AffirmationTaste.fromMap(jsonDecode(raw) as Map<String, dynamic>);
     } catch (error) {
-      debugPrint('Astra: could not decode affirmation taste — $error');
+      debugPrint('Maya: could not decode affirmation taste — $error');
       return const AffirmationTaste();
     }
   }
@@ -197,7 +255,7 @@ class AstraRepository {
           .map((e) => decode(e.key, e.value as Map<String, dynamic>))
           .toList();
     } catch (error) {
-      debugPrint('Astra: could not decode "$key" — $error');
+      debugPrint('Maya: could not decode "$key" — $error');
       return <T>[];
     }
   }
@@ -210,7 +268,41 @@ class AstraRepository {
     try {
       await write();
     } catch (error) {
-      debugPrint('Astra: cloud sync skipped — $error');
+      debugPrint('Maya: cloud sync skipped — $error');
     }
+  }
+
+  // ---------------------------------------------------------------- reports
+
+  /// Flags one piece of generated content — a story or an affirmation line.
+  ///
+  /// Unlike every write above, this one does not go through [_mirror] and does
+  /// not swallow its own failure. A profile edit that quietly fails to sync
+  /// costs nothing the user can see; a report that quietly fails to send is a
+  /// person who believes something has been flagged when nobody has heard
+  /// about it, which is the one failure mode Play's Generative AI policy exists
+  /// to prevent. The caller is expected to show its own error if this throws.
+  Future<void> submitReport({
+    required String kind,
+    required String contentId,
+    required String excerpt,
+    String? reason,
+  }) async {
+    final reporter = uid;
+    if (reporter == null) {
+      throw StateError('Signed out — nothing to attach the report to.');
+    }
+
+    await FirebaseFirestore.instance.collection('reports').add({
+      'uid': reporter,
+      'kind': kind,
+      'contentId': contentId,
+      // Capped well short of the full script: enough for a reviewer to find
+      // and recognise the piece, not a duplicate of data already sitting in
+      // the user's own `stories` subcollection.
+      'excerpt': excerpt.length > 600 ? excerpt.substring(0, 600) : excerpt,
+      'reason': reason,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
   }
 }

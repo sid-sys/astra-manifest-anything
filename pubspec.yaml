@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 1.0.4+37
 
 environment:
   sdk: ^3.12.2
@@ -46,12 +46,16 @@ dependencies:
   cloud_functions: ^6.3.5
   image_picker: ^1.2.3
   in_app_purchase: ^3.3.0
+  # Already present transitively; declared so the offer types can be imported.
+  # A subscription with a free trial comes back from Play as several offers on
+  # one product, and telling them apart needs the Android-side types.
+  in_app_purchase_android: ^0.5.2
   url_launcher: ^6.3.2
   flutter_local_notifications: ^22.3.0
   timezone: ^0.11.1
   flutter_timezone: ^5.1.0
   firebase_messaging: ^16.5.0
-
+  google_sign_in: ^7.2.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -63,7 +67,48 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.6
   image: ^4.9.1
+
+# The launch screen, generated into the native projects rather than drawn by
+# Flutter.
+#
+# It has to be native: the Flutter engine takes a second or two to start on a
+# cold launch, and anything Dart draws cannot appear until it has. A splash
+# written in Dart would arrive after the wait it exists to cover, which is why
+# the first frame is an Android window background instead.
+#
+# Regenerate after changing anything here:
+#   dart run flutter_native_splash:create
+flutter_native_splash:
+  # The same night the app is painted on, so the handover from the system
+  # splash to the first screen is invisible.
+  #
+  # This was #F4EFE6 — the paper colour from before the app went dark — which
+  # meant a cold launch flashed a cream screen and then dropped into a near
+  # black one. The mark is drawn for the dark ground now, and so is this.
+  color: "#05060F"
+  image: assets/brand/logo_mark.png
+
+  # Android 12 replaced the window-background trick with its own splash API,
+  # which ignores the drawable above and centres an icon in a circle instead.
+  # Both are configured, because a phone on 11 and a phone on 14 take different
+  # paths through this and only one of them is the one you are holding.
+  #
+  # A separate, much more padded image for this one specifically. Android 12's
+  # splash icon is masked into a safe zone well inside the full canvas — the
+  # first version used the same tightly-cropped mark as everywhere else, and
+  # the OS clipped the birds and the ring around the figure at the edge. This
+  # version fills only 48% of its canvas, with transparent margin the rest of
+  # the way, so the mask has room to breathe.
+  android_12:
+    color: "#05060F"
+    image: assets/brand/logo_mark_splash.png
+    icon_background_color: "#05060F"
+
+  # The web build is a development surface, not a product, and its own
+  # index.html already paints while the bundle loads.
+  web: false
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -76,10 +121,17 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  # The logo, so Dart can draw the same mark the native splash showed a moment
+  # earlier — see the waiting screen in app.dart.
+  # logo_mark_splash.png is not listed here on purpose: it exists only for
+  # `flutter_native_splash:create` to bake into native drawables, and is never
+  # loaded at runtime by Dart. Bundling it would just add dead weight.
+  assets:
+    - assets/brand/logo_mark.png
+    - assets/brand/night_sky.jpg
+    - assets/brand/orb.webp
+    - assets/brand/orb_still.png
+    - assets/audio/meditation_bed.mp3
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

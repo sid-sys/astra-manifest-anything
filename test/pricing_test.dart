@@ -5,31 +5,14 @@ void main() {
   _marginTests();
 
   group('region resolves currency', () {
-    test('India is priced in rupees', () {
-      expect(PricingCatalog.currencyForCountry('IN'), 'INR');
-      expect(PricingCatalog.currencyForCountry('in'), 'INR');
-    });
-
-    test('everywhere else falls back to dollars', () {
-      for (final country in ['US', 'GB', 'AU', 'ZZ', '']) {
+    test('every country is priced in dollars', () {
+      for (final country in ['US', 'IN', 'GB', 'AU', 'ZZ', '']) {
         expect(PricingCatalog.currencyForCountry(country), 'USD');
       }
     });
   });
 
   group('every price states the period it bills on', () {
-    test('rupee plans print whole rupees', () {
-      final plans = PricingCatalog.plansForCountry('IN');
-      final monthly = plans.firstWhere((p) => p.period == BillingPeriod.month);
-      final yearly = plans.firstWhere((p) => p.period == BillingPeriod.year);
-
-      expect(monthly.headline, '₹649 / month');
-      expect(monthly.subline, 'billed monthly · cancel anytime');
-      expect(yearly.headline, '₹6,499 / year');
-      // The yearly tile does the division so the user doesn't have to.
-      expect(yearly.subline, '₹542 / month · billed once yearly');
-    });
-
     test('dollar plans keep their cents', () {
       final plans = PricingCatalog.plansForCountry('US');
       final monthly = plans.firstWhere((p) => p.period == BillingPeriod.month);
@@ -41,7 +24,7 @@ void main() {
     });
 
     test('no headline can be read without its billing period', () {
-      for (final currency in ['INR', 'USD']) {
+      for (final currency in ['USD']) {
         for (final plan in PricingCatalog.plansForCurrency(currency)) {
           expect(plan.headline, contains('/ ${plan.periodLabel}'));
         }
@@ -50,7 +33,7 @@ void main() {
   });
 
   test('each region offers exactly one monthly and one yearly plan', () {
-    for (final currency in ['INR', 'USD']) {
+    for (final currency in ['USD']) {
       final plans = PricingCatalog.plansForCurrency(currency);
       expect(plans.where((p) => p.period == BillingPeriod.month).length, 1);
       expect(plans.where((p) => p.period == BillingPeriod.year).length, 1);
@@ -59,7 +42,7 @@ void main() {
   });
 
   test('a yearly plan never costs more than twelve monthly payments', () {
-    for (final currency in ['INR', 'USD']) {
+    for (final currency in ['USD']) {
       final plans = PricingCatalog.plansForCurrency(currency);
       final monthly = plans.firstWhere((p) => p.period == BillingPeriod.month);
       final yearly = plans.firstWhere((p) => p.period == BillingPeriod.year);
@@ -70,39 +53,67 @@ void main() {
 
 /// The margin floors, asserted rather than remembered.
 ///
-/// There are two, because the allowance is a ceiling rather than a forecast.
-/// The 80% target is measured at expected usage; the cap only has to keep the
-/// worst case bounded. If a price, the cap, or the usage assumption moves
-/// without the others, one of these fails.
+/// Measured on what actually arrives in the bank, which is the correction that
+/// matters. An earlier version of this file measured margin on the shelf price
+/// and called twenty a month 68%. Google Play takes 15%, so every
+/// number here is net of that.
+///
+/// There are two floors, because the allowance is a ceiling rather than a
+/// forecast: the target is measured at the usage a real subscriber has, and
+/// the floor only has to keep the worst case bounded. If a price, the cap, or
+/// the usage assumption moves without the others, one of these fails.
 void _marginTests() {
-  // Measured, not estimated: a 5-minute story is 915 words at 183 wpm and
-  // 5.34 chars/word — narration $0.059, script $0.037, infrastructure $0.004.
-  // Planning uses a 10% buffer over the $0.100 measured cost.
-  const costPerStory = 0.105;
+  /// What one manifestation costs to produce, in dollars.
+  ///
+  /// Measured, not estimated. Three real ones ran to 2,230, 2,249 and 2,253
+  /// characters; at ElevenLabs Turbo's $0.05 per thousand that is $0.112 of
+  /// narration. The script adds $0.022, the four questions before it $0.017,
+  /// and storage, traffic and functions about $0.010.
+  ///
+  /// Narration is 70% of it, which is why the script model barely moves this
+  /// number and the voice model decides it.
+  const costPerManifestation = 0.161;
 
-  const targetMargin = 0.80;
+  /// Affirmations, per active user per month. Uncapped and free to everybody,
+  /// so this is a cost of having a user rather than of selling to one. On
+  /// Haiku; it was $0.25 on Opus, for five short lines.
+  const affirmationsPerMonth = 0.05;
 
-  // What the heaviest possible subscriber is allowed to cost. Not a goal — a
-  // bound. A plan that falls below this is one an automated client could bleed.
-  const worstCaseFloor = 0.65;
+  /// Google Play's share. 15% under $1M of annual revenue, 30% above it.
+  const playCut = 0.15;
 
-  // Only used to check rupee plans against a dollar-denominated cost.
-  const inrPerUsd = 86.5;
+  /// The target at the usage a real subscriber has.
+  ///
+  /// Seventy-eight, not the eighty this file used to assert, and the number
+  /// moved because what it measures did. Eighty was margin on the shelf price,
+  /// with Play's 15% and India's 18% GST counted as revenue. Measured on money
+  /// that actually arrives, the same catalogue sits between 79% and 85% at six
+  /// a month — so 78% is the old standard restated honestly rather than a
+  /// standard being lowered.
+  const targetMargin = 0.78;
 
-  /// Margin on the list price, before any store cut. Google Play's 15% (or 30%
-  /// above $1M) comes out of what is left; it is a distribution cost, not a
-  /// cost of making the story, so it is not netted off here.
-  double marginAt(Plan plan, int storiesPerMonth) {
-    final usd = plan.currencyCode == 'INR' ? plan.amount / inrPerUsd : plan.amount;
+  /// What the heaviest possible subscriber is allowed to cost. Not a goal — a
+  /// bound. A plan below this is one an automated client could bleed. The
+  /// owner asked to hold 60–70%; this is the floor of that band.
+  const worstCaseFloor = 0.60;
+
+  /// What one month of this plan actually pays, in dollars.
+  double netMonthlyUsd(Plan plan) {
+    final usd = plan.amount;
     final months = plan.period == BillingPeriod.year ? 12 : 1;
-    final cogs = storiesPerMonth * months * costPerStory;
-    return (usd - cogs) / usd;
+    return usd * (1 - playCut) / months;
+  }
+
+  double marginAt(Plan plan, int perMonth) {
+    final net = netMonthlyUsd(plan);
+    final cost = perMonth * costPerManifestation + affirmationsPerMonth;
+    return (net - cost) / net;
   }
 
   String pct(double v) => '${(v * 100).toStringAsFixed(1)}%';
 
-  group('every plan holds 80% at expected usage', () {
-    for (final currency in ['INR', 'USD']) {
+  group('every plan holds the target at expected usage', () {
+    for (final currency in ['USD']) {
       for (final plan in PricingCatalog.plansForCurrency(currency)) {
         test('${plan.id} clears $targetMargin', () {
           final margin = marginAt(plan, PricingCatalog.expectedMonthlyStories);
@@ -111,8 +122,9 @@ void _marginTests() {
             greaterThanOrEqualTo(targetMargin),
             reason:
                 '${plan.headline} at ${PricingCatalog.expectedMonthlyStories} '
-                'stories/month leaves ${pct(margin)} — raise the price, or '
-                'lower expectedMonthlyStories if real usage says otherwise',
+                'a month leaves ${pct(margin)} of what Play actually pays — '
+                'raise the price, or lower expectedMonthlyStories if real '
+                'usage says otherwise',
           );
         });
       }
@@ -120,17 +132,17 @@ void _marginTests() {
   });
 
   group('the cap keeps the worst case bounded', () {
-    for (final currency in ['INR', 'USD']) {
+    for (final currency in ['USD']) {
       for (final plan in PricingCatalog.plansForCurrency(currency)) {
         test('${plan.id} survives a subscriber who maxes out', () {
-          final margin = marginAt(plan, PricingCatalog.plusMonthlyStories);
+          final margin = marginAt(plan, PricingCatalog.manifestMonthly);
           expect(
             margin,
             greaterThanOrEqualTo(worstCaseFloor),
             reason:
-                '${plan.headline} at the ${PricingCatalog.plusMonthlyStories}-story '
-                'cap leaves ${pct(margin)} — lower plusMonthlyStories or raise '
-                'the price',
+                '${plan.headline} at the ${PricingCatalog.manifestMonthly} cap '
+                'leaves ${pct(margin)} — lower manifestMonthly or raise the '
+                'price',
           );
         });
       }
@@ -138,24 +150,64 @@ void _marginTests() {
   });
 
   test('the allowance is a ceiling, not a forecast', () {
-    // If these ever meet, the cap has stopped being a bound on the outlier and
-    // started being the plan — at which point the 80% target has to be
-    // measured against it, and the prices in the doc comment apply.
+    // If these ever meet, the cap has stopped bounding the outlier and started
+    // being the plan — at which point the 80% target has to be measured
+    // against it, and the price has to move with it.
     expect(
       PricingCatalog.expectedMonthlyStories,
-      lessThan(PricingCatalog.plusMonthlyStories),
+      lessThan(PricingCatalog.manifestMonthly),
     );
+  });
+
+  test('a savings badge claims no more than the prices deliver', () {
+    // The badge is a hardcoded string sitting next to two numbers it describes,
+    // and nothing used to connect them. "Save 17%" was written against ₹6,499
+    // and stayed on the plan when it went to ₹6,999 — at which point it was
+    // claiming 17% on a real saving of 10%.
+    //
+    // A wrong savings claim on a subscription is not a cosmetic bug. It is the
+    // Misleading Claims section of Play's policy, and it is the single thing
+    // reviewers of the app this one is modelled on complained about most.
+    for (final currency in ['USD']) {
+      final plans = PricingCatalog.plansForCurrency(currency);
+      final monthly = plans.firstWhere((p) => p.period == BillingPeriod.month);
+      final yearly = plans.firstWhere((p) => p.period == BillingPeriod.year);
+
+      final badge = yearly.badge;
+      if (badge == null) continue;
+
+      final claimed = int.parse(RegExp(r'\d+').firstMatch(badge)!.group(0)!);
+      final real = (1 - yearly.amount / (12 * monthly.amount)) * 100;
+
+      expect(
+        claimed,
+        closeTo(real, 0.5),
+        reason:
+            '$badge on ${yearly.id}, but ${yearly.amount} against 12 × '
+            '${monthly.amount} is only ${real.toStringAsFixed(1)}%',
+      );
+    }
   });
 
   test('the yearly plan is the binding constraint', () {
     // Worth knowing: yearly always has the thinner margin, so it is the one to
     // check first when any of these numbers moves.
-    for (final currency in ['INR', 'USD']) {
+    for (final currency in ['USD']) {
       final plans = PricingCatalog.plansForCurrency(currency);
       final monthly = plans.firstWhere((p) => p.period == BillingPeriod.month);
       final yearly = plans.firstWhere((p) => p.period == BillingPeriod.year);
-      final at = PricingCatalog.plusMonthlyStories;
+      final at = PricingCatalog.manifestMonthly;
       expect(marginAt(yearly, at), lessThan(marginAt(monthly, at)));
     }
+  });
+
+  test('the yearly plan is the one that breaks first', () {
+    // Pinned because it is the plan every cost rise lands on, and the last one
+    // anybody thinks to check.
+    final yearly = PricingCatalog.plansForCurrency(
+      'USD',
+    ).firstWhere((p) => p.period == BillingPeriod.year);
+
+    expect(marginAt(yearly, PricingCatalog.manifestMonthly), greaterThan(0.65));
   });
 }

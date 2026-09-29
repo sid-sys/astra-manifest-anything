@@ -1,4 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#FFFFFF</color>
+    <color name="ic_launcher_background">#05060F</color>
+
+    <!-- The window behind Flutter, shown in the frame between the splash
+         going away and Flutter's first paint. It has to match the app's own
+         ground or that frame flashes.
+
+         It was #F4EFE6, the paper colour from before the app went dark, so
+         every cold launch flashed cream between two black screens. The name
+         stayed "paper" because it is referenced from styles.xml; what it holds
+         is the night the app is actually painted on. -->
+    <color name="paper">#05060F</color>
 </resources>
