@@ -116,6 +116,24 @@ flutter_native_splash:
 # The following section is specific to Flutter packages.
 flutter:
 
+  # iOS resolves native dependencies with CocoaPods, not Swift Package Manager.
+  #
+  # Under Swift Package Manager every Firebase plugin pins its own exact copy of
+  # Apple's Firebase SDK, and they must all agree. The locked set does not:
+  # firebase_auth, cloud_firestore and cloud_functions pin 12.15.0 while
+  # firebase_core and firebase_messaging pin 12.17.0, so `xcodebuild` refuses
+  # with "Could not resolve package dependencies" before compiling anything.
+  #
+  # CocoaPods reads one Firebase version from firebase_core and hands it to all
+  # of them, so they cannot disagree. This changes only how the iOS project is
+  # built — no package version moves, and the Android app is untouched.
+  #
+  # The proper fix is to upgrade the five Firebase plugins together, which does
+  # change the Android app and so needs its own round of testing. When that is
+  # done, this can come out.
+  config:
+    enable-swift-package-manager: false
+
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
