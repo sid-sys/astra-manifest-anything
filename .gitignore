@@ -59,3 +59,12 @@ app.*.map.json
 android/key.properties
 *.jks
 *.keystore
+
+# Old copies of Firebase config, kept by hand when a key is rotated. The live
+# one is android/app/google-services.json; a stale one in history is just a
+# second place a dead key can be found.
+*.bak
+
+# Claude Code scratch. launch.json (the demo web run config) is worth sharing;
+# the scheduler lock is per-machine state.
+.claude/scheduled_tasks.lock
