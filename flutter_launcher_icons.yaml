@@ -6,6 +6,12 @@
 # alone, which is the part that survives being small.
 flutter_launcher_icons:
   android: "ic_launcher"
+
+  # Apple rejects an icon with an alpha channel outright, and says so only after
+  # the upload. The source is opaque already; this makes it a guarantee rather
+  # than a property of one particular PNG.
+  ios: true
+  remove_alpha_ios: true
   image_path: "assets/brand/icon.png"
 
   # Adaptive icons are two layers the launcher animates and masks

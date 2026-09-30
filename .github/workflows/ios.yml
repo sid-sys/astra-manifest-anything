@@ -1,0 +1,103 @@
+# Builds the iOS app on GitHub's macOS runners.
+#
+# This lives in a PUBLIC repository on purpose. GitHub-hosted runners are free
+# and unlimited for public repos; on a private one a macOS minute is billed at
+# ten times the Linux rate, so a ten-minute iOS build costs a hundred minutes of
+# the monthly allowance. The public repo holds only what a build needs — see
+# tool/sync_public.mjs in the private repo for exactly what is copied and what
+# is refused.
+#
+# Nothing here needs a secret. `--no-codesign` compiles the whole app and
+# resolves every CocoaPod without an Apple account, which is the half of "does
+# iOS build" that breaks most often: a plugin needing a newer deployment
+# target, a missing purpose string, Swift that only fails on the device SDK.
+#
+# Signing and TestFlight upload are a separate job that needs an Apple
+# Developer account, a distribution certificate, a provisioning profile and an
+# App Store Connect API key. They are deliberately not here yet: the secrets go
+# in this repository's Settings -> Secrets, never in a file, and a workflow
+# written before they exist can only be guessed at.
+
+name: iOS build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "lib/**"
+      - "ios/**"
+      - "assets/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - ".github/workflows/ios.yml"
+
+# A second push while one is building replaces it. macOS runners are the
+# slowest thing in the pipeline; letting three queue up helps nobody.
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+# Read-only. This job has no reason to write to the repository, and a token
+# that cannot is one fewer thing to leak if a dependency misbehaves.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (unsigned)
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    # Never on a private repository. This file is also present in the private
+    # source repo, where a macOS minute is billed at ten times the Linux rate:
+    # one stray push there would quietly spend a tenth of the month's free
+    # allowance on a build that was meant to be free. `private == false` makes
+    # the job skip itself everywhere except the public mirror.
+    if: github.event.repository.private == false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The version this app is built and tested with on the developer's
+      # machine. `pubspec.lock` pins packages; this pins the toolchain that
+      # resolves them. Floating on "stable" is how a green build turns red on a
+      # day nobody changed anything.
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.1
+          cache: true
+
+      - name: Toolchain
+        run: |
+          flutter --version
+          xcodebuild -version
+          pod --version
+
+      - name: Packages
+        run: flutter pub get
+
+      # Fails on errors and warnings. Not on info-level lints: those are style,
+      # they are already in the code this was built from, and a build that goes
+      # red over a lint about `BuildContext` is a build people learn to ignore.
+      - name: Analyze
+        run: flutter analyze lib --no-fatal-infos
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: ios/Pods
+          key: pods-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
+          restore-keys: pods-${{ runner.os }}-
+
+      - name: Build iOS (no codesign)
+        run: flutter build ios --release --no-codesign
+
+      # Reports size only. The .app is not uploaded as an artifact: on a public
+      # repository an artifact is downloadable by anyone, and an unsigned
+      # binary of the shipped app is not something to hand out.
+      - name: Result
+        run: |
+          du -sh build/ios/iphoneos/Runner.app
+          echo "iOS build succeeded"

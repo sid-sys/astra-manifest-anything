@@ -58,59 +58,19 @@ class Plan {
 /// goes live it returns its own localized price and that becomes the source of
 /// truth; this table is the pre-billing default and the offline fallback.
 ///
-/// ## How these numbers were derived
-///
-/// A manifestation costs **$0.161** to produce. Measured, not estimated: three
-/// real ones ran to 2,230, 2,249 and 2,253 characters, and at ElevenLabs
-/// Turbo's $0.05 per thousand that is $0.112 of narration. The script adds
-/// $0.022, the four questions that precede it $0.017, and storage, traffic and
-/// functions about $0.010. Narration is 70% of the total, which is why the
-/// script model barely moves the answer and the voice model decides it.
-///
-/// Affirmations are uncapped and cost about $0.05 a month per active user, on
-/// Haiku rather than Opus. They were $0.25 on Opus, which is a point and a
-/// half of margin on the thinnest plan spent on the cheapest thing in the app.
-///
-/// ## The margin is measured on what actually arrives
-///
-/// Google Play takes 15%, so the dollar plans keep 85% and no more. The number
-/// to design against is the one that reaches the bank.
-///
-///     margin at n = (net monthly − n × $0.161 − $0.05) / net monthly
-///
-///
-/// | manifests/month | $7.99 mo | $79.99 yr |
-/// |-----------------|----------|-----------|
-/// | net to us       |    $6.79 |     $5.67 |
-/// | 6 (expected)    |    85.0% |     82.1% |
-/// | **10 (the cap)** | **75.6%** | **70.7%** |
-/// | 12              |    70.8% |     65.0% |
-///
-/// Ten holds 70% to 76% across the catalogue, inside the 60–70% band the owner
-/// asked for with room above it.
-///
-/// The yearly plan in the weaker currency always binds: twelve months of cost
-/// against one payment, so any cost movement hits it twelve times as hard. It
-/// is the first plan to check and the last place anyone looks.
-///
-/// ## The allowance is a ceiling, not a forecast
-///
-/// Ten a month is more than anyone is expected to use. It exists so the worst
-/// case is known: without a cap, one automated client runs the margin
-/// negative. At the six a month a real subscriber uses, every plan is near 88%.
-///
-/// Listening is not capped and never will be. Replaying a file that already
-/// exists is free; making a new one is not. Capping the expensive half and
-/// leaving the free half alone is both cheaper to honour and easier to explain
-/// than the competitor who caps plays at three a day while advertising
-/// unlimited generation.
+/// The reasoning behind the prices and allowances below — what a
+/// manifestation costs to produce, what a subscription actually pays after
+/// the store's cut and tax, and where the margin floors sit — is kept in the
+/// private pricing notes and enforced by the pricing test. Change a price or
+/// an allowance there first: the test fails the day one moves without the
+/// other.
 ///
 class PricingCatalog {
   const PricingCatalog._();
 
   /// Stories per month on Plus — a ceiling on the heaviest user, not a
-  /// forecast of the typical one. See the derivation above before changing it:
-  /// past twelve, the yearly plans stop clearing 80% at expected usage and the
+  /// forecast of the typical one. See the pricing notes before changing it: past a
+  /// certain number the yearly plans stop clearing the margin floor, and the
   /// price has to move with it.
   static const plusMonthlyStories = 20;
 
@@ -119,7 +79,7 @@ class PricingCatalog {
   /// This was three, and the reasoning against a trial is worth keeping
   /// because it is the risk the current design has to answer: a time-boxed
   /// trial with an uncapped generator is an unbounded cost, since three days
-  /// of a motivated user is tens of stories at roughly ten cents each.
+  /// of a motivated user is tens of stories.
   ///
   /// A three-a-day cap used to bound that to about a dollar. It was removed at
   /// the owner's request — it was also stopping people who were simply enjoying
@@ -147,9 +107,8 @@ class PricingCatalog {
   ///
   /// Mirrors `MANIFEST_MONTHLY_LIMIT` in `functions/index.js`, which enforces
   /// it. Separate from the story allowance because the two cost different
-  /// amounts to make — a manifestation is narrated by ElevenLabs at roughly
-  /// twice a story's per-character rate over a third of the length — so one
-  /// shared number would either starve the cheap one or give away the dear one.
+  /// amounts to make, so one shared number would either starve the
+  /// cheap one or give away the dear one.
   static const manifestMonthly = 10;
 
   /// What a subscriber is assumed to actually use in a month.
@@ -164,7 +123,6 @@ class PricingCatalog {
 
   static const _plansByCurrency = <String, List<Plan>>{
     'USD': [
-      // $7.99 → $6.79 after Play → 85.0% at six, 75.6% at the cap.
       Plan(
         id: 'astra_plus_monthly_usd',
         period: BillingPeriod.month,
@@ -172,7 +130,6 @@ class PricingCatalog {
         currencyCode: 'USD',
         popular: true,
       ),
-      // $79.99 → $5.67 a month after Play → 82.1% at six, 70.7% at the cap.
       // 1 − 79.99/(12 × 7.99) = 16.6%.
       Plan(
         id: 'astra_plus_yearly_usd',
