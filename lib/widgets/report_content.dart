@@ -59,7 +59,7 @@ Future<void> reportContent(
               Text('Report this', style: AstraTextStyles.display(20)),
               const SizedBox(height: AstraSpacing.sm),
               Text(
-                'Nobody reviews what Maya writes before you see it. If '
+                'Nobody reviews what Mayow writes before you see it. If '
                 'something in here was wrong to generate, tell us and we will '
                 'look at it.',
                 style: AstraTextStyles.bodyDim,

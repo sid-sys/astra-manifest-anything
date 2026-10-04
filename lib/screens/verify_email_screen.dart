@@ -110,7 +110,7 @@ class _VerifyEmailScreenState extends ConsumerState<VerifyEmailScreen> {
             child: ListView(
               children: [
                 const SizedBox(height: AstraSpacing.xxl),
-                const Wordmark('Maya'),
+                const Wordmark('Mayow'),
                 const SizedBox(height: AstraSpacing.xxl),
 
                 const Center(

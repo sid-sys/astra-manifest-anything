@@ -79,8 +79,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
               Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back_rounded),
-                    color: AstraColors.dim,
+                    icon: const AstraIcon('ui_back', size: 28),
                     tooltip: 'Back',
                     onPressed: () => Navigator.of(context).maybePop(),
                   ),

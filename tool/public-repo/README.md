@@ -1,6 +1,6 @@
-# Maya — iOS build
+# Mayow — iOS build
 
-Builds the iOS version of **Personal Manifestation: Maya** on GitHub's free
+Builds the iOS version of **Personal Manifestation: Mayow** on GitHub's free
 macOS runners.
 
 The app's source code is **not** in this repository. It is private, and is

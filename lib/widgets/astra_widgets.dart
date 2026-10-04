@@ -49,7 +49,10 @@ class AstraCard extends StatelessWidget {
     // background, while a shadow reads as something resting on it.
     final decoration = BoxDecoration(
       color: raised ? AstraColors.cardRaised : AstraColors.card,
-      border: borderColor == null ? null : Border.all(color: borderColor!, width: 1.5),
+      border: Border.all(
+        color: borderColor ?? const Color(0x33FFFFFF),
+        width: borderColor == null ? 1 : 2,
+      ),
       borderRadius: BorderRadius.circular(AstraSpacing.cardRadius),
       boxShadow: raised ? AstraColors.liftedShadow : AstraColors.softShadow,
     );
@@ -71,8 +74,12 @@ class AstraCard extends StatelessWidget {
   }
 }
 
-/// Primary action. Aubergine, pill-shaped, one per screen.
-class AstraButton extends StatelessWidget {
+/// Primary action. Hot pink, pill-shaped, one per screen.
+///
+/// The darker underside is a hard shadow, not a blur: it is what makes the
+/// button read as a thing with thickness that can be pressed, and it sinks by
+/// the same distance while a finger is on it.
+class AstraButton extends StatefulWidget {
   const AstraButton({
     super.key,
     required this.label,
@@ -87,77 +94,88 @@ class AstraButton extends StatelessWidget {
   final IconData? icon;
 
   @override
+  State<AstraButton> createState() => _AstraButtonState();
+}
+
+class _AstraButtonState extends State<AstraButton> {
+  bool _down = false;
+
+  @override
   Widget build(BuildContext context) {
-    final enabled = onPressed != null && !busy;
+    final enabled = widget.onPressed != null && !widget.busy;
+    const edge = 5.0;
 
     return Semantics(
       button: true,
       enabled: enabled,
-      label: label,
+      label: widget.label,
       child: Opacity(
         opacity: enabled ? 1 : 0.55,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: enabled ? onPressed : null,
-            borderRadius: BorderRadius.circular(AstraSpacing.pillRadius),
-            child: Ink(
-              decoration: BoxDecoration(
-                gradient: AstraColors.accentGradient,
-                borderRadius: BorderRadius.circular(AstraSpacing.pillRadius),
-                boxShadow: enabled ? AstraColors.liftedShadow : null,
-              ),
-              child: Container(
-                height: 54,
-                alignment: Alignment.center,
-                child: busy
-                    ? SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.2,
-                          color: AstraColors.onAccent,
-                        ),
-                      )
-                    : Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (icon != null) ...[
-                            const SizedBox(width: 2),
-                            Icon(icon, size: 18, color: AstraColors.onAccent),
-                            const SizedBox(width: 8),
-                          ],
-                          // Shrinks rather than overflows.
-                          //
-                          // The label is not a fixed string: the paywall's
-                          // reads "Start Maya Plus — ₹6,999 / year" in one
-                          // currency and something longer in the next, and a
-                          // Row of natural-width children on a 375pt phone ran
-                          // 43 points off the right edge of the button.
-                          //
-                          // Scaled down rather than wrapped or ellipsised: the
-                          // pill is a fixed 54 high so a second line has
-                          // nowhere to go, and a call to action that ends in
-                          // "…" is a call to action nobody can read.
-                          Flexible(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                label,
-                                maxLines: 1,
-                                style: TextStyle(
-                                  color: AstraColors.onAccent,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 15,
-                                  letterSpacing: 0.1,
-                                ),
-                              ),
+        child: GestureDetector(
+          onTapDown: enabled ? (_) => setState(() => _down = true) : null,
+          onTapCancel: () => setState(() => _down = false),
+          onTapUp: (_) => setState(() => _down = false),
+          onTap: enabled ? widget.onPressed : null,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 90),
+            margin: EdgeInsets.only(top: _down ? edge : 0, bottom: _down ? 0 : edge),
+            height: 56,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AstraColors.cta,
+              borderRadius: BorderRadius.circular(AstraSpacing.pillRadius),
+              boxShadow: [
+                if (!_down)
+                  const BoxShadow(
+                    color: AstraColors.ctaEdge,
+                    offset: Offset(0, edge),
+                  ),
+              ],
+            ),
+            child: widget.busy
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.6,
+                      color: AstraColors.onCta,
+                    ),
+                  )
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (widget.icon != null) ...[
+                        const SizedBox(width: 2),
+                        Icon(widget.icon, size: 20, color: AstraColors.onCta),
+                        const SizedBox(width: 8),
+                      ],
+                      // Shrinks rather than overflows.
+                      //
+                      // The label is not a fixed string: the paywall's reads
+                      // "Start Mayow Plus — ₹6,999 / year" in one currency and
+                      // something longer in the next, and a Row of natural-width
+                      // children on a 375pt phone ran 43 points off the right
+                      // edge of the button. Scaled down rather than wrapped or
+                      // ellipsised: the pill is a fixed height so a second line
+                      // has nowhere to go, and a call to action that ends in
+                      // "…" is a call to action nobody can read.
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            widget.label,
+                            maxLines: 1,
+                            style: const TextStyle(
+                              color: AstraColors.onCta,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 17,
+                              letterSpacing: 0.2,
                             ),
                           ),
-                        ],
+                        ),
                       ),
-              ),
-            ),
+                    ],
+                  ),
           ),
         ),
       ),
@@ -183,16 +201,16 @@ class AstraGhostButton extends StatelessWidget {
       onTap: onPressed,
       borderRadius: BorderRadius.circular(AstraSpacing.pillRadius),
       child: Container(
-        height: 50,
+        height: 52,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: AstraColors.card,
           borderRadius: BorderRadius.circular(AstraSpacing.pillRadius),
-          boxShadow: AstraColors.softShadow,
+          border: Border.all(color: AstraColors.line, width: 1.5),
         ),
         child: Text(
           label,
-          style: AstraTextStyles.body.copyWith(fontWeight: FontWeight.w500),
+          style: AstraTextStyles.body.copyWith(fontWeight: FontWeight.w800),
         ),
       ),
     ),
@@ -228,14 +246,17 @@ class TagChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: selected ? color : AstraColors.card,
         borderRadius: BorderRadius.circular(AstraSpacing.pillRadius),
-        boxShadow: AstraColors.softShadow,
+        border: Border.all(
+          color: selected ? color : AstraColors.line,
+          width: 1.5,
+        ),
       ),
       child: Text(
         label,
         style: TextStyle(
-          fontSize: 12.5,
+          fontSize: 13.5,
           color: selected ? AstraColors.onAccent : AstraColors.text,
-          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+          fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
         ),
       ),
     );
@@ -318,9 +339,13 @@ class EmptyState extends StatelessWidget {
     required this.title,
     required this.body,
     this.action,
+    this.mascot,
   });
 
   final String glyph;
+
+  /// A mascot pose to show instead of the glyph disc, e.g. `mascot_sleep`.
+  final String? mascot;
   final String title;
   final String body;
   final Widget? action;
@@ -332,7 +357,10 @@ class EmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          GlyphDot(glyph: glyph, size: 56),
+          if (mascot != null)
+            AstraMascot(mascot!, size: 170)
+          else
+            GlyphDot(glyph: glyph, size: 56),
           const SizedBox(height: AstraSpacing.lg),
           Text(
             title,
@@ -387,4 +415,102 @@ Future<bool> confirmDelete(BuildContext context, String title) async {
     ),
   );
   return answer ?? false;
+}
+
+/// One of the app's glossy 3D icons (`assets/icons/<name>.png`).
+///
+/// Drawn from pictures rather than from the icon font, so they are full
+/// colour and cannot be tinted: a state that used to be "grey versus gold" is
+/// now "faded versus full", which is what [opacity] is for. Decorative —
+/// excluded from the accessibility tree, since every place that uses one
+/// already has a tooltip or a label next to it.
+class AstraIcon extends StatelessWidget {
+  const AstraIcon(this.name, {super.key, this.size = 24, this.opacity = 1});
+
+  /// The file name without folder or extension, e.g. `ui_play`.
+  final String name;
+  final double size;
+  final double opacity;
+
+  @override
+  Widget build(BuildContext context) => Image.asset(
+    'assets/icons/$name.png',
+    width: size,
+    height: size,
+    fit: BoxFit.contain,
+    filterQuality: FilterQuality.medium,
+    excludeFromSemantics: true,
+    opacity: AlwaysStoppedAnimation(opacity),
+  );
+}
+
+/// Mayow, the moon cat — the app's mascot (`assets/mascot/<name>.png`).
+///
+/// Floats up and down a few pixels on a slow loop, which is enough to make
+/// the screen feel inhabited without being a distraction. Pass [still] where
+/// motion would fight something else on screen. The pictures are in
+/// `design/mascot/` at full size if a larger one is ever needed.
+class AstraMascot extends StatefulWidget {
+  const AstraMascot(this.name, {super.key, this.size = 160, this.still = false});
+
+  /// Which pose: `mascot_wave`, `mascot_cheer`, `mascot_sleep`,
+  /// `mascot_listen`, `mascot_think` or `mascot_gift`.
+  final String name;
+  final double size;
+  final bool still;
+
+  @override
+  State<AstraMascot> createState() => _AstraMascotState();
+}
+
+class _AstraMascotState extends State<AstraMascot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 3200),
+  );
+
+  @override
+  void didUpdateWidget(AstraMascot old) {
+    super.didUpdateWidget(old);
+    if (old.still != widget.still) didChangeDependencies();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Still when asked to be, and still for anyone who has turned animations
+    // off in their phone's settings — a bobbing picture is exactly the kind of
+    // motion that setting exists to remove.
+    final reduce = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (widget.still || reduce) {
+      _controller.stop();
+      _controller.value = 0;
+    } else if (!_controller.isAnimating) {
+      _controller.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _controller,
+    builder: (context, child) => Transform.translate(
+      offset: Offset(0, -6 * Curves.easeInOut.transform(_controller.value)),
+      child: child,
+    ),
+    child: Image.asset(
+      'assets/mascot/${widget.name}.png',
+      width: widget.size,
+      height: widget.size,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.medium,
+      excludeFromSemantics: true,
+    ),
+  );
 }

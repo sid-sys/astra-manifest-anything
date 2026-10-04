@@ -42,8 +42,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     if (all.isEmpty) {
       return EmptyState(
         glyph: '✦',
+        mascot: 'mascot_sleep',
         title: 'Your library is waiting',
-        body: 'Everything Maya writes for you is kept here — replayable, for '
+        body: 'Everything Mayow writes for you is kept here — replayable, for '
             'as long as you want it.',
         action: AstraButton(
           label: 'Write your first manifestation',

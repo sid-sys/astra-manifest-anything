@@ -43,17 +43,17 @@ class PlanService {
       // rather than halfway through a page of questions.
       if (!plan.isUsable) {
         throw const PlanFailed(
-          'Maya could not shape that one into questions. Try rewording it.',
+          'Mayow could not shape that one into questions. Try rewording it.',
         );
       }
 
       return plan;
     } on FirebaseFunctionsException catch (error) {
-      debugPrint('Maya: planning failed — ${error.code} ${error.message}');
+      debugPrint('Mayow: planning failed — ${error.code} ${error.message}');
       throw PlanFailed(
         humanMessage(
           error,
-          fallback: 'Maya could not read that one. Try again in a moment.',
+          fallback: 'Mayow could not read that one. Try again in a moment.',
         ),
       );
     }

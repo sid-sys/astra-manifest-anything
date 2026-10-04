@@ -1,3 +1,4 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -54,7 +55,7 @@ class _BroadcastScreenState extends ConsumerState<BroadcastScreen> {
     try {
       await next;
     } catch (error) {
-      debugPrint('Maya: broadcast list failed — $error');
+      debugPrint('Mayow: broadcast list failed — $error');
     }
   }
 
@@ -82,9 +83,24 @@ class _BroadcastScreenState extends ConsumerState<BroadcastScreen> {
           ),
         ),
       );
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      // The server's own sentence, not the exception: the default string form
+      // is the code in brackets followed by eight lines of stack trace.
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            error.code == 'failed-precondition'
+                ? 'Nobody to send to yet. An announcement only reaches phones '
+                      'where "Affirmation reminders" is switched on in '
+                      'Profile — turn it on on your own phone first.'
+                : (error.message ?? 'Could not send.'),
+          ),
+        ),
+      );
     } catch (error) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text('$error')));
+      messenger.showSnackBar(SnackBar(content: Text('Could not send: $error')));
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -99,7 +115,9 @@ class _BroadcastScreenState extends ConsumerState<BroadcastScreen> {
       await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          backgroundColor: AstraColors.card,
+          // Colour comes from the app's dialog theme: opaque. It used to ask
+          // for the translucent card colour, which put the "Send to everyone"
+          // button and the sent list straight through the confirmation text.
           title: Text('Send to everyone?', style: AstraTextStyles.display(20)),
           content: Text(
             'Every phone with notifications turned on gets this, straight '
@@ -113,15 +131,17 @@ class _BroadcastScreenState extends ConsumerState<BroadcastScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: Text('Cancel', style: AstraTextStyles.small),
+              child: Text(
+                'Cancel',
+                style: AstraTextStyles.label.copyWith(color: AstraColors.dim),
+              ),
             ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(true),
               child: Text(
                 'Send',
-                style: AstraTextStyles.small.copyWith(
+                style: AstraTextStyles.label.copyWith(
                   color: AstraColors.accent,
-                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -137,7 +157,7 @@ class _BroadcastScreenState extends ConsumerState<BroadcastScreen> {
         child: RefreshIndicator(
           onRefresh: _refresh,
           color: AstraColors.text,
-          backgroundColor: AstraColors.card,
+          backgroundColor: AstraColors.canvasRaised,
           child: ListView(
             padding: AstraSpacing.screenPadding,
             children: [
@@ -146,7 +166,7 @@ class _BroadcastScreenState extends ConsumerState<BroadcastScreen> {
                 children: [
                   _Back(onTap: () => Navigator.of(context).pop()),
                   const SizedBox(width: AstraSpacing.md),
-                  Text('Maya', style: AstraTextStyles.wordmark),
+                  Text('Mayow', style: AstraTextStyles.wordmark),
                 ],
               ),
               const SizedBox(height: AstraSpacing.xl),
@@ -460,7 +480,7 @@ class _Back extends StatelessWidget {
           shape: BoxShape.circle,
           border: Border.all(color: AstraColors.line),
         ),
-        child: Icon(Icons.arrow_back_rounded, size: 18, color: AstraColors.text),
+        child: const Center(child: AstraIcon('ui_back', size: 26)),
       ),
     ),
   );

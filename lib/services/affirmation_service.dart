@@ -80,7 +80,7 @@ class AffirmationService {
         );
       }
 
-      debugPrint('Maya: affirmations failed — ${error.code} ${error.message}');
+      debugPrint('Mayow: affirmations failed — ${error.code} ${error.message}');
       throw AffirmFailed(
         humanMessage(
           error,
@@ -114,7 +114,7 @@ class AffirmationService {
     } catch (error) {
       // Rethrown, not swallowed — see the same note on
       // ManifestService.delete.
-      debugPrint('Maya: could not delete an affirmation set — $error');
+      debugPrint('Mayow: could not delete an affirmation set — $error');
       rethrow;
     }
   }

@@ -14,7 +14,7 @@ import 'player_screen.dart';
 /// Five lines a person can actually believe, written for one goal.
 ///
 /// The same shape as the manifestation box on Home — type the goal, decide
-/// whether Maya should use what it knows about you, press the button — because
+/// whether Mayow should use what it knows about you, press the button — because
 /// they are the same decision and two different arrangements of it would be two
 /// things to learn.
 ///
@@ -136,7 +136,7 @@ class _AffirmationsScreenState extends ConsumerState<AffirmationsScreen> {
               const SizedBox(height: AstraSpacing.xs),
               Text(
                 _ready
-                    ? 'Maya will ask you four things about this'
+                    ? 'Mayow will ask you four things about this'
                     : 'Write it in your own words — "I want to feel calm"',
                 style: AstraTextStyles.small.copyWith(color: AstraColors.dim),
               ),
@@ -257,21 +257,13 @@ class _SetCard extends StatelessWidget {
                 onPressed: onPlay,
                 tooltip: 'Play and loop',
                 visualDensity: VisualDensity.compact,
-                icon: Icon(
-                  Icons.play_circle_outline_rounded,
-                  size: 24,
-                  color: AstraColors.accent,
-                ),
+                icon: const AstraIcon('ui_play', size: 34),
               ),
             IconButton(
               onPressed: onDelete,
               tooltip: 'Delete',
               visualDensity: VisualDensity.compact,
-              icon: Icon(
-                Icons.delete_outline_rounded,
-                size: 20,
-                color: AstraColors.dim,
-              ),
+              icon: const AstraIcon('ui_delete', size: 30),
             ),
           ],
         ),

@@ -162,31 +162,50 @@ class PlaybackController extends ChangeNotifier {
     } catch (error) {
       // Never let the music break the words. A missing or unplayable bed
       // leaves the narration exactly as it was.
-      debugPrint('Maya: could not load the background bed — $error');
+      debugPrint('Mayow: could not load the background bed — $error');
     }
   }
 
+  /// What the music should be doing right now, and whether a sync is running.
+  bool _bedWanted = false;
+  bool _bedSyncing = false;
+
   /// Matches the bed to whatever the voice is doing right now.
+  ///
+  /// One run at a time, always chasing the latest answer. The voice player
+  /// reports every change of state, and while a file is still loading or has
+  /// just failed those arrive faster than the bed can load. Each report used to
+  /// start its own load, the loads interrupted each other, and the pause that
+  /// followed found the bed "not ready" and did nothing — so a load finishing
+  /// a moment later started the music over a voice that had stopped, and
+  /// nothing ever stopped it again. That is music with no voice, and a pause
+  /// button that appears to do nothing.
   Future<void> _syncBed(bool playing) async {
-    if (!_bedOn || !playing) {
-      if (_bedReady) {
-        try {
-          await _bed.pause();
-        } catch (_) {
-          // Nothing loaded yet. Silence is already the desired state.
-        }
-      }
-      return;
-    }
+    _bedWanted = _bedOn && playing;
+    if (_bedSyncing) return;
 
-    await _prepareBed();
-    if (!_bedReady) return;
-
+    _bedSyncing = true;
     try {
-      await _bed.setVolume(_bedVolume);
-      await _bed.play();
-    } catch (error) {
-      debugPrint('Maya: background bed failed — $error');
+      while (true) {
+        final wanted = _bedWanted;
+        try {
+          if (wanted) {
+            await _prepareBed();
+            if (_bedReady) {
+              await _bed.setVolume(_bedVolume);
+              if (!_bed.playing) unawaited(_bed.play());
+            }
+          } else if (_bedReady) {
+            await _bed.pause();
+          }
+        } catch (error) {
+          debugPrint('Mayow: background bed failed — $error');
+        }
+        // Something changed while that was loading: go round again.
+        if (wanted == _bedWanted) break;
+      }
+    } finally {
+      _bedSyncing = false;
     }
   }
 
@@ -212,7 +231,7 @@ class PlaybackController extends ChangeNotifier {
       try {
         await _bed.setVolume(_bedVolume);
       } catch (error) {
-        debugPrint('Maya: could not set bed volume — $error');
+        debugPrint('Mayow: could not set bed volume — $error');
       }
     }
   }
@@ -273,7 +292,7 @@ class PlaybackController extends ChangeNotifier {
       await _player.setLoopMode(_state.looping ? LoopMode.one : LoopMode.off);
       await _player.setSpeed(_state.speed);
     } catch (error) {
-      debugPrint('Maya: audio failed, reading script instead — $error');
+      debugPrint('Mayow: audio failed, reading script instead — $error');
       _usingVirtualClock = true;
     }
     _pushNotificationState();
@@ -298,11 +317,11 @@ class PlaybackController extends ChangeNotifier {
         await _player.setUrl(story.audioUrl!);
         await _player.setLoopMode(_state.looping ? LoopMode.one : LoopMode.off);
         await _player.setSpeed(_state.speed);
-        await _player.play();
+        unawaited(_player.play());
         _pushNotificationState();
         return;
       } catch (error) {
-        debugPrint('Maya: audio failed, reading script instead — $error');
+        debugPrint('Mayow: audio failed, reading script instead — $error');
       }
     }
 
@@ -333,9 +352,9 @@ class PlaybackController extends ChangeNotifier {
       await _player.setLoopMode(_state.looping ? LoopMode.one : LoopMode.off);
       await _player.setSpeed(_state.speed);
       if (resumeAt > Duration.zero) await _player.seek(resumeAt);
-      if (wasPlaying) await _player.play();
+      if (wasPlaying) unawaited(_player.play());
     } catch (error) {
-      debugPrint('Maya: could not attach narration — $error');
+      debugPrint('Mayow: could not attach narration — $error');
       if (wasPlaying) _startVirtualClock();
     }
     _pushNotificationState();
@@ -357,7 +376,7 @@ class PlaybackController extends ChangeNotifier {
       await _player.stop();
       await _bed.pause();
     } catch (error) {
-      debugPrint('Maya: could not stop the player — $error');
+      debugPrint('Mayow: could not stop the player — $error');
     }
     // Clears the notification rather than leaving it on a story that no
     // longer plays — the one thing a "stopped" card must never show is a
@@ -390,12 +409,31 @@ class PlaybackController extends ChangeNotifier {
     try {
       _state = _state.copyWith(playing: true);
       notifyListeners();
+
+      // The narration failed to load when the story opened — a dropped
+      // connection, usually. Try again now that somebody has asked for it,
+      // rather than reading the script in silence for good.
+      final story = _state.story;
+      if (_usingVirtualClock && story != null && story.hasAudio) {
+        try {
+          await _player.setUrl(story.audioUrl!);
+          await _player.setLoopMode(
+            _state.looping ? LoopMode.one : LoopMode.off,
+          );
+          await _player.setSpeed(_state.speed);
+          _stopVirtualClock();
+          _usingVirtualClock = false;
+        } catch (error) {
+          debugPrint('Mayow: narration still unavailable — $error');
+        }
+      }
+
       if (_usingVirtualClock) {
         _startVirtualClock();
         _pushNotificationState();
         return;
       }
-      await _player.play();
+      unawaited(_player.play());
     } finally {
       _toggling = false;
     }
@@ -410,6 +448,7 @@ class PlaybackController extends ChangeNotifier {
       notifyListeners();
       if (_usingVirtualClock) {
         _virtualClock?.cancel();
+        unawaited(_syncBed(false));
         _pushNotificationState();
         return;
       }
@@ -520,7 +559,7 @@ class PlaybackController extends ChangeNotifier {
       audio_service.MediaItem(
         id: story.id,
         title: story.title,
-        album: 'Maya',
+        album: 'Mayow',
         duration: story.duration,
       ),
     );

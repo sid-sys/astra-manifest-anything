@@ -2,6 +2,8 @@ import 'package:astra/providers.dart';
 import 'package:astra/screens/auth_screen.dart';
 import 'package:astra/screens/forgot_password_screen.dart';
 import 'package:astra/theme/astra_theme.dart';
+import 'package:astra/widgets/astra_widgets.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -45,6 +47,17 @@ Future<void> _pump(WidgetTester tester, {bool asUpgrade = false}) async {
 }
 
 bool _armed(WidgetTester tester, String label) {
+  // The primary button is an AstraButton, which presses through a gesture
+  // detector rather than an InkWell, so ask the button itself whether it has
+  // an action. Anything else with this label (a text link) is still an InkWell.
+  final primary = find.ancestor(
+    of: find.text(label),
+    matching: find.byType(AstraButton),
+  );
+  if (primary.evaluate().isNotEmpty) {
+    return tester.widget<AstraButton>(primary.first).onPressed != null;
+  }
+
   final button = tester.widget<InkWell>(
     find.ancestor(of: find.text(label), matching: find.byType(InkWell)).first,
   );
@@ -80,7 +93,14 @@ void main() {
     // onboarding on answers that were never theirs and dropped straight onto
     // the paywall, having been asked nothing at all.
     expect(find.text('Continue as guest'), findsNothing);
-    expect(find.textContaining('guest'), findsNothing);
+
+    // The one exception is a throwaway door that exists in debug builds only,
+    // labelled as a test, so a developer can walk every screen. It is gated on
+    // `kDebugMode` and asserts again where it is used, so it cannot ship.
+    expect(
+      find.textContaining('guest'),
+      kDebugMode ? findsOneWidget : findsNothing,
+    );
 
     // Every remaining route leaves the user with something to sign back in
     // with, which is the whole point.

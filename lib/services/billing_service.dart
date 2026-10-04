@@ -60,7 +60,7 @@ class PurchaseNotVerified implements Exception {
   String toString() => 'PurchaseNotVerified: $cause';
 }
 
-/// Buying Maya Plus.
+/// Buying Mayow Plus.
 ///
 /// The store is the only thing that takes money and the server is the only
 /// thing that grants access. This class sits between them and does neither: it
@@ -118,7 +118,7 @@ class BillingService {
       // function that lives in asia-south1.
       return FirebaseFunctions.instanceFor(region: 'asia-south1');
     } catch (error) {
-      debugPrint('Maya: no functions available for billing — $error');
+      debugPrint('Mayow: no functions available for billing — $error');
       return null;
     }
   }
@@ -140,7 +140,7 @@ class BillingService {
     try {
       return await store.isAvailable();
     } catch (error) {
-      debugPrint('Maya: store would not answer — $error');
+      debugPrint('Mayow: store would not answer — $error');
       return false;
     }
   }
@@ -182,7 +182,7 @@ class BillingService {
       InAppPurchase.instance.purchaseStream;
       return _storePresent = true;
     } catch (error) {
-      debugPrint('Maya: no store on this platform — $error');
+      debugPrint('Mayow: no store on this platform — $error');
       return _storePresent = false;
     }
   }
@@ -199,7 +199,7 @@ class BillingService {
       // Normal before the products are published in the Console, and a
       // permanent misconfiguration after. Either way the paywall falls back to
       // the local price table rather than showing nothing.
-      debugPrint('Maya: store has no record of ${response.notFoundIDs}');
+      debugPrint('Mayow: store has no record of ${response.notFoundIDs}');
     }
 
     return response.productDetails;
@@ -347,7 +347,7 @@ class BillingService {
               // the subscription — and only the server's confirmation failed,
               // which is a different thing to tell the user than "the purchase
               // failed". See [PurchaseNotVerified].
-              debugPrint('Maya: purchase verification failed — $error');
+              debugPrint('Mayow: purchase verification failed — $error');
               if (!completer.isCompleted) {
                 completer.completeError(PurchaseNotVerified(error));
               }
@@ -415,7 +415,7 @@ class BillingService {
         if (!done.isCompleted) done.complete(false);
       },
       onError: (Object error) {
-        debugPrint('Maya: restore failed — $error');
+        debugPrint('Mayow: restore failed — $error');
         if (!done.isCompleted) done.complete(false);
       },
     );
@@ -435,9 +435,9 @@ class BillingService {
       // quietly a second later with the message still on screen.
       await done.future.timeout(const Duration(seconds: 30));
     } on TimeoutException {
-      debugPrint('Maya: restore timed out waiting for Play');
+      debugPrint('Mayow: restore timed out waiting for Play');
     } catch (error) {
-      debugPrint('Maya: restore failed — $error');
+      debugPrint('Mayow: restore failed — $error');
     } finally {
       await _watch?.cancel();
       _watch = null;

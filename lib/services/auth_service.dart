@@ -2,7 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
-/// Every way into Maya, and the rules about moving between them.
+/// Every way into Mayow, and the rules about moving between them.
 ///
 /// Two doors now: an email and password, or Google. The anonymous "continue as
 /// guest" door was removed. It cost nothing to walk through and that was the
@@ -84,7 +84,7 @@ class AuthService {
     try {
       return _auth.currentUser;
     } catch (error) {
-      debugPrint('Maya: no auth available, running local-only — $error');
+      debugPrint('Mayow: no auth available, running local-only — $error');
       return null;
     }
   }
@@ -124,15 +124,15 @@ class AuthService {
         // Offline, or any other transient failure. Keeping the session is the
         // right guess: signing people out because their train went into a
         // tunnel would be far worse than the bug this fixes.
-        debugPrint('Maya: could not check the session — ${error.code}');
+        debugPrint('Mayow: could not check the session — ${error.code}');
         return false;
       }
 
-      debugPrint('Maya: signing out a dead session — ${error.code}');
+      debugPrint('Mayow: signing out a dead session — ${error.code}');
       await _auth.signOut();
       return true;
     } catch (error) {
-      debugPrint('Maya: could not check the session — $error');
+      debugPrint('Mayow: could not check the session — $error');
       return false;
     }
   }
@@ -251,6 +251,16 @@ class AuthService {
   ///
   /// The web keeps the popup, which has no such problem — a popup shares
   /// storage with the page that opened it.
+  /// A throwaway anonymous account, for walking through every screen.
+  ///
+  /// Debug builds only — the assert makes a release build refuse, and the only
+  /// button that calls it is behind `kDebugMode` too. The production app has no
+  /// guest door on purpose (see the note in `AuthScreen`).
+  Future<UserCredential> signInAsTestGuest() {
+    assert(kDebugMode, 'The test guest door must never exist in a release.');
+    return _auth.signInAnonymously();
+  }
+
   Future<UserCredential> signInWithGoogle() async {
     if (kIsWeb) {
       return _federated(GoogleAuthProvider()..addScope('email'));
@@ -366,7 +376,7 @@ class AuthService {
       } catch (error) {
         // Never block a sign-out on this. Not having been signed into Google
         // is the common case, and it throws.
-        debugPrint('Maya: Google sign-out skipped — $error');
+        debugPrint('Mayow: Google sign-out skipped — $error');
       }
     }
 

@@ -54,7 +54,7 @@ class AstraRepository {
     try {
       return UserProfile.fromMap(jsonDecode(raw) as Map<String, dynamic>);
     } catch (error) {
-      debugPrint('Maya: could not decode stored profile — $error');
+      debugPrint('Mayow: could not decode stored profile — $error');
       return null;
     }
   }
@@ -117,12 +117,12 @@ class AstraRepository {
       if (data == null) return null;
       return UserProfile.fromMap(data);
     } catch (error) {
-      debugPrint('Maya: could not read cloud profile — $error');
+      debugPrint('Mayow: could not read cloud profile — $error');
       return null;
     }
   }
 
-  /// Removes everything Maya has stored on this device.
+  /// Removes everything Mayow has stored on this device.
   ///
   /// Named keys rather than `prefs.clear()`: the preference store belongs to
   /// the whole app, and a wipe that also took out something a plugin had put
@@ -192,7 +192,7 @@ class AstraRepository {
           .map((doc) => Story.fromMap(doc.id, doc.data()))
           .toList();
     } catch (error) {
-      debugPrint('Maya: could not read cloud stories — $error');
+      debugPrint('Mayow: could not read cloud stories — $error');
       return const [];
     }
   }
@@ -228,7 +228,7 @@ class AstraRepository {
     try {
       return AffirmationTaste.fromMap(jsonDecode(raw) as Map<String, dynamic>);
     } catch (error) {
-      debugPrint('Maya: could not decode affirmation taste — $error');
+      debugPrint('Mayow: could not decode affirmation taste — $error');
       return const AffirmationTaste();
     }
   }
@@ -255,7 +255,7 @@ class AstraRepository {
           .map((e) => decode(e.key, e.value as Map<String, dynamic>))
           .toList();
     } catch (error) {
-      debugPrint('Maya: could not decode "$key" — $error');
+      debugPrint('Mayow: could not decode "$key" — $error');
       return <T>[];
     }
   }
@@ -268,7 +268,7 @@ class AstraRepository {
     try {
       await write();
     } catch (error) {
-      debugPrint('Maya: cloud sync skipped — $error');
+      debugPrint('Mayow: cloud sync skipped — $error');
     }
   }
 

@@ -65,6 +65,12 @@ Future<void> _pump(
       ],
       child: MaterialApp(
         theme: buildAstraTheme(),
+        // Reduce-motion on, so the mascot holds still and the screen can
+        // settle — an endlessly floating picture never lets pumpAndSettle end.
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(disableAnimations: true),
+          child: child!,
+        ),
         // Two different lives, and the difference is the point. Pushed, there
         // is a screen underneath and leaving means popping. As `home`, there is
         // nothing underneath at all — which is how the app shows it to an
@@ -106,7 +112,7 @@ void main() {
     // so this screen can afford a door.
     expect(find.bySemanticsLabel('Back'), findsOneWidget);
     expect(find.text('Sign out'), findsNothing);
-    expect(find.text('Restore a purchase'), findsOneWidget);
+    expect(find.text('Restore purchase'), findsOneWidget);
   });
 
   testWidgets('as the root, it offers sign out and never a back button', (
@@ -124,7 +130,7 @@ void main() {
     // another account. Sign out grants nothing: signing back in runs the same
     // check that put them here.
     expect(find.text('Sign out'), findsOneWidget);
-    expect(find.text('Restore a purchase'), findsOneWidget);
+    expect(find.text('Restore purchase'), findsOneWidget);
   });
 
   testWidgets('the offer fits a small phone without clipping anything', (
@@ -146,7 +152,7 @@ void main() {
     expect(tester.takeException(), isNull);
 
     // Pinned, not scrolled off with the rest of the offer.
-    expect(find.text('Restore a purchase'), findsOneWidget);
+    expect(find.text('Restore purchase'), findsOneWidget);
   });
 
   testWidgets('nothing on the paywall grants a subscription by itself', (
@@ -160,6 +166,6 @@ void main() {
     // purchase, a restore, or leaving — never a way to arrive entitled.
     expect(find.textContaining('TEST'), findsNothing);
     expect(find.textContaining('DEBUG'), findsNothing);
-    expect(find.text('Restore a purchase'), findsOneWidget);
+    expect(find.text('Restore purchase'), findsOneWidget);
   });
 }

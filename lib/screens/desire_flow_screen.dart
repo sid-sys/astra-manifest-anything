@@ -10,7 +10,6 @@ import '../services/affirmation_service.dart';
 import '../services/manifest_service.dart';
 import '../services/plan_service.dart';
 import '../theme/astra_theme.dart';
-import '../widgets/astra_orb.dart';
 import '../widgets/astra_widgets.dart';
 import '../widgets/aura_background.dart';
 import 'generating_screen.dart';
@@ -173,7 +172,7 @@ class _DesireFlowScreenState extends ConsumerState<DesireFlowScreen> {
           ref.invalidate(affirmationSetsProvider);
         } catch (error) {
           // The manifestation is what was asked for. Do not lose it over this.
-          debugPrint('Maya: companion affirmations skipped — $error');
+          debugPrint('Mayow: companion affirmations skipped — $error');
         }
       }
 
@@ -220,7 +219,7 @@ class _DesireFlowScreenState extends ConsumerState<DesireFlowScreen> {
       messenger.showSnackBar(SnackBar(content: Text(error.message)));
     } catch (error) {
       if (!cancelled) navigator.removeRoute(waiting);
-      debugPrint('Maya: making failed — $error');
+      debugPrint('Mayow: making failed — $error');
       messenger.showSnackBar(
         const SnackBar(
           content: Text("That didn't come through. Try again in a moment."),
@@ -265,7 +264,7 @@ class _DesireFlowScreenState extends ConsumerState<DesireFlowScreen> {
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      const Wordmark('Maya'),
+                      const Wordmark('Mayow'),
                       Align(
                         alignment: Alignment.centerLeft,
                         child: _Back(onTap: _busy ? null : _back),
@@ -325,7 +324,7 @@ class _DesireFlowScreenState extends ConsumerState<DesireFlowScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const AstraOrb(size: 150),
+            const AstraMascot('mascot_think', size: 170),
             const SizedBox(height: AstraSpacing.xxl),
             Text(
               'Reading your wish…',
@@ -334,7 +333,7 @@ class _DesireFlowScreenState extends ConsumerState<DesireFlowScreen> {
             ),
             const SizedBox(height: AstraSpacing.sm),
             Text(
-              'Maya is working out what to ask you.',
+              'Mayow is working out what to ask you.',
               style: AstraTextStyles.small,
               textAlign: TextAlign.center,
             ),
@@ -383,7 +382,7 @@ class _DesireFlowScreenState extends ConsumerState<DesireFlowScreen> {
 
   Widget _choicePage() => ListView(
     children: [
-      Text('What should Maya make?', style: AstraTextStyles.display(24)),
+      Text('What should Mayow make?', style: AstraTextStyles.display(24)),
       const SizedBox(height: AstraSpacing.sm),
       Text(
         'Both come from the same four answers, so making the second one later '
@@ -436,7 +435,7 @@ class _Option extends StatelessWidget {
           ),
         ),
         if (selected)
-          Icon(Icons.check_circle_rounded, color: AstraColors.accent, size: 20),
+          const AstraIcon('ui_check', size: 28),
       ],
     ),
   );
@@ -463,7 +462,7 @@ class _Back extends StatelessWidget {
           shape: BoxShape.circle,
           border: Border.all(color: AstraColors.line),
         ),
-        child: Icon(Icons.arrow_back_rounded, size: 18, color: AstraColors.text),
+        child: const Center(child: AstraIcon('ui_back', size: 26)),
       ),
     ),
   );

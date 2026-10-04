@@ -1,11 +1,11 @@
 {
-    "name": "Maya — Personal Manifestation",
-    "short_name": "Maya",
+    "name": "Mayow — Personal Manifestation",
+    "short_name": "Mayow",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#05060F",
-    "theme_color": "#05060F",
-    "description": "Maya writes you a manifestation from the life you are calling in, and reads it to you.",
+    "background_color": "#6C3FD6",
+    "theme_color": "#6C3FD6",
+    "description": "Mayow writes you a manifestation from the life you are calling in, and reads it to you.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

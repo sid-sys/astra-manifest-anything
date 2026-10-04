@@ -1,4 +1,4 @@
-/// A review from a real person who actually used Maya.
+/// A review from a real person who actually used Mayow.
 class Testimonial {
   const Testimonial({
     required this.quote,

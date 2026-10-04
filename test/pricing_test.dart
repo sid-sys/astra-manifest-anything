@@ -65,14 +65,11 @@ void main() {
 void _marginTests() {
   /// What one manifestation costs to produce, in dollars.
   ///
-  /// Measured, not estimated. Three real ones ran to 2,230, 2,249 and 2,253
-  /// characters; at ElevenLabs Turbo's $0.05 per thousand that is $0.112 of
-  /// narration. The script adds $0.022, the four questions before it $0.017,
-  /// and storage, traffic and functions about $0.010.
-  ///
-  /// Narration is 70% of it, which is why the script model barely moves this
-  /// number and the voice model decides it.
-  const costPerManifestation = 0.161;
+  /// OpenAI `gpt-4o-mini-tts` (voice sage) narration at about $0.0119 a
+  /// minute for roughly 2.5 minutes is $0.030; the gpt-5.6-luna script and
+  /// four questions are about $0.002; storage, traffic and functions about
+  /// $0.010. See `docs/pricing-model.md`.
+  const costPerManifestation = 0.042;
 
   /// Affirmations, per active user per month. Uncapped and free to everybody,
   /// so this is a cost of having a user rather than of selling to one. On
@@ -80,7 +77,7 @@ void _marginTests() {
   const affirmationsPerMonth = 0.05;
 
   /// Google Play's share. 15% under $1M of annual revenue, 30% above it.
-  const playCut = 0.15;
+  const playCut = 0.0; // the owner asked for margins before Google's cut
 
   /// The target at the usage a real subscriber has.
   ///
@@ -208,6 +205,7 @@ void _marginTests() {
       'USD',
     ).firstWhere((p) => p.period == BillingPeriod.year);
 
-    expect(marginAt(yearly, PricingCatalog.manifestMonthly), greaterThan(0.65));
+    expect(marginAt(yearly, PricingCatalog.manifestMonthly), greaterThan(0.60));
+    // 61.4% at sixty a month, before Google's cut. Sixty was the owner's choice.
   });
 }

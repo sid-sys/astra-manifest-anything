@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/astra_theme.dart';
+import 'astra_widgets.dart';
 
 /// The streak, as a thing worth looking at rather than a number in a corner.
 ///
@@ -68,11 +69,7 @@ class StreakCard extends StatelessWidget {
                   width: 2,
                 ),
               ),
-              child: Icon(
-                Icons.local_fire_department_rounded,
-                size: 42,
-                color: AstraColors.accent,
-              ),
+              child: const AstraIcon('ui_flame', size: 64),
             ),
             const SizedBox(height: AstraSpacing.md),
             Text(
@@ -135,7 +132,7 @@ class _DayDot extends StatelessWidget {
       (true, _) => (
         AstraColors.accent.withValues(alpha: 0.14),
         AstraColors.accent,
-        Icons.local_fire_department_rounded,
+        null,
         AstraColors.accent,
       ),
       (false, true) => (
@@ -172,9 +169,9 @@ class _DayDot extends StatelessWidget {
                 width: isToday ? 1.6 : 1,
               ),
             ),
-            child: icon == null
-                ? null
-                : Icon(icon, size: 17, color: iconColor),
+            child: done
+                ? const AstraIcon('ui_flame', size: 24)
+                : (icon == null ? null : Icon(icon, size: 17, color: iconColor)),
           ),
         ],
       ),

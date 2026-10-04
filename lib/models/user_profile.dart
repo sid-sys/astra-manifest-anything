@@ -1,3 +1,4 @@
+import '../app_build.dart';
 import 'intention.dart';
 import 'plan.dart';
 import 'story_preferences.dart';
@@ -31,6 +32,9 @@ class UserProfile {
     this.onboardingV2Done = false,
     this.sendMorning = true,
     this.sendEvening = true,
+    this.signupBuild = 0,
+    this.appBuild = 0,
+    this.trialPushToken,
   });
 
   final String name;
@@ -125,7 +129,7 @@ class UserProfile {
   /// How strongly this person believes their thoughts can shape their life —
   /// one of "absolutely", "i-think-so", "not-sure", "not-really". Asked first
   /// in the belief-and-ritual onboarding, never shown back to them; it colours
-  /// how confidently Maya writes rather than being quoted at them.
+  /// how confidently Mayow writes rather than being quoted at them.
   final String belief;
 
   /// How much they want the change they named — one of "not-sure",
@@ -156,6 +160,23 @@ class UserProfile {
   /// all", so turning it off still silences both without touching these.
   final bool sendMorning;
   final bool sendEvening;
+
+  /// The build that created this account, or 0 for an account made before
+  /// builds were recorded. At or above [kGateFromBuild] the account is behind
+  /// the paywall until it starts a trial.
+  final int signupBuild;
+
+  /// The newest build this account has opened. 0 means it has only ever used
+  /// an older build, which is how the admin panel tells old from new.
+  final int appBuild;
+
+  /// Where to send "your trial ends tomorrow", kept apart from [fcmToken]
+  /// because that one is erased when daily reminders are off, and this notice
+  /// is the one that tells somebody how not to be charged.
+  final String? trialPushToken;
+
+  /// New accounts cannot use the app until they have a subscription.
+  bool get isGated => signupBuild >= kGateFromBuild;
 
   static UserProfile empty() => UserProfile(
     name: '',
@@ -222,6 +243,9 @@ class UserProfile {
     bool? onboardingV2Done,
     bool? sendMorning,
     bool? sendEvening,
+    int? signupBuild,
+    int? appBuild,
+    String? trialPushToken,
     bool clearPush = false,
   }) => UserProfile(
     name: name ?? this.name,
@@ -254,6 +278,9 @@ class UserProfile {
     onboardingV2Done: onboardingV2Done ?? this.onboardingV2Done,
     sendMorning: sendMorning ?? this.sendMorning,
     sendEvening: sendEvening ?? this.sendEvening,
+    signupBuild: signupBuild ?? this.signupBuild,
+    appBuild: appBuild ?? this.appBuild,
+    trialPushToken: trialPushToken ?? this.trialPushToken,
   );
 
   /// Only what the app uses today. The old onboarding answers (age, gender,
@@ -278,6 +305,9 @@ class UserProfile {
     'onboardingV2Done': onboardingV2Done,
     'sendMorning': sendMorning,
     'sendEvening': sendEvening,
+    'signupBuild': signupBuild,
+    'appBuild': appBuild,
+    'trialPushToken': trialPushToken,
   };
 
   factory UserProfile.fromMap(Map<String, dynamic> map) => UserProfile(
@@ -312,5 +342,8 @@ class UserProfile {
     onboardingV2Done: map['onboardingV2Done'] as bool? ?? false,
     sendMorning: map['sendMorning'] as bool? ?? true,
     sendEvening: map['sendEvening'] as bool? ?? true,
+    signupBuild: (map['signupBuild'] as num?)?.toInt() ?? 0,
+    appBuild: (map['appBuild'] as num?)?.toInt() ?? 0,
+    trialPushToken: map['trialPushToken'] as String?,
   );
 }

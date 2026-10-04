@@ -3,7 +3,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 /// Codes whose message was written for a person to read.
 ///
 /// The server raises these deliberately and puts a plain sentence in them —
-/// "Tell Maya what you want, in your own words", "You have used this month's
+/// "Tell Mayow what you want, in your own words", "You have used this month's
 /// manifestations". Those are worth showing exactly as written.
 const _spoken = {
   'invalid-argument',

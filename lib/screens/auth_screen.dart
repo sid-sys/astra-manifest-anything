@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -146,8 +147,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.close_rounded),
-                        color: AstraColors.dim,
+                        icon: const AstraIcon('ui_close', size: 28),
                         tooltip: 'Back',
                         onPressed: _busy
                             ? null
@@ -160,7 +160,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   const SizedBox(height: AstraSpacing.xxl),
 
                 const SizedBox(height: AstraSpacing.lg),
-                const Wordmark('Maya'),
+                const Wordmark('Mayow'),
                 const SizedBox(height: AstraSpacing.xl),
                 Text(
                   widget.asUpgrade
@@ -195,7 +195,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   _Field(
                     controller: _name,
                     label: 'Your first name',
-                    hint: 'What should Maya call you?',
+                    hint: 'What should Mayow call you?',
                     icon: Icons.person_outline_rounded,
                     keyboardType: TextInputType.name,
                     autofillHints: const [AutofillHints.givenName],
@@ -306,6 +306,18 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 // past onboarding on somebody else's answers and dropped
                 // straight onto the paywall, never having been asked a single
                 // question.
+                // Debug builds only: compiled out of anything uploaded to Play.
+                // A throwaway account so every screen, onboarding included, can
+                // be walked through without a real sign-up.
+                if (kDebugMode) ...[
+                  const SizedBox(height: AstraSpacing.sm),
+                  _ProviderButton(
+                    label: 'Continue as test guest',
+                    glyph: '🧪',
+                    enabled: !_busy,
+                    onTap: () => _federated(auth.signInAsTestGuest),
+                  ),
+                ],
                 const SizedBox(height: AstraSpacing.sm),
                 Text(
                   'Your stories are saved to your account, so they follow you '

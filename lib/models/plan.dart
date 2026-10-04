@@ -94,14 +94,14 @@ class PricingCatalog {
   static const freeStories = 0;
 
 
-  /// Days of Maya Plus before the first charge.
+  /// Days of Mayow Plus before the first charge.
   ///
   /// Honoured by **Play**, not by this app: the trial is an offer attached to
   /// the base plan in the Play Console, and this constant only exists so the
   /// paywall can print the same number Play will actually charge on. If the
   /// Console has no trial offer configured, the store charges immediately and
   /// this number becomes a lie — see `store/billing-setup.md`.
-  static const trialDays = 3;
+  static const trialDays = 7;
 
   /// Manifestations a month on Plus, counted apart from stories.
   ///
@@ -109,7 +109,11 @@ class PricingCatalog {
   /// it. Separate from the story allowance because the two cost different
   /// amounts to make, so one shared number would either starve the
   /// cheap one or give away the dear one.
-  static const manifestMonthly = 10;
+  static const manifestMonthly = 60;
+
+  /// Manifestations allowed during the free trial; the rest wait for the trial
+  /// to end. Mirrors `TRIAL_MANIFEST_LIMIT` in `functions/index.js`.
+  static const trialManifests = 10;
 
   /// What a subscriber is assumed to actually use in a month.
   ///

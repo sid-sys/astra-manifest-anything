@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.4+37
+version: 1.0.7+43
 
 environment:
   sdk: ^3.12.2
@@ -87,7 +87,7 @@ flutter_native_splash:
   # This was #F4EFE6 — the paper colour from before the app went dark — which
   # meant a cold launch flashed a cream screen and then dropped into a near
   # black one. The mark is drawn for the dark ground now, and so is this.
-  color: "#05060F"
+  color: "#6C3FD6"
   image: assets/brand/logo_mark.png
 
   # Android 12 replaced the window-background trick with its own splash API,
@@ -102,9 +102,9 @@ flutter_native_splash:
   # version fills only 48% of its canvas, with transparent margin the rest of
   # the way, so the mask has room to breathe.
   android_12:
-    color: "#05060F"
+    color: "#6C3FD6"
     image: assets/brand/logo_mark_splash.png
-    icon_background_color: "#05060F"
+    icon_background_color: "#6C3FD6"
 
   # The web build is a development surface, not a product, and its own
   # index.html already paints while the bundle loads.
@@ -149,6 +149,8 @@ flutter:
     - assets/brand/night_sky.jpg
     - assets/brand/orb.webp
     - assets/brand/orb_still.png
+    - assets/icons/
+    - assets/mascot/
     - assets/audio/meditation_bed.mp3
 
   # An image asset can refer to one or more resolution-specific "variants", see

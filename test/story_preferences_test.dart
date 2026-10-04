@@ -84,7 +84,38 @@ void main() {
     }
   });
 
-  test('preferences travel with the profile', () {
+  test('the onboarding answers travel with the profile', () {
+    final profile = UserProfile.empty().copyWith(
+      name: 'Sana',
+      belief: 'i-think-so',
+      importance: 'ready-to-change',
+      reminderPref: 'evening',
+      sendMorning: false,
+      sendEvening: true,
+      onboardingV2Done: true,
+    );
+
+    final restored = UserProfile.fromMap(profile.toMap());
+
+    expect(restored.belief, 'i-think-so');
+    expect(restored.importance, 'ready-to-change');
+    expect(restored.reminderPref, 'evening');
+    expect(restored.sendMorning, isFalse);
+    expect(restored.sendEvening, isTrue);
+    expect(restored.onboardingV2Done, isTrue);
+  });
+
+  test('a profile written before the send flags existed still gets both', () {
+    // Silently dropping the evening reminder for an account that never chose
+    // to lose it would be worse than the bug the flags fix.
+    final restored = UserProfile.fromMap({'name': 'Old'});
+
+    expect(restored.sendMorning, isTrue);
+    expect(restored.sendEvening, isTrue);
+    expect(restored.onboardingV2Done, isFalse);
+  });
+
+  test('answers from the retired twelve-question flow are no longer saved', () {
     final profile = UserProfile.empty().copyWith(
       name: 'Sana',
       preferences: const StoryPreferences(
@@ -93,9 +124,9 @@ void main() {
       ),
     );
 
-    final restored = UserProfile.fromMap(profile.toMap());
+    final map = profile.toMap();
 
-    expect(restored.preferences.desire, 'I run five kilometres without stopping');
-    expect(restored.preferences.category, DesireCategory.health);
+    expect(map.containsKey('preferences'), isFalse);
+    expect(map.containsKey('aspiration'), isFalse);
   });
 }

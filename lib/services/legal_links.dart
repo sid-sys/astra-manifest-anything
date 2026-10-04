@@ -27,7 +27,7 @@ class LegalLinks {
 
   /// Google Play's own subscription page for this app.
   ///
-  /// Deep-linked to Maya rather than to the list of every subscription the
+  /// Deep-linked to Mayow rather than to the list of every subscription the
   /// user has, because "go to Play, find us among fourteen others, then cancel"
   /// is the shape of a dark pattern even when it is only laziness.
   ///

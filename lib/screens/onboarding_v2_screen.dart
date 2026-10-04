@@ -6,7 +6,6 @@ import '../providers.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
 import '../widgets/aura_background.dart';
-import 'notification_permission_screen.dart';
 
 /// Four short questions asked once, before Home is shown for the first time.
 ///
@@ -35,6 +34,11 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
   String? _importance;
   String? _reminderPref;
 
+  /// Whether the person said yes to the system notification prompt on the
+  /// reminder question. Written to the profile in [_finish].
+  bool _allowed = false;
+  bool _busy = false;
+
   static const _pageCount = 6; // welcome, 4 questions, ready
 
   bool get _canContinue => switch (_page) {
@@ -46,8 +50,29 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
     _ => true,
   };
 
+  /// True on the reminder question once they picked a time other than "later".
+  bool get _asksPermission =>
+      _page == 4 && _reminderPref != null && _reminderPref != 'later';
+
   Future<void> _next() async {
-    if (!_canContinue) return;
+    if (!_canContinue || _busy) return;
+
+    // The ask happens here, on the page that explains it, straight after the
+    // person says when they want to be reminded — not two screens later, when
+    // the reason has gone cold. The system dialog is Android's own and says
+    // nothing about why, so the page above it has to.
+    if (_asksPermission) {
+      setState(() => _busy = true);
+      final granted = await ref
+          .read(notificationServiceProvider)
+          .requestPermission();
+      if (!mounted) return;
+      setState(() {
+        _allowed = granted;
+        _busy = false;
+      });
+    }
+
     if (_page == _pageCount - 1) {
       await _finish();
       return;
@@ -79,8 +104,18 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
       // screen right after this is where "on or off" is actually settled.
     };
 
+    // The push address, fetched before saving: saving `onboardingV2Done` is
+    // what moves the app on, and this screen is gone the moment it lands.
+    final registration = _allowed
+        ? await ref.read(notificationServiceProvider).register()
+        : null;
+    if (!mounted) return;
+
     await ref.read(profileProvider.notifier).update(
       ref.read(profileProvider).copyWith(
+        fcmToken: registration?.token,
+        trialPushToken: registration?.token,
+        timezone: registration?.zone,
         belief: _belief,
         intentions: _areas,
         importance: _importance,
@@ -88,12 +123,12 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
         onboardingV2Done: true,
         sendMorning: sendMorning,
         sendEvening: sendEvening,
+        remindersOn: _allowed,
       ),
     );
-    if (!mounted) return;
-    await Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const NotificationPermissionScreen()),
-    );
+    // Nothing to navigate to. Saving `onboardingV2Done` is what moves the app
+    // on: `app.dart` is watching it, and shows the paywall to a new account
+    // or Home to anyone else.
   }
 
   @override
@@ -117,7 +152,7 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    const Wordmark('Maya'),
+                    const Wordmark('Mayow'),
                     if (_page > 0)
                       Align(
                         alignment: Alignment.centerLeft,
@@ -163,13 +198,12 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
               const SizedBox(height: AstraSpacing.md),
               AstraButton(
                 label: switch (_page) {
-                  0 => 'See how Maya works',
-                  1 => 'Continue',
-                  2 => 'Continue',
-                  3 => 'Continue',
-                  4 => 'Continue',
+                  0 => 'Get Started',
+                  4 when _asksPermission => 'Allow notifications',
+                  5 => 'Continue to Mayow',
                   _ => 'Continue',
                 },
+                busy: _busy,
                 onPressed: _canContinue ? _next : null,
               ),
               const SizedBox(height: AstraSpacing.sm),
@@ -226,7 +260,7 @@ class _Back extends StatelessWidget {
           shape: BoxShape.circle,
           border: Border.all(color: AstraColors.line),
         ),
-        child: Icon(Icons.arrow_back_rounded, size: 18, color: AstraColors.text),
+        child: const Center(child: AstraIcon('ui_back', size: 26)),
       ),
     ),
   );
@@ -240,16 +274,22 @@ class _Welcome extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListView(
     children: [
-      const SizedBox(height: AstraSpacing.xxl),
+      const SizedBox(height: AstraSpacing.lg),
+      // Mayow herself, waving. The rings behind her are drawn by the page
+      // background, so she sits at the centre of them like a logo would.
+      const Center(child: AstraMascot('mascot_wave', size: 230)),
+      const SizedBox(height: AstraSpacing.xl),
       Text(
-        'Turn your wish into a moment\nyou can feel.',
+        'Turn your wish into a moment you can feel.',
+        textAlign: TextAlign.center,
         style: AstraTextStyles.display(30),
       ),
       const SizedBox(height: AstraSpacing.md),
       Text(
-        'Tell Maya what you\'re working toward. It writes a personal guided '
+        'Tell Mayow what you\'re working toward. It writes a personal guided '
         'manifestation you can listen to again and again — and five '
         'affirmations to say and believe, every day, for free.',
+        textAlign: TextAlign.center,
         style: AstraTextStyles.bodyDim,
       ),
     ],
@@ -361,12 +401,59 @@ class _ReminderPref extends StatelessWidget {
   Widget build(BuildContext context) => ListView(
     children: [
       const SizedBox(height: AstraSpacing.lg),
-      Text('When should Maya remind\nyou of your goal?', style: AstraTextStyles.display(24)),
+      Text(
+        'When should Mayow remind\nyou of your goal?',
+        style: AstraTextStyles.display(24),
+      ),
       const SizedBox(height: AstraSpacing.lg),
       for (final (key, label) in _options) ...[
         _Choice(label: label, selected: value == key, onTap: () => onChanged(key)),
         const SizedBox(height: AstraSpacing.sm),
       ],
+      const SizedBox(height: AstraSpacing.sm),
+
+      // Why, in plain words, before Android asks. Changes with the answer so it
+      // never promises a reminder the person just said they did not want.
+      AstraCard(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const AstraIcon('ui_bell', size: 38),
+            const SizedBox(width: AstraSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    value == 'later'
+                        ? 'No reminders for now'
+                        : 'Why Mayow asks to send notifications',
+                    style: AstraTextStyles.label,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    value == 'later'
+                        ? 'You can switch them on any time in Profile. Until '
+                              'then nothing will be sent.'
+                        : 'A reminder is what turns this into a habit. '
+                              '${switch (value) {
+                                'morning' => 'Your morning affirmation',
+                                'evening' => 'Your evening affirmation',
+                                _ => 'Your morning and evening affirmations',
+                              }} '
+                              'will arrive as a notification, and Mayow will '
+                              'tell you when a manifestation you asked for is '
+                              'ready. Never more than two a day otherwise. '
+                              'Without notifications, nothing reaches you.',
+                    style: AstraTextStyles.small,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     ],
   );
 }
@@ -377,16 +464,17 @@ class _Ready extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListView(
     children: [
-      const SizedBox(height: AstraSpacing.xxl),
+      const Center(child: AstraMascot('mascot_cheer', size: 170)),
+      const SizedBox(height: AstraSpacing.md),
       Text('You already know what\nyou want.', style: AstraTextStyles.display(28)),
       const SizedBox(height: AstraSpacing.md),
       Text(
-        'Maya helps you turn that intention into something you can return to '
+        'Mayow helps you turn that intention into something you can return to '
         'every day.',
         style: AstraTextStyles.bodyDim,
       ),
       const SizedBox(height: AstraSpacing.xl),
-      Text('YOUR MAYA EXPERIENCE', style: AstraTextStyles.eyebrow),
+      Text('YOUR MAYOW EXPERIENCE', style: AstraTextStyles.eyebrow),
       const SizedBox(height: AstraSpacing.sm),
       for (final line in const [
         '✦  A personal manifestation, from your own words',
@@ -415,22 +503,32 @@ class _Choice extends StatelessWidget {
   @override
   Widget build(BuildContext context) => InkWell(
     onTap: onTap,
-    borderRadius: BorderRadius.circular(16),
-    child: Container(
+    borderRadius: BorderRadius.circular(22),
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 140),
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: BoxDecoration(
         color: selected ? AstraColors.accentWash : AstraColors.card,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
           color: selected ? AstraColors.accent : AstraColors.line,
+          width: selected ? 2.5 : 1.5,
         ),
       ),
-      child: Text(
-        label,
-        style: AstraTextStyles.body.copyWith(
-          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-        ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: AstraTextStyles.body.copyWith(
+                fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+              ),
+            ),
+          ),
+          if (selected)
+            const AstraIcon('ui_check', size: 30),
+        ],
       ),
     ),
   );

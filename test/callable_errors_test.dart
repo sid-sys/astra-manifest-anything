@@ -33,7 +33,7 @@ void main() {
       written,
     );
 
-    const asked = 'Tell Maya what you want, in your own words.';
+    const asked = 'Tell Mayow what you want, in your own words.';
     expect(
       humanMessage(failure('invalid-argument', asked), fallback: 'Try again.'),
       asked,

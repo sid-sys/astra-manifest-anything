@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'providers.dart';
 import 'screens/auth_screen.dart';
 import 'screens/onboarding_v2_screen.dart';
+import 'screens/paywall_screen.dart';
 import 'screens/shell_screen.dart';
 import 'screens/verify_email_screen.dart';
 import 'services/auth_service.dart';
@@ -81,7 +82,7 @@ class _AstraAppState extends ConsumerState<AstraApp>
     unawaited(
       ref.read(billingServiceProvider).restore().catchError(
             (Object error) =>
-                debugPrint('Maya: subscription re-check failed — $error'),
+                debugPrint('Mayow: subscription re-check failed — $error'),
           ),
     );
   }
@@ -100,7 +101,7 @@ class _AstraAppState extends ConsumerState<AstraApp>
     ref.watch(purchaseRestoreProvider);
 
     return MaterialApp(
-      title: 'Maya',
+      title: 'Mayow',
       debugShowCheckedModeBanner: false,
       theme: buildAstraTheme(),
       home: !firebaseReady
@@ -189,6 +190,29 @@ class _AstraAppState extends ConsumerState<AstraApp>
                 // live entitlement, and it refused before this change too —
                 // the paywall here was never what protected the money, only
                 // what decided which screen opened first.
+                //
+                // The exception: an account created by a build that sells the
+                // free trial first. It stops at the paywall, with no way
+                // forward but a trial, until the subscription exists. Accounts
+                // made by older builds are not touched.
+                final profile = ref.watch(profileProvider);
+                if (profile.isGated && !user.isAnonymous) {
+                  final entitlement = ref.watch(entitlementProvider);
+                  if (entitlement.isLoading) return const _Waiting();
+                  if (entitlement.valueOrNull != true) {
+                    return PaywallScreen(
+                      hard: true,
+                      // Back goes to the questions, never to the app.
+                      onBack: () => unawaited(
+                        ref.read(profileProvider.notifier).update(
+                          ref.read(profileProvider).copyWith(
+                            onboardingV2Done: false,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                }
                 return const ShellScreen();
               },
             ),

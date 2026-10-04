@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../demo/demo_data.dart';
 import '../providers.dart';
 import '../theme/astra_theme.dart';
+import '../widgets/astra_widgets.dart';
 import '../widgets/aura_background.dart';
 import 'affirmations_screen.dart';
 import 'desire_flow_screen.dart';
@@ -138,20 +139,23 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
             // it by a rule. A hairline across the bottom of a gradient reads
             // as a seam.
             decoration: BoxDecoration(
-              color: AstraColors.card,
+              // Opaque deep indigo, not the translucent card colour: a bar
+              // that let the gradient through put pink behind the labels.
+              color: AstraColors.canvasRaised,
+              border: const Border(top: BorderSide(color: AstraColors.line)),
               boxShadow: AstraColors.liftedShadow,
             ),
             child: NavigationBarTheme(
               data: NavigationBarThemeData(
                 backgroundColor: Colors.transparent,
-                indicatorColor: AstraColors.accent.withValues(alpha: 0.12),
+                indicatorColor: AstraColors.accent.withValues(alpha: 0.22),
                 labelTextStyle: WidgetStateProperty.resolveWith(
                   (states) => TextStyle(
                     fontSize: 10.5,
                     letterSpacing: 0.4,
                     fontWeight: states.contains(WidgetState.selected)
-                        ? FontWeight.w600
-                        : FontWeight.w400,
+                        ? FontWeight.w900
+                        : FontWeight.w700,
                     color: states.contains(WidgetState.selected)
                         ? AstraColors.accent
                         : AstraColors.dim,
@@ -169,27 +173,30 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
               child: NavigationBar(
                 selectedIndex: _tab,
                 onDestinationSelected: _goTo,
-                height: 64,
+                height: 72,
                 elevation: 0,
+                // Full colour when selected and larger; faded and smaller when
+                // not. The pictures cannot be tinted, so fade is the only way
+                // left to say "not this one".
                 destinations: const [
                   NavigationDestination(
-                    icon: Icon(Icons.nights_stay_outlined),
-                    selectedIcon: Icon(Icons.nights_stay),
+                    icon: AstraIcon('nav_home', size: 28, opacity: 0.55),
+                    selectedIcon: AstraIcon('nav_home', size: 36),
                     label: 'Home',
                   ),
                   NavigationDestination(
-                    icon: Icon(Icons.library_music_outlined),
-                    selectedIcon: Icon(Icons.library_music),
+                    icon: AstraIcon('nav_library', size: 28, opacity: 0.55),
+                    selectedIcon: AstraIcon('nav_library', size: 36),
                     label: 'Library',
                   ),
                   NavigationDestination(
-                    icon: Icon(Icons.favorite_border),
-                    selectedIcon: Icon(Icons.favorite),
+                    icon: AstraIcon('nav_affirm', size: 28, opacity: 0.55),
+                    selectedIcon: AstraIcon('nav_affirm', size: 36),
                     label: 'Affirm',
                   ),
                   NavigationDestination(
-                    icon: Icon(Icons.person_outline),
-                    selectedIcon: Icon(Icons.person),
+                    icon: AstraIcon('nav_profile', size: 28, opacity: 0.55),
+                    selectedIcon: AstraIcon('nav_profile', size: 36),
                     label: 'Profile',
                   ),
                 ],

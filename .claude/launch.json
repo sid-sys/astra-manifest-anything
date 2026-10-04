@@ -13,6 +13,18 @@
         "--dart-define=ASTRA_DEMO=true"
       ],
       "port": 8080
+    },
+    {
+      "name": "astra-web-live",
+      "runtimeExecutable": "flutter",
+      "runtimeArgs": [
+        "run",
+        "-d",
+        "web-server",
+        "--web-port=8081",
+        "--web-hostname=127.0.0.1"
+      ],
+      "port": 8081
     }
   ]
 }

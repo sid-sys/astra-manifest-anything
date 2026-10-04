@@ -30,7 +30,7 @@ class ProofScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: AstraSpacing.lg),
-              const Wordmark('Maya'),
+              const Wordmark('Mayow'),
               const SizedBox(height: AstraSpacing.xl),
               Text(
                 'What people say',

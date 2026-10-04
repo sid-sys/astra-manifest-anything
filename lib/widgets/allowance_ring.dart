@@ -37,7 +37,7 @@ class AllowanceRing extends StatelessWidget {
 
     final ring = Semantics(
       label: limit == null
-          ? '${usage.plan} plan, manifestations need Maya Plus'
+          ? '${usage.plan} plan, manifestations need Mayow Plus'
           : '${usage.plan} plan, $left of $limit manifestations left',
       child: SizedBox(
         width: size,

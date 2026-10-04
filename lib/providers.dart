@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app_build.dart';
 import 'models/affirmation_set.dart';
 import 'models/affirmation_taste.dart';
 import 'models/intention.dart';
@@ -85,7 +86,7 @@ final notificationServiceProvider = Provider<NotificationService>((ref) {
           .httpsCallable('markBroadcastOpened')
           .call<Map<Object?, Object?>>({'broadcastId': broadcastId})
           .catchError((Object error) {
-            debugPrint('Maya: could not report a broadcast open — $error');
+            debugPrint('Mayow: could not report a broadcast open — $error');
             throw error;
           }),
     );
@@ -111,10 +112,13 @@ Future<void> refreshPushRegistration(WidgetRef ref) async {
   final profiles = ref.read(profileProvider.notifier);
 
   if (!profile.remindersOn) {
-    await notifications.unregister();
+    // Daily reminders are off, but the "your trial ends tomorrow" notice may
+    // not be: deleting the device token would silence that one too.
+    if (profile.trialPushToken == null) await notifications.unregister();
     if (profile.fcmToken != null) {
       await profiles.update(profile.copyWith(clearPush: true));
     }
+    await enableTrialNotice(ref, ask: false);
     return;
   }
 
@@ -129,6 +133,42 @@ Future<void> refreshPushRegistration(WidgetRef ref) async {
   await profiles.update(
     profile.copyWith(fcmToken: registration.token, timezone: registration.zone),
   );
+}
+
+/// Lets the server warn this person the day before their free trial ends.
+///
+/// That notice is the one that tells somebody how to cancel before they are
+/// charged, so it has its own push address on the profile, separate from the
+/// daily reminders: switching reminders off must not switch this off.
+///
+/// With [ask] the system permission dialog is shown if needed; without it the
+/// call only refreshes an address that was already given. Returns whether the
+/// notice can be delivered.
+Future<bool> enableTrialNotice(WidgetRef ref, {bool ask = true}) async {
+  final notifications = ref.read(notificationServiceProvider);
+  final profiles = ref.read(profileProvider.notifier);
+
+  if (ask) {
+    final granted = await notifications.requestPermission();
+    if (!granted) return false;
+  } else if (ref.read(profileProvider).trialPushToken == null) {
+    return false;
+  }
+
+  final registration = await notifications.register();
+  final token = registration.token;
+  if (token == null) return false;
+
+  final profile = ref.read(profileProvider);
+  if (profile.trialPushToken != token || profile.timezone == null) {
+    await profiles.update(
+      profile.copyWith(
+        trialPushToken: token,
+        timezone: profile.timezone ?? registration.zone,
+      ),
+    );
+  }
+  return true;
 }
 
 final adminServiceProvider = Provider<AdminService>((ref) => AdminService());
@@ -182,7 +222,7 @@ final entitlementProvider = StreamProvider<bool>((ref) {
         return expiry == null || expiry.isAfter(DateTime.now());
       })
       .handleError((Object error) {
-        debugPrint('Maya: entitlement stream failed — $error');
+        debugPrint('Mayow: entitlement stream failed — $error');
       });
 });
 
@@ -224,6 +264,7 @@ class Entitlement {
     required this.state,
     required this.isTestGrant,
     required this.everSubscribed,
+    this.startedAt,
   });
 
   static const none = Entitlement(
@@ -248,6 +289,18 @@ class Entitlement {
 
   final bool isSubscribed;
   final DateTime? expiryTime;
+
+  /// When the subscription began. The free trial runs
+  /// [PricingCatalog.trialDays] days from here.
+  final DateTime? startedAt;
+
+  /// When the free trial ends, or null once it already has (or never began).
+  DateTime? get trialEndsAt {
+    final start = startedAt;
+    if (start == null || !isSubscribed) return null;
+    final end = start.add(const Duration(days: PricingCatalog.trialDays));
+    return end.isAfter(DateTime.now()) ? end : null;
+  }
 
   /// Google Play's own word for it — `SUBSCRIPTION_STATE_ACTIVE`,
   /// `SUBSCRIPTION_STATE_CANCELED`, and so on. Stored verbatim rather than
@@ -294,10 +347,11 @@ final entitlementDetailsProvider = StreamProvider<Entitlement>((ref) {
           isTestGrant: data['source'] == 'admin-grant',
           // The document exists, so somebody paid at some point.
           everSubscribed: true,
+          startedAt: entitlementExpiry(data['subscribedAt']),
         );
       })
       .handleError((Object error) {
-        debugPrint('Maya: entitlement detail stream failed — $error');
+        debugPrint('Mayow: entitlement detail stream failed — $error');
       });
 });
 
@@ -334,7 +388,7 @@ final purchaseRestoreProvider = Provider<void>((ref) {
             // own Restore button is the path for someone who has and is not
             // seeing it.
             (Object error) =>
-                debugPrint('Maya: restore on sign-in failed — $error'),
+                debugPrint('Mayow: restore on sign-in failed — $error'),
           ),
     );
   });
@@ -431,7 +485,7 @@ class StoryComposer {
       _ref.read(playbackProvider).adoptAudio(withAudio);
       return withAudio;
     } catch (error) {
-      debugPrint('Maya: narration failed, story stays readable — $error');
+      debugPrint('Mayow: narration failed, story stays readable — $error');
       return story;
     }
   }
@@ -522,7 +576,7 @@ class ProfileNotifier extends StateNotifier<UserProfile> {
     await _repository.saveProfile(profile);
   }
 
-  /// What Maya calls this person, first name only.
+  /// What Mayow calls this person, first name only.
   ///
   /// Taken on the sign-up form and spoken by every manifestation, so it is
   /// trimmed to one word here rather than at each place that reads it.
@@ -599,6 +653,25 @@ final profileRestoreProvider = FutureProvider<void>((ref) async {
   // After the cloud restore, never before: an account signing in on a second
   // phone has a name saved already, and this must not overwrite it.
   await profile.adoptProviderName(user.displayName);
+
+  // Record which build this account is on, and which one made it.
+  //
+  // An account that has never finished onboarding is brand new, so it is
+  // stamped with this build as its `signupBuild` and sits behind the paywall.
+  // An account that finished onboarding on an older build has no stamp and
+  // keeps the free run of the app. `appBuild` is the newest build the account
+  // has opened; the admin panel uses it to tell old from new.
+  final current = ref.read(profileProvider);
+  final stamped = current.copyWith(
+    signupBuild: current.signupBuild == 0 && !current.onboardingV2Done
+        ? kAppBuild
+        : null,
+    appBuild: kAppBuild,
+  );
+  if (stamped.signupBuild != current.signupBuild ||
+      stamped.appBuild != current.appBuild) {
+    await profile.update(stamped);
+  }
 });
 
 // ------------------------------------------------------------------ stories
@@ -704,7 +777,7 @@ class AvatarNotifier extends StateNotifier<Uint8List?> {
     try {
       return base64Decode(base64);
     } catch (error) {
-      debugPrint('Maya: stored avatar could not be decoded — $error');
+      debugPrint('Mayow: stored avatar could not be decoded — $error');
       return null;
     }
   }
@@ -785,7 +858,7 @@ final generatedAffirmationGroupsProvider = StreamProvider<List<AffirmationGroup>
         return raw.map(AffirmationGroup.fromMap).whereType<AffirmationGroup>().toList();
       })
       .handleError((Object error) {
-        debugPrint('Maya: generated affirmations unavailable — $error');
+        debugPrint('Mayow: generated affirmations unavailable — $error');
       });
 });
 
@@ -854,7 +927,7 @@ final sentAffirmationProvider = StreamProvider<String?>((ref) {
         return (line == null || line.isEmpty) ? null : line;
       })
       .handleError((Object error) {
-        debugPrint('Maya: sent affirmation unavailable — $error');
+        debugPrint('Mayow: sent affirmation unavailable — $error');
       });
 });
 
@@ -965,7 +1038,7 @@ class Usage {
   /// allowance to draw a ring around.
   final int? limit;
 
-  /// 'Maya Plus', 'Free day', 'Free'.
+  /// 'Mayow Plus', 'Free day', 'Free'.
   final String plan;
 
   /// The sentence under the meter, in whatever unit actually binds.
@@ -1001,7 +1074,7 @@ final usageProvider = Provider<Usage>((ref) {
       used: 0,
       limit: null,
       plan: 'Free',
-      detail: 'Maya Plus writes ${PricingCatalog.manifestMonthly} '
+      detail: 'Mayow Plus writes ${PricingCatalog.manifestMonthly} '
           'manifestations a month. Affirmations are free, always.',
     );
   }
@@ -1014,13 +1087,33 @@ final usageProvider = Provider<Usage>((ref) {
   return Usage(
     used: thisMonth,
     limit: PricingCatalog.manifestMonthly,
-    plan: 'Maya Plus',
+    plan: 'Mayow Plus',
     detail: left > 0
         ? '$left of ${PricingCatalog.manifestMonthly} left this month · '
               'affirmations are free and unlimited · resets on the 1st'
         : 'All ${PricingCatalog.manifestMonthly} written this month · '
               'affirmations are free and carry on · resets on the 1st',
   );
+});
+
+/// How many manifestations were written since the subscription began.
+int _madeSince(List<Manifestation> made, DateTime start) =>
+    made.where((one) => !one.createdAt.isBefore(start)).length;
+
+/// When the free trial ends, if all [PricingCatalog.trialManifests] of its
+/// manifestations are already used. Null otherwise. While this is set the
+/// button is replaced by a countdown to that moment.
+///
+/// Read once per rebuild, so the countdown widget invalidates it when it hits
+/// zero and the lock lifts on its own.
+final trialLockProvider = Provider<DateTime?>((ref) {
+  final entitlement = ref.watch(entitlementDetailsProvider).valueOrNull;
+  final ends = entitlement?.trialEndsAt;
+  final start = entitlement?.startedAt;
+  if (ends == null || start == null) return null;
+
+  final made = ref.watch(manifestationsProvider).valueOrNull ?? const [];
+  return _madeSince(made, start) >= PricingCatalog.trialManifests ? ends : null;
 });
 
 /// How many manifestations this account may still write this month.
@@ -1030,6 +1123,7 @@ final usageProvider = Provider<Usage>((ref) {
 /// screen that greys a button out has to be sure, and a sentence is for people.
 final manifestsLeftProvider = Provider<int>((ref) {
   if (!ref.watch(isSubscribedProvider)) return 0;
+  if (ref.watch(trialLockProvider) != null) return 0;
   final usage = ref.watch(usageProvider);
   return usage.limit == null ? 0 : usage.left;
 });

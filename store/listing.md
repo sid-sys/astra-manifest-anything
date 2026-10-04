@@ -1,11 +1,11 @@
-# Play Store listing — Maya
+# Play Store listing — Mayow
 
 Written against the ASO principles in the playbook: the primary keyword goes in
 the title, secondary keywords go in the short description, and the long
 description is written for a human but carries the keywords Play indexes.
 
 One rule shapes all of it, and it is not an ASO rule: **no claim we cannot
-stand behind.** Maya writes stories. It does not deliver outcomes. Copy that
+stand behind.** Mayow writes stories. It does not deliver outcomes. Copy that
 promises money or a returning ex is both a Play policy risk under Misleading
 Claims and a direct contradiction of our own Terms, which say in as many words
 that nothing here makes an outcome more likely. Every line below is written so
@@ -16,14 +16,14 @@ the same thing.
 
 ## Title — 30 characters max
 
-**`Personal Manifestation: Maya`** — 28 characters
+**`Personal Manifestation: Mayow`** — 28 characters
 
-The brand is Maya now, and the title puts the keyword first because nobody
+The brand is Mayow now, and the title puts the keyword first because nobody
 searches for a name they have never heard. "Personal Manifestation" is what
-someone types; "Maya" is what they remember afterwards.
+someone types; "Mayow" is what they remember afterwards.
 
 This is the opposite order from the old title, and the reason is that the old
-one had the same problem in reverse: `Maya: Manifestation Diary` led with a
+one had the same problem in reverse: `Mayow: Manifestation Diary` led with a
 word that ranks for nothing. Leading with the keyword ranks better cold, and
 the name still sits in the title where Play indexes it.
 
@@ -36,11 +36,11 @@ Alternatives, if a different keyword tests better:
 
 | Title | Chars | Primary keyword |
 |---|---|---|
-| `Personal Manifestation: Maya` | 28 | personal manifestation |
-| `Maya: Personal Manifestation` | 28 | brand-first, same keyword |
-| `Manifestation Diary: Maya` | 25 | manifestation diary |
-| `Maya: Manifest & Affirmations` | 29 | manifest, affirmations |
-| `Law of Attraction: Maya` | 23 | law of attraction |
+| `Personal Manifestation: Mayow` | 28 | personal manifestation |
+| `Mayow: Personal Manifestation` | 28 | brand-first, same keyword |
+| `Manifestation Diary: Mayow` | 25 | manifestation diary |
+| `Mayow: Manifest & Affirmations` | 29 | manifest, affirmations |
+| `Law of Attraction: Mayow` | 23 | law of attraction |
 
 Play indexes the title most heavily of anything. Do not change it casually
 once it starts ranking — a title change resets the signal that took months to
@@ -74,13 +74,13 @@ read. Keyword density is deliberately moderate: stuffing reads as spam to both
 the algorithm and the person.
 
 ```
-Maya is a manifestation diary written from the other side. Instead of writing
+Mayow is a manifestation diary written from the other side. Instead of writing
 down what you hope for, you get an entry from the life where it already
 happened — personalised audio you listen to with your eyes closed.
 
-Tell Maya what you want. "I want to be earning $10,000 a month from my own
+Tell Mayow what you want. "I want to be earning $10,000 a month from my own
 work." "I want us to be good again." "I want to wake up without hurting."
-Maya writes a four-minute manifestation where it has already happened,
+Mayow writes a short manifestation where it has already happened,
 narrates it in a calm human-sounding voice, and keeps it in your library to
 play whenever you need it.
 
@@ -91,7 +91,7 @@ Most manifestation apps and affirmation apps hand everyone the same audio. The
 ones that ask questions ask the same questions of everybody — written before
 anyone knew what you wanted.
 
-Maya reads your wish first, then writes four questions about it. Say you want
+Mayow reads your wish first, then writes four questions about it. Say you want
 a home of your own and it asks about the light, the street, who is there in
 the morning. Say you want to find your person and it asks about the
 relationship instead. Four taps, and none of them wasted on something you
@@ -104,7 +104,7 @@ Free, unlimited, and written from your own words — not a quote everybody gets.
 
 "I love coming home to a beautiful space that reflects my taste, success, and
 personality." That is the shape: believable, present tense, specific to what
-you actually asked for. Maya sends one every morning and one every night, at
+you actually asked for. Mayow sends one every morning and one every night, at
 times you choose, and you can change them or turn them off in two taps.
 
 
@@ -122,19 +122,19 @@ WHAT YOU GET
 
 BUILT FOR THE MOMENTS YOU ACTUALLY USE IT
 
-Maya is made for the ten minutes before sleep, the walk to work, the morning
-you need to walk into a room like you belong there. Four minutes is long
+Mayow is made for the ten minutes before sleep, the walk to work, the morning
+you need to walk into a room like you belong there. A few minutes is long
 enough to settle into and short enough to finish.
 
 Love, money, career, studies, health, home, travel, family or personal growth
-— whatever you are calling in, Maya writes around it.
+— whatever you are calling in, Mayow writes around it.
 
 
 HONEST ABOUT WHAT THIS IS
 
-Maya is a wellbeing and reflection app. Manifestations are written as though
+Mayow is a wellbeing and reflection app. Manifestations are written as though
 your wish has already happened, because that is the form — it is a writing
-style, not a prediction. Maya does not guarantee any outcome, and it is not
+style, not a prediction. Mayow does not guarantee any outcome, and it is not
 financial, medical or psychological advice. If you are struggling, please talk
 to a professional.
 
@@ -143,14 +143,18 @@ listening limit — replay anything you own as often as you like, forever.
 Prices are always shown with the period they bill on.
 
 
-ASTRA PLUS
+MAYOW PLUS
 
-Maya Plus writes 10 new manifestations a month, with unlimited listening.
-Affirmations are free with or without it. Monthly or yearly, cancel any time
-in Google Play.
+Start with a 7-day free trial. During the trial you can write up to 10
+manifestations. After the trial, Mayow Plus writes up to 60 new manifestations
+a month, with unlimited listening. Affirmations are free with or without it.
+Monthly or yearly. Cancel any time in Google Play, and we send you a reminder
+the day before your trial ends if you allow notifications.
 
-Subscriptions renew automatically until cancelled. Cancelling stops the next
-payment and you keep Plus until the period you have paid for ends.
+Subscriptions renew automatically until cancelled. If you do not cancel before
+the trial ends, the subscription starts and Google Play charges you. Cancelling
+stops the next payment and you keep Plus until the period you have paid for
+ends.
 
 
 PRIVACY
@@ -209,13 +213,14 @@ reviews. Both are off the table until they are true: an invented user count and
 invented testimonials are the Misleading Claims section of Play policy, and
 they are the exact thing that gets a manifestation app reported.
 
-The images themselves are generated — see `store/screenshots/` and
+The images themselves are generated — see `store/play/phone/`,
+`store/play/tablet-7in/` and `store/play/tablet-10in/`, made by
 `tool/shoot_screenshots.mjs`. The headings below are laid over them.
 
 **1 — The player, mid-manifestation, words on screen**
 
 > **Hear it already done.**
-> Four minutes, in your name.
+> A few minutes, in your name.
 
 The product, and the thing no competitor's screenshot can fake. Use a real one
 with a real name in it. This is first because it is the only frame that answers
@@ -224,7 +229,7 @@ with a real name in it. This is first because it is the only frame that answers
 **2 — Home, with a wish typed into the box**
 
 > **Say it in one line.**
-> Maya takes it from there.
+> Mayow takes it from there.
 
 Type something specific and human — "I want to wake up in a home that is
 actually mine" — not a slogan. The input is what makes the output believable.
@@ -276,10 +281,9 @@ product, and both are what a person scrolls past.
 - [ ] Data safety form — the privacy policy is the source of truth for it
 - [ ] Account deletion URL: https://sid-sys.github.io/policies/delete-account.html
 - [ ] Content rating questionnaire
-- [x] Feature graphic (1024x500) — `store/feature-graphic/`, rebuilt with
-      `node tool/shoot_feature_graphic.mjs`. Built from the app's own night sky,
-      logo and fonts rather than generated, so the store page and the app are
-      set in the same type. Edit the HTML beside it to change the wording.
+- [x] Feature graphic (1024x500) — `store/play/feature-graphic-1024x500.png`
+      (background generated with gpt-image-2, low quality; cat and text added).
+- [ ] Play Console: set the free-trial offer on both plans to **7 days**
 - [ ] 512x512 icon — generated into `web/icons/Icon-512.png` by
       `dart run flutter_launcher_icons`
 - [ ] Test billing on an internal testing track with a licence tester account —

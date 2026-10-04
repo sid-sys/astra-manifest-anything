@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../theme/astra_theme.dart';
-import '../widgets/astra_orb.dart';
 import '../widgets/astra_widgets.dart';
 import '../widgets/aura_background.dart';
 
@@ -101,9 +100,9 @@ class _GeneratingScreenState extends State<GeneratingScreen> {
               children: [
                 const Spacer(),
 
-                // The orb, during the wait it was made for.
-                const AstraOrb(size: 170),
-                const SizedBox(height: AstraSpacing.xxl),
+                // Mayow, thinking, marks the wait.
+                const AstraMascot('mascot_think', size: 190),
+                const SizedBox(height: AstraSpacing.xl),
 
                 Text(
                   _stage,
@@ -112,7 +111,7 @@ class _GeneratingScreenState extends State<GeneratingScreen> {
                 ),
                 const SizedBox(height: AstraSpacing.sm),
                 Text(
-                  'About a minute and a half. Maya writes the story, then '
+                  'About a minute and a half. Mayow writes the story, then '
                   'records it, and opens when it is ready to play.',
                   textAlign: TextAlign.center,
                   style: AstraTextStyles.small,

@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,6 +15,7 @@ import '../providers.dart';
 import '../services/wish_prompts.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/allowance_ring.dart';
+import '../widgets/trial_countdown.dart';
 import '../widgets/astra_widgets.dart';
 import '../widgets/streak_card.dart';
 import 'desire_flow_screen.dart';
@@ -112,7 +116,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     //
     // The server checks the same thing. This is here so the answer arrives
     // before a minute of waiting rather than after it.
-    if (!ref.read(isSubscribedProvider)) {
+    // Debug builds only: a test guest skips the paywall so the questions that
+    // follow can be seen. The server still refuses to write anything for an
+    // account that has not paid, so this opens a screen and nothing more.
+    final testGuest =
+        kDebugMode && (FirebaseAuth.instance.currentUser?.isAnonymous ?? false);
+
+    if (!testGuest && !ref.read(isSubscribedProvider)) {
       final bought = await Navigator.of(context).push<bool>(
         MaterialPageRoute(builder: (_) => const PaywallScreen()),
       );
@@ -158,7 +168,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         // heart to favourites, a clock to the library — all pointed at places
         // the nav bar and the Profile tab already reach. Three ways to the
         // same screen is not three features.
-        const _Inset(child: Wordmark('Maya', align: TextAlign.left)),
+        const _Inset(child: Wordmark('Mayow', align: TextAlign.left)),
         const SizedBox(height: AstraSpacing.xxl),
 
         // The daily ritual, in one object: open, choose or don't, generate,
@@ -175,7 +185,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             // true, and the button then opens the plans rather than refusing.
             left: ref.watch(manifestsLeftProvider),
             subscribed: ref.watch(isSubscribedProvider),
+            trialLockedUntil: ref.watch(trialLockProvider),
+            onTrialElapsed: () => ref.invalidate(trialLockProvider),
             onGenerate: _weaveToday,
+            // The grey suggestion in the empty box looks like a typed wish. One
+            // tap on the button makes it one, instead of doing nothing.
+            onUseHint: () => _wishController.text = _suggestion,
           ),
         ),
         const SizedBox(height: AstraSpacing.md),
@@ -310,7 +325,7 @@ class _Inset extends StatelessWidget {
 /// somewhere new in the same life, or hand the choice over. "Add a moment"
 /// is folded away until asked for, because a field standing open reads as a
 /// field that must be filled.
-/// What Maya will write, and what it will write it from.
+/// What Mayow will write, and what it will write it from.
 ///
 /// The wish is typed here every time rather than answered once at signup. A
 /// person manifests a different thing in March than they did in January, and a
@@ -331,7 +346,18 @@ class _TodayCard extends StatelessWidget {
     required this.left,
     required this.subscribed,
     required this.onGenerate,
+    this.trialLockedUntil,
+    this.onTrialElapsed,
+    this.onUseHint,
   });
+
+  /// Fills the box with the suggestion shown in it.
+  final VoidCallback? onUseHint;
+
+  /// Set once the free trial's ten are used: the moment it ends, and the
+  /// screen shows a countdown to it instead of the button.
+  final DateTime? trialLockedUntil;
+  final VoidCallback? onTrialElapsed;
 
   final String name;
   final bool busy;
@@ -348,7 +374,7 @@ class _TodayCard extends StatelessWidget {
   /// Used up, as opposed to never started. Only this one greys the button out
   /// — there is nothing a person can do about it until the 1st, so offering
   /// them a live button would be offering a refusal.
-  bool get _spent => subscribed && left <= 0;
+  bool get _spent => subscribed && left <= 0 && trialLockedUntil == null;
 
   final VoidCallback onGenerate;
 
@@ -364,8 +390,12 @@ class _TodayCard extends StatelessWidget {
       return 'All ${PricingCatalog.manifestMonthly} written this month. '
           'Affirmations are free and still work, and everything replays.';
     }
+    if (trialLockedUntil != null) {
+      return 'You have used your ${PricingCatalog.trialManifests} free-trial '
+          'manifestations. Affirmations and replays stay open.';
+    }
     if (!ready) return 'Write it in your own words — "I want a place of my own"';
-    if (!subscribed) return 'Maya will ask you four things, then write it';
+    if (!subscribed) return 'Mayow will ask you four things, then write it';
     return '$left of ${PricingCatalog.manifestMonthly} left this month';
   }
 
@@ -446,11 +476,25 @@ class _TodayCard extends StatelessWidget {
                   style: AstraTextStyles.small.copyWith(color: AstraColors.dim),
                 ),
                 const SizedBox(height: AstraSpacing.lg),
-                AstraButton(
-                  label: _spent ? 'Used up this month' : '✨  Continue',
-                  busy: busy,
-                  onPressed: busy || !ready || _spent ? null : onGenerate,
-                ),
+                if (trialLockedUntil != null)
+                  TrialCountdown(
+                    endsAt: trialLockedUntil!,
+                    onElapsed: onTrialElapsed,
+                  )
+                else
+                  AstraButton(
+                    label: _spent
+                        ? 'Used up this month'
+                        : ready
+                        ? '✨  Continue'
+                        : '✨  Use this idea',
+                    busy: busy,
+                    onPressed: busy || _spent
+                        ? null
+                        : ready
+                        ? onGenerate
+                        : onUseHint,
+                  ),
               ],
             );
           },
@@ -517,11 +561,7 @@ class _StoryCard extends StatelessWidget {
                   const SizedBox(height: AstraSpacing.md),
                   Row(
                     children: [
-                      Icon(
-                        Icons.play_circle_fill_rounded,
-                        size: 26,
-                        color: AstraColors.accent,
-                      ),
+                      const AstraIcon('ui_play', size: 30),
                       const SizedBox(width: 8),
                       Text('Listen', style: AstraTextStyles.small),
                     ],
@@ -593,7 +633,7 @@ class _FirstStoryCard extends StatelessWidget {
         ),
         const SizedBox(height: 2),
         Text(
-          'Say what you want in the box above. Maya asks four questions '
+          'Say what you want in the box above. Mayow asks four questions '
           'about it, then writes. Your first one is free.',
           style: AstraTextStyles.small,
         ),

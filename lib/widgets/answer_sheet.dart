@@ -4,12 +4,12 @@ import '../models/story_preferences.dart';
 import '../theme/astra_theme.dart';
 import 'astra_widgets.dart';
 
-/// The switch that decides whether Maya writes from what it knows about you.
+/// The switch that decides whether Mayow writes from what it knows about you.
 ///
 /// One switch, not a row of chips. The chips put every answer on the front page,
 /// which made the commonest action — type something, press the button — look
 /// like a form with a set of decisions attached. The choice people actually
-/// make is binary: use what Maya knows about me, or use only what I just
+/// make is binary: use what Mayow knows about me, or use only what I just
 /// typed. Which answers, for the minority who care, is one tap further in.
 ///
 /// Shared between Home and the affirmations tab because it is the same decision
@@ -118,12 +118,12 @@ Future<void> showAnswerSheet(
             Text('WRITE IT FROM', style: AstraTextStyles.eyebrow),
             const SizedBox(height: AstraSpacing.xs),
             Text(
-              'Your answers, as Maya will use them.',
+              'Your answers, as Mayow will use them.',
               style: AstraTextStyles.bodyDim,
             ),
             const SizedBox(height: AstraSpacing.lg),
 
-            // Always on, and deliberately not a switch. Everything Maya writes
+            // Always on, and deliberately not a switch. Everything Mayow writes
             // says the name out loud; there is no version of this that works
             // without one.
             AnswerRow(

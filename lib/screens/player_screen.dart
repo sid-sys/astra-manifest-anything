@@ -8,7 +8,6 @@ import '../providers.dart';
 import '../services/playback_controller.dart';
 import '../services/story_service.dart';
 import '../theme/astra_theme.dart';
-import '../widgets/astra_orb.dart';
 import '../widgets/astra_widgets.dart';
 import '../widgets/script_view.dart';
 import '../widgets/aura_background.dart';
@@ -201,8 +200,7 @@ class _Header extends StatelessWidget {
       IconButton(
         // A cross, not a chevron. The chevron promised a minimise, and this
         // stops playback outright.
-        icon: const Icon(Icons.close_rounded),
-        color: AstraColors.dim,
+        icon: const AstraIcon('ui_close', size: 28),
         onPressed: onClose,
         tooltip: 'Close player',
       ),
@@ -231,7 +229,13 @@ class _Orb extends StatelessWidget {
   final bool playing;
 
   @override
-  Widget build(BuildContext context) => AstraOrb(size: 132, spinning: playing);
+  Widget build(BuildContext context) => AstraMascot(
+    // Listening while it plays, asleep when it is paused. She bobs only while
+    // there is sound, so stillness reads as "paused" the way the orb's did.
+    playing ? 'mascot_listen' : 'mascot_sleep',
+    size: 168,
+    still: !playing,
+  );
 }
 
 /// The pinned control bar: scrubber, times, and everything you press while
@@ -289,13 +293,14 @@ class _Transport extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               _IconToggle(
-                icon: Icons.repeat_rounded,
+                asset: 'ui_repeat',
                 active: state.looping,
                 tooltip: state.looping ? 'Loop on' : 'Loop',
                 onTap: playback.toggleLoop,
               ),
               _ControlButton(
-                icon: Icons.replay_10_rounded,
+                asset: 'ui_rewind',
+                caption: '10',
                 tooltip: 'Back 10 seconds',
                 onTap: () => playback.skip(const Duration(seconds: -10)),
               ),
@@ -307,7 +312,8 @@ class _Transport extends StatelessWidget {
                 onTap: playback.toggle,
               ),
               _ControlButton(
-                icon: Icons.forward_30_rounded,
+                asset: 'ui_forward',
+                caption: '30',
                 tooltip: 'Forward 30 seconds',
                 onTap: () => playback.skip(const Duration(seconds: 30)),
               ),
@@ -324,9 +330,8 @@ class _Transport extends StatelessWidget {
           Row(
             children: [
               _ControlButton(
-                icon: playback.bedOn
-                    ? Icons.music_note_rounded
-                    : Icons.music_off_rounded,
+                asset: 'ui_music',
+                faded: !playback.bedOn,
                 tooltip: playback.bedOn ? 'Music on' : 'Music off',
                 onTap: playback.toggleBed,
               ),
@@ -382,13 +387,13 @@ class _Transport extends StatelessWidget {
 /// nothing to compare it against.
 class _IconToggle extends StatelessWidget {
   const _IconToggle({
-    required this.icon,
+    required this.asset,
     required this.active,
     required this.tooltip,
     required this.onTap,
   });
 
-  final IconData icon;
+  final String asset;
   final bool active;
   final String tooltip;
   final VoidCallback onTap;
@@ -405,23 +410,20 @@ class _IconToggle extends StatelessWidget {
         customBorder: const CircleBorder(),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          width: 44,
-          height: 44,
+          width: 52,
+          height: 52,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: active
-                ? AstraColors.accent.withValues(alpha: 0.16)
+                ? AstraColors.accent.withValues(alpha: 0.22)
                 : Colors.transparent,
             border: Border.all(
               color: active ? AstraColors.accent : Colors.transparent,
+              width: 2,
             ),
           ),
-          child: Icon(
-            icon,
-            size: 21,
-            color: active ? AstraColors.accent : AstraColors.dim,
-          ),
+          child: AstraIcon(asset, size: 36, opacity: active ? 1 : 0.55),
         ),
       ),
     ),
@@ -497,28 +499,21 @@ class _PlayButton extends StatelessWidget {
       child: InkWell(
         onTap: recording ? null : onTap,
         customBorder: const CircleBorder(),
-        child: Container(
-          width: 62,
-          height: 62,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: AstraColors.accentGradient,
+        child: SizedBox(
+          width: 76,
+          height: 76,
+          child: Center(
+            child: recording
+                ? const SizedBox(
+                    width: 30,
+                    height: 30,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      color: AstraColors.accent,
+                    ),
+                  )
+                : AstraIcon(playing ? 'ui_pause' : 'ui_play', size: 72),
           ),
-          child: recording
-              ? SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.4,
-                    color: AstraColors.onAccent,
-                  ),
-                )
-              : Icon(
-                  playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                  size: 30,
-                  color: AstraColors.onAccent,
-                ),
         ),
       ),
     ),
@@ -527,14 +522,23 @@ class _PlayButton extends StatelessWidget {
 
 class _ControlButton extends StatelessWidget {
   const _ControlButton({
-    required this.icon,
+    required this.asset,
     required this.tooltip,
     required this.onTap,
+    this.caption,
+    this.faded = false,
   });
 
-  final IconData icon;
+  /// The picture, from `assets/icons`.
+  final String asset;
   final String tooltip;
   final VoidCallback onTap;
+
+  /// A short number printed over the corner of the picture — the 10 and 30 in
+  /// "back 10 seconds" and "forward 30". The pictures carry no text of their
+  /// own, so the number is the only thing that says how far a tap goes.
+  final String? caption;
+  final bool faded;
 
   @override
   Widget build(BuildContext context) => Tooltip(
@@ -542,16 +546,36 @@ class _ControlButton extends StatelessWidget {
     child: InkWell(
       onTap: onTap,
       customBorder: const CircleBorder(),
-      child: Container(
-        width: 44,
-        height: 44,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: AstraColors.cardRaised,
-          border: Border.all(color: AstraColors.line),
+      child: SizedBox(
+        width: 52,
+        height: 52,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            AstraIcon(asset, size: 44, opacity: faded ? 0.4 : 1),
+            if (caption != null)
+              Positioned(
+                right: 0,
+                bottom: 2,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: AstraColors.canvasRaised,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AstraColors.line),
+                  ),
+                  child: Text(
+                    caption!,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      color: AstraColors.text,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
-        child: Icon(icon, size: 21, color: AstraColors.accent),
       ),
     ),
   );

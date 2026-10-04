@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#05060F</color>
+    <color name="ic_launcher_background">#8A44CC</color>
 
     <!-- The window behind Flutter, shown in the frame between the splash
          going away and Flutter's first paint. It has to match the app's own

@@ -23,7 +23,7 @@ void main() {
   });
 
   test('a half-used month is half a ring', () {
-    const usage = Usage(used: 10, limit: 20, plan: 'Maya Plus', detail: '');
+    const usage = Usage(used: 10, limit: 20, plan: 'Mayow Plus', detail: '');
     expect(usage.left, 10);
     expect(usage.fraction, 0.5);
   });
@@ -32,7 +32,7 @@ void main() {
     // Subscribing on the 20th after using the free story and the free day
     // used to hand over an allowance that was already three deep. The stories
     // that sold the plan are not stories the plan paid for.
-    const usage = Usage(used: 0, limit: 20, plan: 'Maya Plus', detail: '');
+    const usage = Usage(used: 0, limit: 20, plan: 'Mayow Plus', detail: '');
     expect(usage.left, 20);
   });
 

@@ -25,6 +25,9 @@ class AdminScreen extends ConsumerStatefulWidget {
 class _AdminScreenState extends ConsumerState<AdminScreen> {
   late Future<AdminOverview> _overview;
 
+  /// Which accounts the list shows: `all`, `new` (has the new app) or `old`.
+  String _which = 'all';
+
   /// The account currently having its entitlement changed, so one card can
   /// show a spinner without the rest of the list going inert.
   String? _working;
@@ -53,7 +56,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       // Swallowed rather than rethrown: the builder below already renders the
       // failure, and letting it escape here leaves the refresh spinner turning
       // over a screen that has finished.
-      debugPrint('Maya: admin overview refresh failed — $error');
+      debugPrint('Mayow: admin overview refresh failed — $error');
     }
   }
 
@@ -285,6 +288,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
               onSetTrial: _setTrial,
               onDelete: _deleteAccount,
               onCleanOld: _cleanOld,
+              which: _which,
+              onWhich: (value) => setState(() => _which = value),
             );
           },
         ),
@@ -301,8 +306,12 @@ class _Overview extends StatelessWidget {
     required this.onSetTrial,
     required this.onDelete,
     required this.onCleanOld,
+    required this.which,
+    required this.onWhich,
   });
 
+  final String which;
+  final ValueChanged<String> onWhich;
   final VoidCallback onCleanOld;
   final AdminOverview overview;
   final Future<void> Function() onRefresh;
@@ -329,13 +338,13 @@ class _Overview extends StatelessWidget {
           children: [
             _Back(onTap: () => Navigator.of(context).pop()),
             const SizedBox(width: AstraSpacing.md),
-            Text('Maya', style: AstraTextStyles.wordmark),
+            Text('Mayow', style: AstraTextStyles.wordmark),
           ],
         ),
         const SizedBox(height: AstraSpacing.xl),
         Text('ADMIN', style: AstraTextStyles.eyebrow),
         const SizedBox(height: AstraSpacing.xs),
-        Text('Everyone on Maya', style: AstraTextStyles.display(26)),
+        Text('Everyone on Mayow', style: AstraTextStyles.display(26)),
         const SizedBox(height: AstraSpacing.xl),
 
         // The one control that reaches every user at once, behind its own
@@ -364,12 +373,63 @@ class _Overview extends StatelessWidget {
             _Stat(label: 'On Plus', value: '${overview.subscribers}'),
           ],
         ),
+        const SizedBox(height: AstraSpacing.sm),
+        // How many phones an announcement can actually reach. Only accounts
+        // with reminders switched on hold a push address, so this is usually
+        // far smaller than the user count — which is why a broadcast to
+        // "everyone" can come back with nobody to send it to.
+        AstraCard(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Text(
+                '${overview.pushReachable}',
+                style: AstraTextStyles.display(24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'of ${overview.totalUsers} accounts can be reached by an '
+                  'announcement (reminders on)',
+                  style: AstraTextStyles.small,
+                ),
+              ),
+            ],
+          ),
+        ),
         const SizedBox(height: AstraSpacing.xl),
+
+        // New and old, side by side. "New" is anyone who has opened the build
+        // with the paywall and the 7-day trial; "old" is everyone still on an
+        // earlier build, who is left exactly as they were.
+        Wrap(
+          spacing: AstraSpacing.sm,
+          runSpacing: AstraSpacing.xs,
+          children: [
+            for (final (key, label, count) in [
+              ('all', 'All', overview.users.length),
+              ('new', 'New app', overview.users.where((u) => u.onNewApp).length),
+              ('old', 'Old app', overview.users.where((u) => !u.onNewApp).length),
+            ])
+              TagChip(
+                label: '$label · $count',
+                selected: which == key,
+                onTap: () => onWhich(key),
+              ),
+          ],
+        ),
+        const SizedBox(height: AstraSpacing.md),
 
         if (overview.users.isEmpty)
           Text('Nobody has signed up yet.', style: AstraTextStyles.bodyDim)
         else
-          for (final user in overview.users) ...[
+          for (final user in overview.users.where(
+            (u) => switch (which) {
+              'new' => u.onNewApp,
+              'old' => !u.onNewApp,
+              _ => true,
+            },
+          )) ...[
             _UserCard(
               user: user,
               busy: working == user.uid,
@@ -412,6 +472,52 @@ class _Overview extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// One funnel number with its label. Fixed width so four sit on a line inside
+/// a card and the rest wrap, rather than each tile stretching to fill a row.
+class _Tile extends StatelessWidget {
+  const _Tile(this.label, this.value, {this.good = false, this.bad = false});
+
+  final String label;
+  final int value;
+  final bool good;
+  final bool bad;
+
+  @override
+  Widget build(BuildContext context) {
+    final error = Theme.of(context).colorScheme.error;
+    final color = bad ? error : (good ? AstraColors.good : AstraColors.text);
+
+    return Container(
+      width: 66,
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+      decoration: BoxDecoration(
+        color: const Color(0x4D150C5C),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: bad ? error.withValues(alpha: 0.7) : AstraColors.line,
+        ),
+      ),
+      child: Column(
+        children: [
+          Text('$value', style: AstraTextStyles.display(19, color: color)),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            style: AstraTextStyles.small.copyWith(
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.4,
+              height: 1.15,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _Stat extends StatelessWidget {
@@ -541,27 +647,90 @@ class _UserCard extends StatelessWidget {
 
         // The furthest step reached, given its own line above the rest. It is
         // the one fact on this card that says whether anything is wrong.
-        Text(user.stage.label, style: AstraTextStyles.bodyDim),
-
-        if (user.wishes.isNotEmpty) ...[
-          const SizedBox(height: AstraSpacing.xs),
-          Text('MANIFESTATIONS TYPED', style: AstraTextStyles.eyebrow),
-          for (final wish in user.wishes) ...[
-            const SizedBox(height: 2),
-            Text('“${wish.dream}”', style: AstraTextStyles.small),
-          ],
-        ] else if (user.wish != null) ...[
-          const SizedBox(height: AstraSpacing.xs),
-          Text('Wish: “${user.wish}”', style: AstraTextStyles.small),
-        ],
-        const SizedBox(height: AstraSpacing.xs),
         Text(
-          'Opened ${user.appOpens}× · price seen ${user.paywallViews}× · '
-          'subscribe pressed ${user.subscribeTaps}× · '
-          'backed out ${user.purchaseCancels}× · errors ${user.purchaseFails}'
-          '${user.trialShown == null ? '' : user.trialShown! ? ' · trial shown' : ' · trial NOT shown'}',
-          style: AstraTextStyles.small,
+          user.stage.label,
+          style: AstraTextStyles.label.copyWith(color: AstraColors.accent),
         ),
+        const SizedBox(height: AstraSpacing.md),
+
+        // The funnel, one labelled tile per number. These used to be a single
+        // line of small print ("Opened 2× · price seen 2× · …") that was
+        // technically all there and practically unreadable.
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _Tile('OPENED', user.appOpens),
+            _Tile('TYPED', user.typedCount),
+            _Tile('MADE', user.madeCount, good: user.madeCount > 0),
+            _Tile('PRICE SEEN', user.paywallViews),
+            _Tile('TAPPED BUY', user.subscribeTaps),
+            _Tile('BACKED OUT', user.purchaseCancels),
+            _Tile('BUY ERRORS', user.purchaseFails, bad: user.purchaseFails > 0),
+            _Tile('GEN FAILED', user.generateFailed, bad: user.generateFailed > 0),
+          ],
+        ),
+
+        const SizedBox(height: AstraSpacing.md),
+        Text(
+          user.typed.isEmpty
+              ? 'WISHES TYPED'
+              : 'WISHES TYPED · ${user.typed.length} '
+                    '(${user.typed.where((w) => w.wasMade).length} made)',
+          style: AstraTextStyles.eyebrow,
+        ),
+        const SizedBox(height: AstraSpacing.xs),
+        if (user.typed.isEmpty)
+          Text(
+            user.wish != null
+                ? '“${user.wish}”'
+                : 'Has not typed a wish yet.',
+            style: AstraTextStyles.small,
+          )
+        else
+          for (final wish in user.typed)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    wish.wasMade
+                        ? Icons.check_circle_rounded
+                        : Icons.cancel_rounded,
+                    size: 17,
+                    color: wish.wasMade
+                        ? AstraColors.good
+                        : Theme.of(context).colorScheme.error,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '“${wish.wish}”',
+                            style: AstraTextStyles.body.copyWith(fontSize: 13.5),
+                          ),
+                          TextSpan(
+                            text: wish.wasMade
+                                ? '  → ${wish.made}'
+                                : '  → nothing generated',
+                            style: AstraTextStyles.small.copyWith(
+                              color: wish.wasMade
+                                  ? AstraColors.good
+                                  : Theme.of(context).colorScheme.error,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
         if (user.lastError != null && user.lastError!.isNotEmpty) ...[
           const SizedBox(height: 2),
           Text(
@@ -583,12 +752,20 @@ class _UserCard extends StatelessWidget {
           spacing: AstraSpacing.sm,
           runSpacing: AstraSpacing.xs,
           children: [
+            _Fact(
+              user.onNewApp ? 'NEW APP · build ${user.appBuild}' : 'OLD APP',
+              strong: user.onNewApp,
+            ),
+            if (user.isNewSignup) const _Fact('New signup · paywalled'),
             _Fact('Joined ${_date(user.signedUpAt)}'),
             _Fact('Seen ${_ago(user.lastSeenAt)}'),
             _Fact(_providers(user.providers)),
             if (user.storiesThisMonth > 0)
               _Fact('${user.storiesThisMonth} this month'),
             if (user.subscribed) const _Fact('Plus', strong: true),
+            if (user.trialShown != null)
+              _Fact(user.trialShown! ? 'Trial was shown' : 'Trial NOT shown'),
+            _Fact(user.pushReady ? 'Push on' : 'Push off'),
           ],
         ),
 
@@ -786,11 +963,7 @@ class _Back extends StatelessWidget {
           shape: BoxShape.circle,
           border: Border.all(color: AstraColors.line),
         ),
-        child: Icon(
-          Icons.arrow_back_rounded,
-          size: 18,
-          color: AstraColors.text,
-        ),
+        child: const Center(child: AstraIcon('ui_back', size: 26)),
       ),
     ),
   );

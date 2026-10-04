@@ -33,13 +33,13 @@ Future<void> main() async {
       builder: MayaAudioHandler.new,
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'com.astraapp.astra.playback',
-        androidNotificationChannelName: 'Maya playback',
+        androidNotificationChannelName: 'Mayow playback',
         androidNotificationOngoing: true,
         androidStopForegroundOnPause: true,
       ),
     );
   } catch (error) {
-    debugPrint('Maya: notification playback controls unavailable — $error');
+    debugPrint('Mayow: notification playback controls unavailable — $error');
   }
 
   final prefs = await SharedPreferences.getInstance();
@@ -84,7 +84,7 @@ Future<void> main() async {
       await AstraRepository(prefs).clearLocal();
     }
   } catch (error) {
-    debugPrint('Maya: Firebase unavailable, running local-only — $error');
+    debugPrint('Mayow: Firebase unavailable, running local-only — $error');
   }
 
   runApp(

@@ -73,7 +73,7 @@ class Manifestation {
     intention: Intention.peace,
     script: readable,
     duration: duration,
-    voice: 'elevenlabs',
+    voice: 'sage',
     createdAt: createdAt,
     audioUrl: audioUrl,
   );

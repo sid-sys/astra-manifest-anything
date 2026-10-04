@@ -384,7 +384,7 @@ class StoryPreferences {
 enum StoryFocus {
   desire('My desire', 'Continue the main storyline'),
   fresh('Something new', 'A different part of the same life'),
-  surprise('Surprise me', 'Maya picks the moment');
+  surprise('Surprise me', 'Mayow picks the moment');
 
   const StoryFocus(this.label, this.detail);
 

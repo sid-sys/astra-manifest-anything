@@ -6,6 +6,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// The daily affirmation, delivered as a notification.
 ///
@@ -60,7 +61,7 @@ class NotificationService {
     try {
       return FirebaseMessaging.instance;
     } catch (error) {
-      debugPrint('Maya: messaging unavailable — $error');
+      debugPrint('Mayow: messaging unavailable — $error');
       return null;
     }
   }
@@ -144,6 +145,20 @@ class NotificationService {
   }
 
   void _fromTap(RemoteMessage message) {
+    // "Your trial ends tomorrow": the tap goes straight to the place where it
+    // can be cancelled, which is the whole point of the message.
+    if (message.data['type'] == 'trial_ending') {
+      unawaited(
+        launchUrl(
+          Uri.parse(
+            'https://play.google.com/store/account/subscriptions'
+            '?package=com.astraapp.astra',
+          ),
+          mode: LaunchMode.externalApplication,
+        ),
+      );
+      return;
+    }
     final id = message.data['broadcastId'];
     if (id is String && id.isNotEmpty) _opened(id);
   }
@@ -219,13 +234,13 @@ class NotificationService {
     try {
       zone = (await FlutterTimezone.getLocalTimezone()).identifier;
     } catch (error) {
-      debugPrint('Maya: could not resolve timezone — $error');
+      debugPrint('Mayow: could not resolve timezone — $error');
     }
 
     try {
       return (token: await _push?.getToken(), zone: zone);
     } catch (error) {
-      debugPrint('Maya: no push token — $error');
+      debugPrint('Mayow: no push token — $error');
       return (token: null, zone: zone);
     }
   }
@@ -240,12 +255,12 @@ class NotificationService {
     try {
       await _push?.deleteToken();
     } catch (error) {
-      debugPrint('Maya: could not delete push token — $error');
+      debugPrint('Mayow: could not delete push token — $error');
     }
     try {
       await _plugin.cancelAll();
     } catch (error) {
-      debugPrint('Maya: could not clear notifications — $error');
+      debugPrint('Mayow: could not clear notifications — $error');
     }
   }
 
@@ -257,7 +272,7 @@ class NotificationService {
     try {
       return _push?.onTokenRefresh ?? const Stream<String>.empty();
     } catch (error) {
-      debugPrint('Maya: no token refresh stream — $error');
+      debugPrint('Mayow: no token refresh stream — $error');
       return const Stream<String>.empty();
     }
   }

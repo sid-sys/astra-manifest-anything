@@ -22,11 +22,11 @@ import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 /// the base plan happens to come first.
 List<ProductDetails> _offers({required bool trial}) {
   final wrapper = ProductDetailsWrapper(
-    description: 'Maya Plus',
-    name: 'Maya Plus',
+    description: 'Mayow Plus',
+    name: 'Mayow Plus',
     productId: 'astra_plus_monthly',
     productType: ProductType.subs,
-    title: 'Maya Plus (Maya)',
+    title: 'Mayow Plus (Mayow)',
     subscriptionOfferDetails: [
       const SubscriptionOfferDetailsWrapper(
         basePlanId: 'astra-plus-monthly',
@@ -131,8 +131,8 @@ void main() {
     final chosen = BillingService.resolveOffer([
       ProductDetails(
         id: 'astra_plus_monthly',
-        title: 'Maya Plus',
-        description: 'Maya Plus',
+        title: 'Mayow Plus',
+        description: 'Mayow Plus',
         price: r'$7.99',
         rawPrice: 7.99,
         currencyCode: 'USD',

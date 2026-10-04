@@ -59,7 +59,7 @@ class ProfileScreen extends ConsumerWidget {
                           ? profile.preferences.desire
                           : (profile.aspiration.isNotEmpty
                                 ? profile.aspiration
-                                : 'Your Maya')),
+                                : 'Your Mayow')),
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -81,7 +81,7 @@ class ProfileScreen extends ConsumerWidget {
         // two different settings that could disagree with each other. Life
         // areas now live inside Story preferences, reachable one tap further
         // in rather than one row over.
-        // What Maya calls you, in every story it writes.
+        // What Mayow calls you, in every story it writes.
         _SettingRow(
           label: 'Your name',
           value: profile.name.isEmpty ? 'Not set' : profile.name,
@@ -221,11 +221,7 @@ class ProfileScreen extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  Icon(
-                    Icons.play_circle_outline_rounded,
-                    color: AstraColors.accent,
-                    size: 24,
-                  ),
+                  const AstraIcon('ui_play', size: 32),
                 ],
               ),
             ),
@@ -359,7 +355,7 @@ class ProfileScreen extends ConsumerWidget {
         _AccountRow(
           icon: Icons.description_outlined,
           label: 'Terms of use',
-          detail: 'What Maya promises, and what it does not',
+          detail: 'What Mayow promises, and what it does not',
           onTap: () => LegalLinks.open(context, LegalLinks.terms),
         ),
         const SizedBox(height: AstraSpacing.sm),
@@ -424,7 +420,7 @@ class ProfileScreen extends ConsumerWidget {
       messenger.showSnackBar(
         const SnackBar(
           content: Text(
-            'Notifications are blocked for Maya. Turn them on in your phone '
+            'Notifications are blocked for Mayow. Turn them on in your phone '
             'settings and try again.',
           ),
         ),
@@ -516,7 +512,7 @@ class ProfileScreen extends ConsumerWidget {
       const SizedBox(height: AstraSpacing.md),
       _AccountRow(
         icon: Icons.open_in_new_rounded,
-        label: 'Cancel Maya Plus',
+        label: 'Cancel Mayow Plus',
         detail: 'Opens Google Play · you keep Plus until the period ends',
         onTap: () => LegalLinks.open(
           context,
@@ -590,9 +586,9 @@ class ProfileScreen extends ConsumerWidget {
                     // Play told us it is cancelled but not when it lapses.
                     // Better to say the true half than to invent a date the
                     // user will hold us to.
-                    ? 'You have cancelled Maya Plus. It stays on until the '
+                    ? 'You have cancelled Mayow Plus. It stays on until the '
                         'period you have paid for ends.'
-                    : 'You have cancelled Maya Plus. It stays on until '
+                    : 'You have cancelled Mayow Plus. It stays on until '
                         '${_longDate(ends)}, and you keep everything you '
                         'have already made.',
                 style: AstraTextStyles.bodyDim,
@@ -809,7 +805,6 @@ class _NameDialogState extends State<_NameDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    backgroundColor: AstraColors.card,
     title: Text('Your name', style: AstraTextStyles.label),
     content: TextField(
       controller: _controller,

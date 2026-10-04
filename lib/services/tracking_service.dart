@@ -32,7 +32,7 @@ class TrackingService {
         'storeAnswered': ?storeAnswered,
       });
     } catch (error) {
-      debugPrint('Maya: could not report $event — $error');
+      debugPrint('Mayow: could not report $event — $error');
     }
   }
 }

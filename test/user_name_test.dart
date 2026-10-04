@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// What Maya calls the person.
+/// What Mayow calls the person.
 ///
 /// Worth pinning, because getting it wrong is not cosmetic: the manifestation
 /// opens by saying this name out loud, and with nothing set the server writes

@@ -109,8 +109,7 @@ class _ConfirmScreenState extends ConsumerState<ConfirmScreen> {
                 Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.close_rounded),
-                      color: AstraColors.dim,
+                      icon: const AstraIcon('ui_close', size: 28),
                       tooltip: 'Back',
                       onPressed: _working
                           ? null
@@ -129,7 +128,7 @@ class _ConfirmScreenState extends ConsumerState<ConfirmScreen> {
                 Text(
                   _isDelete
                       ? 'This removes your account and everything in it, from '
-                            'this device and from Maya\'s servers. It cannot '
+                            'this device and from Mayow\'s servers. It cannot '
                             'be undone and there is no copy to restore from.'
                       : isGuest
                       // The warning only applies to guests. Saying it to
@@ -274,7 +273,7 @@ class _Item extends StatelessWidget {
 
 /// The destructive action, in the app's error colour rather than its gold.
 ///
-/// Gold is the colour of everything Maya wants you to press. This one it does
+/// Gold is the colour of everything Mayow wants you to press. This one it does
 /// not, so it does not get the house button.
 class _DangerButton extends StatelessWidget {
   const _DangerButton({

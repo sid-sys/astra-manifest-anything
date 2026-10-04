@@ -51,7 +51,7 @@ void main() {
     await container.read(manifestationsProvider.future);
 
     expect(container.read(manifestsLeftProvider), PricingCatalog.manifestMonthly);
-    expect(container.read(usageProvider).plan, 'Maya Plus');
+    expect(container.read(usageProvider).plan, 'Mayow Plus');
   });
 
   test('last month does not count against this month', () async {

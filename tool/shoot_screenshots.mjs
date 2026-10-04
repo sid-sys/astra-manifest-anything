@@ -32,12 +32,14 @@ const PORT = 9222;
 // the whole frame with tiny type — and the screenshots come out looking like a
 // desktop app photographed sideways. 360 at 3x is a normal Android phone, and
 // it still writes out at 1080x2280.
-const WIDTH = 360;
-const HEIGHT = 760;
-const DENSITY = 3;
+// Overridable so the same six frames can be taken for tablets:
+//   SHOT_W=540 SHOT_H=960 SHOT_DPR=2 SHOT_OUT=store/play/tablet7 node tool/shoot_screenshots.mjs
+const WIDTH = Number(process.env.SHOT_W ?? 360);
+const HEIGHT = Number(process.env.SHOT_H ?? 640);
+const DENSITY = Number(process.env.SHOT_DPR ?? 3);
 
 const here = dirname(fileURLToPath(import.meta.url));
-const OUT = join(here, '..', 'store', 'screenshots');
+const OUT = join(here, '..', process.env.SHOT_OUT ?? join('store', 'play', 'phone'));
 
 /** The six frames the listing asks for, in the order it asks for them. */
 const FRAMES = [

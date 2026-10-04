@@ -59,7 +59,7 @@ class ManifestService {
 
   /// Writes one, narrated and stored, and returns it ready to play.
   ///
-  /// Slow — the script and an ElevenLabs render, back to back — so the timeout
+  /// Slow — the script and a narration render, back to back — so the timeout
   /// is generous. A caller that gave up early would leave the user paying for
   /// audio they never heard.
   Future<Manifestation> write(
@@ -91,7 +91,7 @@ class ManifestService {
           error.message ?? 'You have used this month\'s manifestations.',
         );
       }
-      debugPrint('Maya: manifest failed — ${error.code} ${error.message}');
+      debugPrint('Mayow: manifest failed — ${error.code} ${error.message}');
 
       // The server writes a plain sentence for every case it understands.
       // Passing that through beats rethrowing, which reaches the screen as
@@ -130,7 +130,7 @@ class ManifestService {
       // read look exactly like an empty library — which is how a missing
       // Firestore rule hid for a whole release. The screen has an error state;
       // let it use it.
-      debugPrint('Maya: could not read manifestations — $error');
+      debugPrint('Mayow: could not read manifestations — $error');
       rethrow;
     }
   }
@@ -146,7 +146,7 @@ class ManifestService {
       // failed delete look exactly like a successful one: the item stayed in
       // the list with no explanation, and it looked like the app had simply
       // ignored the tap.
-      debugPrint('Maya: could not delete a manifestation — $error');
+      debugPrint('Mayow: could not delete a manifestation — $error');
       rethrow;
     }
   }

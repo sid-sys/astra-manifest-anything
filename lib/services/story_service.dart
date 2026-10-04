@@ -72,7 +72,7 @@ class StoryService {
   /// [scene] is today's moment, in the user's words, and is usually empty —
   /// the whole point of storing preferences is that nobody restates their
   /// desire every morning. [focus] says what to do when it is: continue the
-  /// main storyline, go somewhere new in the same life, or let Maya choose.
+  /// main storyline, go somewhere new in the same life, or let Mayow choose.
   Future<Story> write({
     required UserProfile profile,
     required Intention intention,
@@ -154,7 +154,7 @@ class StoryService {
     if (error.code == 'resource-exhausted') {
       return StoryQuotaExceeded(error.message ?? 'Your free day has ended.');
     }
-    debugPrint('Maya: $stage failed — ${error.code} ${error.message}');
+    debugPrint('Mayow: $stage failed — ${error.code} ${error.message}');
     return error;
   }
 }

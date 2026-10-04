@@ -72,14 +72,16 @@ them has run its course — a year at minimum.
 
 | Product ID             | Name        | Base plan ID       | Billing period |
 | ---------------------- | ----------- | ------------------ | -------------- |
-| `astra_plus_monthly`   | Maya Plus  | `monthly-autorenew`| 1 month        |
-| `astra_plus_yearly`    | Maya Plus  | `yearly-autorenew` | 1 year         |
+| `astra_plus_monthly`   | Mayow Plus  | `monthly-autorenew`| 1 month        |
+| `astra_plus_yearly`    | Mayow Plus  | `yearly-autorenew` | 1 year         |
 
-For each base plan: **auto-renewing**. If a free trial offer is configured,
-the app shows it automatically and the server caps the first three days at
-three manifestations — see `TRIAL_MANIFEST_LIMIT` in `functions/index.js`.
-Without that cap a three-day trial is ten manifestations given to somebody who
-can cancel on the third day.
+For each base plan: **auto-renewing**, with a **7-day free trial** offer
+(Play Console → the base plan → Add offer → New customer acquisition → Free
+trial, 1 week). The app shows the trial only when Play returns it. The server
+allows 10 manifestations during the trial and the rest once it ends — see
+`TRIAL_MANIFEST_LIMIT` and `TRIAL_WINDOW_DAYS` in `functions/index.js`, and
+`PricingCatalog` in `lib/models/plan.dart`. A change to the trial length has to
+be made in all three places.
 
 Prices, matching `lib/models/plan.dart`:
 
@@ -111,7 +113,7 @@ The account is:
 
 1. Play Console → **Users and permissions → Invite new users**
 2. Email: the address above
-3. App permissions: add **Maya** only
+3. App permissions: add **Mayow** only
 4. Grant **View financial data, orders, and cancellation survey responses**
 5. Also enable the Google Play Android Developer API for the
    `astra-manifest` project if it is not already on:

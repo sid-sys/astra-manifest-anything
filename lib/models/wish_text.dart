@@ -12,7 +12,7 @@
 /// needing to know what any particular word means.
 ///
 /// It is a guard, not a judge. The server checks the same thing before spending
-/// money, and anything that gets past both is a real sentence Maya can try to
+/// money, and anything that gets past both is a real sentence Mayow can try to
 /// write from. Being slightly too permissive is the right way to be wrong: the
 /// cost of letting an odd wish through is one odd manifestation, and the cost of
 /// refusing a real one is a person who cannot use the app.

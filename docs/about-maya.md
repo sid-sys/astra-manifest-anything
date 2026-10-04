@@ -1,15 +1,15 @@
-# Maya — what the app is
+# Mayow — what the app is
 
 ## In one line
 
-Maya is a mobile app (Android) that turns a person's wish into a short guided
+Mayow is a mobile app (Android) that turns a person's wish into a short guided
 audio they can listen to again and again, plus five affirmations they can say
 and believe. Built for a US audience.
 
 ## The idea
 
 People who manifest usually have a wish ("I want to buy my dream home") but no
-easy way to practise it every day. Maya takes the wish, asks four quick
+easy way to practise it every day. Mayow takes the wish, asks four quick
 questions about it, then writes and reads a personal meditation and a set of
 affirmations. The person listens, repeats, and gets gentle reminders during the
 day.
@@ -24,7 +24,7 @@ day.
 - **Get reminders**: morning and evening notifications that carry their own
   affirmation lines.
 - **Keep everything** in a library and delete anything they no longer want.
-- **Subscribe** to Maya Plus for a monthly number of manifestations. New
+- **Subscribe** to Mayow Plus for a monthly number of manifestations. New
   subscribers get a free trial, priced in US dollars.
 
 ## The screens
@@ -39,16 +39,16 @@ Continue starts the flow. Also shows recent manifestations and how many are left
 this month.
 
 **The four questions**
-After typing a wish, Maya asks four multiple-choice questions written for that
+After typing a wish, Mayow asks four multiple-choice questions written for that
 exact wish (for example about the place, the feeling, who is there). The answers
 shape the writing.
 
 **Generating**
-A calm waiting screen while Maya writes and records. Affirmations are written
+A calm waiting screen while Mayow writes and records. Affirmations are written
 first, then the manifestation.
 
-**Paywall (Maya Plus)**
-Shows monthly and yearly plans, the free trial, samples of how Maya writes, and
+**Paywall (Mayow Plus)**
+Shows monthly and yearly plans, the free trial, samples of how Mayow writes, and
 a Restore purchase link. Non-subscribers see it when they try to make a
 manifestation.
 
@@ -58,7 +58,7 @@ forward 30 seconds, speed, **loop**, and **background music** with its own
 volume. Words show on screen to read along. Favourite and report buttons.
 
 **Library**
-Everything Maya has written, newest first, filterable. Each item can be played,
+Everything Mayow has written, newest first, filterable. Each item can be played,
 queued or deleted (with a confirmation).
 
 **Affirm**
@@ -81,7 +81,7 @@ subscription, legal links, sign out and delete account.
 
 ## How the free and paid parts work
 
-| | Free | Maya Plus |
+| | Free | Mayow Plus |
 |---|---|---|
 | Affirmations (text and audio) | Yes | Yes |
 | Reminders with own affirmations | Yes | Yes |

@@ -1,5 +1,5 @@
 /**
- * Maya story generation.
+ * Mayow story generation.
  *
  * Claude writes the script, OpenAI narrates it, the audio lands in Storage and
  * the metadata in Firestore. This runs server-side for one reason above all
@@ -16,12 +16,24 @@ const admin = require("firebase-admin");
 const crypto = require("crypto");
 const Anthropic = require("@anthropic-ai/sdk");
 const OpenAI = require("openai");
+const nodemailer = require("nodemailer");
 
 admin.initializeApp();
 
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
 const OPENAI_API_KEY = defineSecret("OPENAI_API_KEY");
-const ELEVENLABS_API_KEY = defineSecret("ELEVENLABS_API_KEY");
+// ElevenLabs is parked, not removed: we want its voice back later. To revive it,
+// uncomment this line, the ELEVENLABS_* constants and narrateWithElevenLabs
+// below, add the secret to writeManifest, and swap the narrate call back.
+// The mailbox the "trial ends tomorrow" email is sent from (a Gmail address and
+// an app password). Set with `firebase functions:secrets:set SMTP_USER` and
+// `SMTP_PASS`, then flip EMAIL_ENABLED below and redeploy `trialEndingNotice`.
+const EMAIL_ENABLED = false;
+// Declared only when enabled: a declared secret must have a value to deploy.
+const SMTP_USER = EMAIL_ENABLED ? defineSecret("SMTP_USER") : null;
+const SMTP_PASS = EMAIL_ENABLED ? defineSecret("SMTP_PASS") : null;
+
+// const ELEVENLABS_API_KEY = defineSecret("ELEVENLABS_API_KEY");
 
 // Same region as Firestore — keeps the round trips short.
 setGlobalOptions({ region: "asia-south1", maxInstances: 10 });
@@ -64,6 +76,15 @@ const ANTHROPIC_STORY_MODEL = "claude-opus-5";
  * Terra is the balanced production tier and roughly halves the script cost.
  */
 const OPENAI_STORY_MODEL = "gpt-5.6-terra";
+
+/**
+ * Writes manifestations, the four questions and the five affirmations.
+ *
+ * Luna: $0.20 in / $1.20 out per million tokens, against Opus 5's $5 / $25.
+ * Those three jobs are short, free-form prose, where the price gap is 20x and
+ * the quality gap is the one the owner chose to accept.
+ */
+const WRITER_MODEL = "gpt-5.6-luna";
 
 const TTS_MODEL = "gpt-4o-mini-tts";
 const TTS_VOICE = "sage";
@@ -1158,7 +1179,7 @@ async function assertWithinQuota(uid) {
     if (usage.lifetime >= FREE_STORY_LIMIT) {
       throw new HttpsError(
         "resource-exhausted",
-        "Maya Plus writes your stories. Start your free trial to begin.",
+        "Mayow Plus writes your stories. Start your free trial to begin.",
       );
     }
     return;
@@ -1300,61 +1321,46 @@ const DELETE_LIMITS = [
  * their eyes shut. The user gives one sentence; everything else is the prompt.
  */
 
-/** The voice, chosen by the owner from the ElevenLabs voice library. */
-const ELEVENLABS_VOICE = "Nyip1VgoS6bg9Vl30y8v";
-
-/**
- * Turbo rather than Multilingual v2, and it is a money decision.
- *
- * v2 costs $0.10 per 1,000 characters against Turbo's $0.05. A manifestation is
- * around 2,200 characters, so the choice is 22 cents a script or 11. At ten a
- * month on top of twenty stories, that is the difference between roughly 45%
- * and 58% margin at the cap on a ₹699 plan — one under the floor, one on it.
- *
- * The quality gap is smallest on exactly this kind of audio: one voice, no
- * dialogue, read slowly. It is the right place to spend half as much.
- */
-const ELEVENLABS_MODEL = "eleven_turbo_v2_5";
+// /** The voice, chosen by the owner from the ElevenLabs voice library. */
+// const ELEVENLABS_VOICE = "Nyip1VgoS6bg9Vl30y8v";
+//
+// /**
+//  * Turbo rather than Multilingual v2, and it is a money decision.
+//  *
+//  * v2 costs $0.10 per 1,000 characters against Turbo's $0.05. A manifestation is
+//  * around 2,200 characters, so the choice is 22 cents a script or 11. At ten a
+//  * month on top of twenty stories, that is the difference between roughly 45%
+//  * and 58% margin at the cap on a ₹699 plan — one under the floor, one on it.
+//  *
+//  * The quality gap is smallest on exactly this kind of audio: one voice, no
+//  * dialogue, read slowly. It is the right place to spend half as much.
+//  */
+// const ELEVENLABS_MODEL = "eleven_turbo_v2_5";
 
 /**
  * Manifestations per month, inside the Plus subscription.
  *
- * Ten, and the number is arithmetic rather than taste. One costs $0.161 all in
- * — 2,244 characters of ElevenLabs narration at $0.05 per thousand (measured
- * from three real ones: 2,230, 2,249 and 2,253), plus the script, plus the
- * four questions that precede it, plus storage and traffic.
- *
- * What a subscriber is worth is smaller than the shelf price. ₹699 arrives as
- * about $5.82: Google Play takes 15%, and the Indian price has 18% GST inside
- * it that was never ours. Against that, ten is 65% margin in the worst case
- * anybody can reach and around 88% at the six a month a real subscriber uses.
- *
- * It was twenty, on a note that read 68% at the cap. That note used a price we
- * do not charge, and counted neither Play's cut, nor the tax, nor the question
- * step. The true figure at twenty was 36%, and on the yearly rupee plan 29%.
- * The yearly plan in the weaker currency is always the one that binds — twelve
- * months of cost against one payment — and it is always the last place anyone
- * looks.
+ * Sixty, at roughly $0.042 each (OpenAI "sage" narration plus a gpt-5.6-luna
+ * script). That is $2.57 a month in the worst case anybody can reach, which
+ * leaves 68% of a $7.99 month and 61% of a $79.99 year. See
+ * `docs/pricing-model.md`.
  */
-const MANIFEST_MONTHLY_LIMIT = 10;
+const MANIFEST_MONTHLY_LIMIT = 60;
 
 /**
- * What a subscription may write in its first three days.
+ * What a subscription may write during its free trial.
  *
- * The trial is Play's and it is free, so the first three days of any new
- * subscription are three days somebody may never pay for. Ten manifestations
- * in that window is $1.61 given to a person who can cancel on the third day,
- * and there is nothing to stop the same person doing it again with another
- * address.
+ * The trial is Play's and it is free, so these seven days are seven days
+ * somebody may never pay for. Ten manifestations is about $0.42 given to a
+ * person who can cancel on the last day: enough to be convinced by, too few to
+ * be worth farming. The rest unlock when the trial ends, and the app counts
+ * down to that moment.
  *
- * Three is enough to be convinced by and too few to be worth farming. It is
- * applied to every new subscription rather than only to ones Play labels as
- * trials, because the receipt does not reliably say which is which — and a
- * genuine payer writing more than three in their first three days is a case
- * this app has never seen, against a cost it certainly would.
+ * Applied to every new subscription rather than only to ones Play labels as
+ * trials, because the receipt does not reliably say which is which.
  */
-const TRIAL_MANIFEST_LIMIT = 3;
-const TRIAL_WINDOW_DAYS = 3;
+const TRIAL_MANIFEST_LIMIT = 10;
+const TRIAL_WINDOW_DAYS = 7;
 
 /**
  * Whether a typed wish is worth spending money on.
@@ -1409,7 +1415,7 @@ function looksMeaningful(input) {
 
 /** What to say when the box holds no wish. */
 const NO_WISH_MESSAGE =
-  "Tell Maya what you want, in your own words — a few of them, so there is " +
+  "Tell Mayow what you want, in your own words — a few of them, so there is " +
   "something specific to write from.";
 
 /**
@@ -1505,7 +1511,7 @@ function manifestBrief({ name, dream, profile, include, answers }) {
   // time it was written that way, unparseable.
   const context = [
     "",
-    `What ${name} told Maya about this life. Use these — the people by the`,
+    `What ${name} told Mayow about this life. Use these — the people by the`,
     "names given, the places as named places, the feelings as the note the",
     "ending lands on. Do not list them back; weave them into the day:",
     ...intel,
@@ -1542,35 +1548,74 @@ Return only the script. Do not add a title, a heading, or any commentary.`;
  * No schema here on purpose. The brief already says "return only the script",
  * and a manifestation has nothing to put in a second field.
  */
-async function writeManifestScript(brief) {
-  const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
+/**
+ * Writes what a Claude call actually consumed to the log, so cost per item is
+ * read off real numbers instead of estimated from character counts. Filter the
+ * function logs on "Claude usage" to total a day.
+ */
+function logUsage(call, response) {
+  const usage = response?.usage ?? {};
+  logger.info("Claude usage", {
+    call,
+    model: ANTHROPIC_STORY_MODEL,
+    inputTokens: usage.input_tokens ?? null,
+    outputTokens: usage.output_tokens ?? null,
+    cacheReadTokens: usage.cache_read_input_tokens ?? 0,
+    cacheWriteTokens: usage.cache_creation_input_tokens ?? 0,
+  });
+}
 
+/** What an OpenAI writing call consumed, for the cost log. */
+function logWriterUsage(call, response) {
+  const usage = response?.usage ?? {};
+  logger.info("Writer usage", {
+    call,
+    model: WRITER_MODEL,
+    inputTokens: usage.prompt_tokens ?? null,
+    outputTokens: usage.completion_tokens ?? null,
+    cacheReadTokens: usage.prompt_tokens_details?.cached_tokens ?? 0,
+  });
+}
+
+/**
+ * One writing call to [WRITER_MODEL]. Returns the text, or throws the same
+ * HttpsError a refusal always did. `schema` asks for JSON.
+ */
+async function writeWithLuna(call, brief, { maxTokens, schema, refusal }) {
+  const openai = new OpenAI({ apiKey: OPENAI_API_KEY.value() });
   const response = await withRetry(() =>
-    anthropic.messages.create({
-      model: ANTHROPIC_STORY_MODEL,
-      // Four hundred words with generous pauses. Eight thousand, as the story
-      // path uses, would only pay for tokens nobody reads.
-      max_tokens: 2000,
+    openai.chat.completions.create({
+      model: WRITER_MODEL,
+      // Room for the model's own thinking as well as the text itself.
+      max_completion_tokens: maxTokens,
       messages: [{ role: "user", content: brief }],
+      ...(schema
+        ? {
+            response_format: {
+              type: "json_schema",
+              json_schema: { name: call.replace(/\W/g, "_"), strict: true, schema },
+            },
+          }
+        : {}),
     }),
   );
+  logWriterUsage(call, response);
 
-  if (response.stop_reason === "refusal") {
-    logger.warn("Manifestation declined", {
-      category: response.stop_details?.category ?? null,
-    });
-    throw new HttpsError(
-      "invalid-argument",
-      "That one couldn't be written. Try describing it a little differently.",
-    );
+  const message = response.choices?.[0]?.message;
+  if (message?.refusal) {
+    logger.warn("Writer declined", { call, refusal: message.refusal });
+    throw new HttpsError("invalid-argument", refusal);
   }
-
-  const text = response.content.find((block) => block.type === "text")?.text;
-  if (!text) {
-    throw new HttpsError("internal", "The manifestation came back empty.");
-  }
-
+  const text = message?.content;
+  if (!text) throw new HttpsError("internal", "Nothing came back. Try again.");
   return text.trim();
+}
+
+async function writeManifestScript(brief) {
+  return writeWithLuna("manifest-script", brief, {
+    maxTokens: 6000,
+    refusal: "That one couldn't be written. Try describing it a little differently.",
+  });
 }
 
 /**
@@ -1598,85 +1643,85 @@ function forSpeaking(script) {
 }
 
 
-/**
- * Narrates with ElevenLabs.
- *
- * Used only for manifestations. Stories stay on OpenAI, which is eight times
- * cheaper per character and fine for a five-minute scene — this voice is worth
- * paying for on the one piece of audio a person listens to over and over.
- */
-async function narrateWithElevenLabs(script) {
-  const started = Date.now();
-
-  const response = await withRetry(() =>
-    fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE}` +
-        `?output_format=mp3_44100_128`,
-      {
-        method: "POST",
-        headers: {
-          "xi-api-key": ELEVENLABS_API_KEY.value(),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: script,
-          model_id: ELEVENLABS_MODEL,
-          voice_settings: {
-            // Steady over expressive. A manifestation read with dramatic
-            // variation sounds like an advert; the point is a level, certain
-            // voice that does not pull attention to itself.
-            stability: 0.55,
-            similarity_boost: 0.75,
-            style: 0.0,
-            use_speaker_boost: true,
-          },
-        }),
-      },
-    ),
-  );
-
-  if (!response.ok) {
-    const detail = (await response.text()).slice(0, 300);
-    logger.error("ElevenLabs refused", {
-      status: response.status,
-      reason: detail,
-    });
-
-    // Account and key problems get their own message, because they are not
-    // things the user can do anything about and "try again" is a lie. The
-    // commonest by far is a free ElevenLabs plan: library voices are paid-only
-    // over the API, so the very first call fails 402 no matter how correct the
-    // request is.
-    if (response.status === 401 || response.status === 402) {
-      throw new HttpsError(
-        "failed-precondition",
-        "Manifestations are briefly unavailable. Nothing has been charged — " +
-          "please try again later.",
-      );
-    }
-
-    if (response.status === 429) {
-      throw new HttpsError(
-        "resource-exhausted",
-        "Maya is busy right now. Try again in a minute.",
-      );
-    }
-
-    throw new HttpsError(
-      "internal",
-      "That one could not be narrated. Try again in a moment.",
-    );
-  }
-
-  const audio = Buffer.from(await response.arrayBuffer());
-  logger.info("Manifestation narrated", {
-    characters: script.length,
-    bytes: audio.length,
-    elapsedMs: Date.now() - started,
-  });
-
-  return audio;
-}
+// /**
+//  * Narrates with ElevenLabs.
+//  *
+//  * Used only for manifestations. Stories stay on OpenAI, which is eight times
+//  * cheaper per character and fine for a five-minute scene — this voice is worth
+//  * paying for on the one piece of audio a person listens to over and over.
+//  */
+// async function narrateWithElevenLabs(script) {
+//   const started = Date.now();
+//
+//   const response = await withRetry(() =>
+//     fetch(
+//       `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE}` +
+//         `?output_format=mp3_44100_128`,
+//       {
+//         method: "POST",
+//         headers: {
+//           "xi-api-key": ELEVENLABS_API_KEY.value(),
+//           "Content-Type": "application/json",
+//         },
+//         body: JSON.stringify({
+//           text: script,
+//           model_id: ELEVENLABS_MODEL,
+//           voice_settings: {
+//             // Steady over expressive. A manifestation read with dramatic
+//             // variation sounds like an advert; the point is a level, certain
+//             // voice that does not pull attention to itself.
+//             stability: 0.55,
+//             similarity_boost: 0.75,
+//             style: 0.0,
+//             use_speaker_boost: true,
+//           },
+//         }),
+//       },
+//     ),
+//   );
+//
+//   if (!response.ok) {
+//     const detail = (await response.text()).slice(0, 300);
+//     logger.error("ElevenLabs refused", {
+//       status: response.status,
+//       reason: detail,
+//     });
+//
+//     // Account and key problems get their own message, because they are not
+//     // things the user can do anything about and "try again" is a lie. The
+//     // commonest by far is a free ElevenLabs plan: library voices are paid-only
+//     // over the API, so the very first call fails 402 no matter how correct the
+//     // request is.
+//     if (response.status === 401 || response.status === 402) {
+//       throw new HttpsError(
+//         "failed-precondition",
+//         "Manifestations are briefly unavailable. Nothing has been charged — " +
+//           "please try again later.",
+//       );
+//     }
+//
+//     if (response.status === 429) {
+//       throw new HttpsError(
+//         "resource-exhausted",
+//         "Mayow is busy right now. Try again in a minute.",
+//       );
+//     }
+//
+//     throw new HttpsError(
+//       "internal",
+//       "That one could not be narrated. Try again in a moment.",
+//     );
+//   }
+//
+//   const audio = Buffer.from(await response.arrayBuffer());
+//   logger.info("Manifestation narrated", {
+//     characters: script.length,
+//     bytes: audio.length,
+//     elapsedMs: Date.now() - started,
+//   });
+//
+//   return audio;
+// }
 
 // ---------------------------------------------------------------- endpoints
 
@@ -2396,11 +2441,109 @@ const DEFAULT_EVENING_MINUTES = 22 * 60;
  * thousands and stops being fine after; the fix when it comes is to shard the
  * query by a stored send-slot field so each run reads only its own slot.
  */
+/**
+ * Notification copy.
+ *
+ * Titles rotate so the phone does not say the same sentence every morning —
+ * the thing people mute first. The body is always the person's own affirmation
+ * where there is one, which is what makes these worth opening: a generic body
+ * is the line every wellness app sends.
+ */
+const MORNING_TITLES = [
+  "🌅 Your morning affirmation is ready",
+  "✨ A new affirmation for you",
+  "☀️ Your future self has something to say",
+  "💫 Start today differently",
+  "🌸 A little reminder for the life you’re creating",
+  "🔮 Your affirmation for today",
+];
+
+const NIGHT_TITLES = [
+  "🌙 Before you sleep, return to your wish",
+  "✨ End the day in the life you’re creating",
+  "🌌 Let your mind settle somewhere beautiful",
+  "💤 Your mind is still listening",
+  "🌙 A few quiet minutes for you",
+  "💫 Close your eyes. Imagine it already happened.",
+];
+
+/**
+ * Win-back messages, by days since the app was last opened. Deliberately
+ * gentle: a lapsed user is not told their streak is gone, because someone who
+ * simply had a bad week should not be scolded by their phone.
+ */
+const WIN_BACK = {
+  2: {
+    title: "✨ Your affirmations haven’t gone anywhere",
+    body: "Come back whenever you’re ready.",
+  },
+  4: {
+    title: "🌙 It’s been a few days",
+    body: "Take five quiet minutes for yourself tonight.",
+  },
+  7: {
+    title: "💫 Your story is still yours",
+    body: "Revisit the life you imagined.",
+  },
+  14: {
+    title: "🌱 Maybe you needed a break. That’s okay.",
+    body: "Your manifestations are still waiting for you.",
+  },
+};
+
+const MANIFEST_READY = [
+  {
+    title: "✨ Your manifestation is ready",
+    body: "Your story has been written. Press play when you’re ready.",
+  },
+  {
+    title: "💫 Your story is ready",
+    body: "Close your eyes and step into the life you’ve imagined.",
+  },
+  {
+    title: "🎧 Your personalized manifestation is waiting",
+    body: "Listen whenever you need a few quiet minutes.",
+  },
+];
+
+/** A stable pick for a given person and day, so a retry does not reroll it. */
+function pickFor(list, seed) {
+  let hash = 0;
+  for (const ch of String(seed)) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return list[hash % list.length];
+}
+
+/**
+ * The win-back message due today, or null.
+ *
+ * One per spell of inactivity per tier: the record is keyed by the moment the
+ * person was last seen, so opening the app starts a fresh spell and a person
+ * who never returns gets four messages over two weeks, then silence. Nothing
+ * is sent after thirty days away — at that point it is no longer a reminder.
+ */
+async function winBackFor(uid) {
+  const ref = trackDoc(uid);
+  const snap = await ref.get();
+  const lastAt = snap.exists ? snap.data().lastAt : null;
+  const last = Date.parse(lastAt ?? "");
+  if (!Number.isFinite(last)) return null;
+
+  const days = Math.floor((Date.now() - last) / 86400000);
+  if (days < 2 || days > 30) return null;
+
+  const tier = [14, 7, 4, 2].find((t) => days >= t);
+  const sent = snap.data();
+  if (sent.reengageFor === lastAt && sent.reengageTier >= tier) return null;
+
+  await ref.update({ reengageFor: lastAt, reengageTier: tier });
+  return WIN_BACK[tier];
+}
+
 exports.dailyAffirmation = onSchedule(
   {
     schedule: `every ${SEND_WINDOW_MINUTES} minutes`,
     timeZone: "UTC",
-    secrets: [ANTHROPIC_API_KEY],
+    secrets: [ANTHROPIC_API_KEY, OPENAI_API_KEY],
     timeoutSeconds: 540,
     memory: "512MiB",
   },
@@ -2520,9 +2663,28 @@ exports.dailyAffirmation = onSchedule(
           continue;
         }
 
+        // Morning is the one slot that can carry a win-back message instead
+        // of the usual title, so the daily total stays at two however long
+        // someone has been away.
+        let title = pickFor(
+          slot === "morning" ? MORNING_TITLES : NIGHT_TITLES,
+          `${uid}:${clock.date}`,
+        );
+        let body = line;
+        let kind = "affirmation";
+
+        if (slot === "morning") {
+          const winBack = await winBackFor(uid);
+          if (winBack) {
+            title = winBack.title;
+            body = winBack.body;
+            kind = "reengage";
+          }
+        }
+
         await admin.messaging().send({
           token,
-          notification: { title: "Today’s affirmation", body: line },
+          notification: { title, body },
           android: {
             priority: "normal",
             notification: {
@@ -2531,7 +2693,7 @@ exports.dailyAffirmation = onSchedule(
               channelId: "daily_affirmation",
             },
           },
-          data: { type: "affirmation", line },
+          data: { type: kind, line },
         });
 
         // Kept so the Home card can show the same sentence the notification
@@ -2736,21 +2898,201 @@ exports.verifyPurchase = onCall(
       );
     }
 
+    // When the subscription began, and never later than that.
+    //
+    // This used to be "now" on every verification, and the app re-verifies each
+    // time it comes to the front, so a free trial's first day restarted every
+    // day. Play's own start time is the truth; failing that, keep what was
+    // stored for this same purchase.
+    const previous = (await entitlementDoc(uid).get()).data() ?? {};
+    const sameReceipt = previous.purchaseToken === purchaseToken;
+    const startedIso =
+      asIsoOrNull(purchase.startTime) ??
+      (sameReceipt ? previous.subscribedAt : null) ??
+      new Date().toISOString();
+
     await entitlementDoc(uid).set(
       {
         isSubscribed: active,
         productId,
         purchaseToken,
         expiryTime: expiry,
-        subscribedAt: new Date().toISOString(),
+        subscribedAt: startedIso,
         state: purchase.subscriptionState ?? "unknown",
         verifiedAt: new Date().toISOString(),
       },
       { merge: true },
     );
 
+    // One "your trial ends tomorrow" notice per subscription: queued here,
+    // sent by `trialEndingNotice`, and deleted once it has gone.
+    try {
+      const startMs = Date.parse(startedIso);
+      const day = 24 * 60 * 60 * 1000;
+      const isFresh = Date.now() < startMs + TRIAL_WINDOW_DAYS * day;
+      if (active && isFresh && previous.trialNoticeQueued !== purchaseToken) {
+        await admin.firestore().collection("trialNotices").doc(uid).set({
+          uid,
+          notifyAt: new Date(startMs + (TRIAL_WINDOW_DAYS - 1) * day).toISOString(),
+          endsAt: new Date(startMs + TRIAL_WINDOW_DAYS * day).toISOString(),
+        });
+        await entitlementDoc(uid).set(
+          { trialNoticeQueued: purchaseToken },
+          { merge: true },
+        );
+      }
+    } catch (error) {
+      logger.warn("Could not queue the trial notice", {
+        uid,
+        reason: String(error?.message ?? error),
+      });
+    }
+
     logger.info("Purchase verified", { uid, productId, active });
     return { isSubscribed: active, expiryTime: expiry };
+  },
+);
+
+/** ISO text for a Play timestamp, or null when it is missing or unreadable. */
+function asIsoOrNull(value) {
+  if (!value) return null;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
+}
+
+const TRIAL_ENDING = {
+  title: "Your free trial ends tomorrow",
+  body:
+    "Mayow Plus starts tomorrow. If it is not for you, cancel in Google Play " +
+    "before then and you pay nothing. Tap to open your subscriptions.",
+};
+
+/** The same warning as an email, with the steps spelled out. */
+function trialEndingEmail(name) {
+  const hello = name ? `Hi ${name},` : "Hi,";
+  const link =
+    "https://play.google.com/store/account/subscriptions?package=com.astraapp.astra";
+  const text =
+    `${hello}\n\n` +
+    "Your free trial of Mayow Plus ends tomorrow. After that your plan starts " +
+    "and Google Play charges you.\n\n" +
+    "If you do not want to continue, cancel before then and you pay nothing:\n" +
+    `1. Open ${link}\n` +
+    "2. Tap Mayow Plus\n" +
+    "3. Tap Cancel subscription\n\n" +
+    "Everything you made stays in your library and still plays after you " +
+    "cancel.\n\n" +
+    "If you want to keep going, you do not need to do anything.\n\n" +
+    "Mayow";
+  const html =
+    `<p>${hello}</p>` +
+    "<p>Your free trial of <b>Mayow Plus</b> ends <b>tomorrow</b>. After that " +
+    "your plan starts and Google Play charges you.</p>" +
+    "<p>If you do not want to continue, cancel before then and you pay nothing:</p>" +
+    `<ol><li>Open <a href="${link}">your Google Play subscriptions</a></li>` +
+    "<li>Tap <b>Mayow Plus</b></li><li>Tap <b>Cancel subscription</b></li></ol>" +
+    "<p>Everything you made stays in your library and still plays after you cancel.</p>" +
+    "<p>If you want to keep going, you do not need to do anything.</p><p>Mayow</p>";
+  return { subject: "Your Mayow free trial ends tomorrow", text, html };
+}
+
+/**
+ * Tells people their trial ends tomorrow, and how to cancel.
+ *
+ * Runs hourly over the small `trialNotices` collection written when a
+ * subscription starts. Sent only to someone who allowed notifications, and
+ * only while the subscription is still going to renew: someone who has
+ * already cancelled does not need to be told how.
+ */
+exports.trialEndingNotice = onSchedule(
+  {
+    schedule: "every 60 minutes",
+    timeZone: "UTC",
+    timeoutSeconds: 300,
+    memory: "256MiB",
+    secrets: EMAIL_ENABLED ? [SMTP_USER, SMTP_PASS] : [],
+  },
+  async () => {
+    const db = admin.firestore();
+    const due = await db
+      .collection("trialNotices")
+      .where("notifyAt", "<=", new Date().toISOString())
+      .limit(200)
+      .get();
+
+    const mailer = EMAIL_ENABLED
+      ? nodemailer.createTransport({
+          service: "gmail",
+          auth: { user: SMTP_USER.value(), pass: SMTP_PASS.value() },
+        })
+      : null;
+
+    let sent = 0;
+    let emailed = 0;
+    for (const notice of due.docs) {
+      const uid = notice.id;
+      try {
+        const [profileSnap, entSnap] = await Promise.all([
+          db.collection("users").doc(uid).get(),
+          entitlementDoc(uid).get(),
+        ]);
+        const profile = profileSnap.data() ?? {};
+        const ent = entSnap.data() ?? {};
+        const token =
+          typeof profile.trialPushToken === "string" && profile.trialPushToken
+            ? profile.trialPushToken
+            : profile.remindersOn === true
+              ? profile.fcmToken
+              : null;
+        const renewing =
+          ent.isSubscribed === true &&
+          ent.state !== "SUBSCRIPTION_STATE_CANCELED";
+        const stillTrial = Date.parse(notice.data().endsAt) > Date.now();
+
+        // The email goes to anyone whose trial will turn into a charge, whether
+        // or not they allowed notifications: it is the second chance for the
+        // people who said no to the first.
+        if (renewing && stillTrial && mailer) {
+          try {
+            const account = await admin.auth().getUser(uid);
+            if (account.email) {
+              const mail = trialEndingEmail(clean(String(profile.name ?? ""), 40));
+              await mailer.sendMail({
+                from: `Mayow <${SMTP_USER.value()}>`,
+                to: account.email,
+                subject: mail.subject,
+                text: mail.text,
+                html: mail.html,
+              });
+              emailed++;
+            }
+          } catch (error) {
+            logger.warn("Trial email failed", { uid, reason: String(error?.message ?? error) });
+          }
+        }
+
+        if (renewing && stillTrial && typeof token === "string" && token.length > 20) {
+          await admin.messaging().send({
+            token,
+            notification: { title: TRIAL_ENDING.title, body: TRIAL_ENDING.body },
+            android: {
+              priority: "high",
+              notification: { channelId: "daily_affirmation" },
+            },
+            data: { type: "trial_ending" },
+          });
+          sent++;
+        }
+      } catch (error) {
+        logger.warn("Trial notice failed", {
+          uid,
+          reason: String(error?.message ?? error),
+        });
+      }
+      // Sent, skipped or failed: one attempt each, never a daily repeat.
+      await notice.ref.delete();
+    }
+    logger.info("Trial notices", { due: due.size, sent, emailed });
   },
 );
 
@@ -2878,6 +3220,20 @@ exports.trackEvent = onCall(
     const ref = trackDoc(uid);
     const existing = await ref.get();
     if (!existing.exists || !existing.data()?.since) update.since = now;
+
+    // Every wish typed, not just the latest, so the admin panel can say which
+    // of them ever produced anything. Pressing Continue twice on the same
+    // sentence is one wish, not two, and the list is capped so one account
+    // cannot grow this document without bound.
+    if (name === "wish_typed" && wish) {
+      const log = Array.isArray(existing.data()?.typedWishes)
+        ? existing.data().typedWishes
+        : [];
+      const last = log[log.length - 1];
+      if (!last || last.text !== wish) {
+        update.typedWishes = [...log, { text: wish, at: now }].slice(-40);
+      }
+    }
 
     // update(), not set-merge. A top-level key like "counts.app_open" is only
     // parsed as a nested path by update() — set() with merge:true writes it
@@ -3045,17 +3401,26 @@ exports.adminOverview = onCall(
       const counted = await Promise.all(
         batch.map(async ({ account }) => {
           const user = db.collection("users").doc(account.uid);
-          const [manifests, affirmations, manifestDocs] = await Promise.all([
+          const [manifests, affirmations, manifestDocs, goalDocs] =
+            await Promise.all([
             user.collection("manifestations").count().get(),
             user.collection("affirmationSets").count().get(),
             // The wish itself, in the person's own words — not the script
-            // Maya wrote from it. Capped at 50: this is a panel to read, not
+            // Mayow wrote from it. Capped at 50: this is a panel to read, not
             // an export.
             user
               .collection("manifestations")
               .orderBy("createdAt", "desc")
               .limit(50)
               .select("dream", "createdAt")
+              .get(),
+            // The goals behind affirmation sets — a wish that produced five
+            // lines is as much "generated" as one that produced audio.
+            user
+              .collection("affirmationSets")
+              .orderBy("createdAt", "desc")
+              .limit(50)
+              .select("goal", "createdAt")
               .get(),
           ]);
           return [
@@ -3065,6 +3430,10 @@ exports.adminOverview = onCall(
               affirmations: affirmations.data().count,
               wishes: manifestDocs.docs.map((doc) => ({
                 dream: String(doc.data().dream ?? ""),
+                createdAt: doc.data().createdAt ?? null,
+              })),
+              goals: goalDocs.docs.map((doc) => ({
+                goal: String(doc.data().goal ?? ""),
                 createdAt: doc.data().createdAt ?? null,
               })),
             },
@@ -3080,7 +3449,53 @@ exports.adminOverview = onCall(
       const profile = byIndex(profiles, index);
       const track = byIndex(tracks, index);
       const c = track.counts ?? {};
-      const row = made.get(account.uid) ?? { manifests: 0, affirmations: 0, wishes: [] };
+      const row = made.get(account.uid) ?? {
+        manifests: 0,
+        affirmations: 0,
+        wishes: [],
+        goals: [],
+      };
+
+      // Every wish this person typed, each marked with whether it ever turned
+      // into something. Matched on the text itself, lower-cased and with
+      // whitespace collapsed, because the server cleans what it stores and the
+      // app logs what was typed.
+      const norm = (text) =>
+        String(text ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+      const madeAs = new Map();
+      for (const w of row.wishes) madeAs.set(norm(w.dream), "manifestation");
+      for (const g of row.goals) {
+        if (!madeAs.has(norm(g.goal))) madeAs.set(norm(g.goal), "affirmations");
+      }
+
+      const typed = (Array.isArray(track.typedWishes) ? track.typedWishes : [])
+        .map((entry) => ({
+          wish: String(entry.text ?? ""),
+          at: asIso(entry.at),
+          made: madeAs.get(norm(entry.text)) ?? null,
+        }));
+
+      // Anything generated that tracking never saw typed — an account that
+      // wrote things before this build reported wishes. Listed as made, so the
+      // panel is complete for older accounts instead of looking empty.
+      const seen = new Set(typed.map((entry) => norm(entry.wish)));
+      for (const w of row.wishes) {
+        if (!seen.has(norm(w.dream))) {
+          seen.add(norm(w.dream));
+          typed.push({
+            wish: w.dream,
+            at: asIso(w.createdAt),
+            made: "manifestation",
+          });
+        }
+      }
+      for (const g of row.goals) {
+        if (!seen.has(norm(g.goal))) {
+          seen.add(norm(g.goal));
+          typed.push({ wish: g.goal, at: asIso(g.createdAt), made: "affirmations" });
+        }
+      }
+      typed.sort((a, b) => String(b.at ?? "").localeCompare(String(a.at ?? "")));
       const subscribed = entitlement.isSubscribed === true;
 
       // Furthest step reached, from what the app reported.
@@ -3115,6 +3530,17 @@ exports.adminOverview = onCall(
           dream: w.dream,
           createdAt: asIso(w.createdAt),
         })),
+        typed: typed.slice(0, 40),
+        typedCount: c.wish_typed ?? 0,
+        madeCount: typed.filter((entry) => entry.made).length,
+        generateOk: (c.generate_ok_manifest ?? 0) + (c.generate_ok_affirmations ?? 0),
+        generateFailed: c.generate_failed ?? 0,
+        pushReady:
+          (typeof profile.fcmToken === "string" && profile.fcmToken.length > 20) ||
+          (typeof profile.trialPushToken === "string" &&
+            profile.trialPushToken.length > 20),
+        appBuild: Number(profile.appBuild) || 0,
+        signupBuild: Number(profile.signupBuild) || 0,
         paywallViews: c.paywall_view ?? 0,
         subscribeTaps: c.subscribe_tap ?? 0,
         purchaseCancels: c.purchase_cancelled ?? 0,
@@ -3146,6 +3572,7 @@ exports.adminOverview = onCall(
       totalUsers: users.length,
       totalStories: users.reduce((sum, user) => sum + user.manifests, 0),
       totalAffirmations: users.reduce((sum, user) => sum + user.affirmations, 0),
+      pushReachable: users.filter((user) => user.pushReady).length,
       subscribers: users.filter((user) => user.subscribed).length,
       generatedAt: new Date().toISOString(),
       users,
@@ -3219,7 +3646,7 @@ exports.adminBroadcast = onCall(
     //
     // Android always draws a header line: give it a title and it shows yours,
     // leave it out and it shows the app name. So a title is never missing — it
-    // is either chosen or it is "Maya". For a one-line announcement the app
+    // is either chosen or it is "Mayow". For a one-line announcement the app
     // name is the better header, because a made-up title above a short message
     // is two headings and no content.
     const title = clean(String(request.data?.title ?? ""), 80);
@@ -3789,7 +4216,7 @@ exports.adminGrantTrial = onCall(
  */
 exports.writeManifest = onCall(
   {
-    secrets: [ANTHROPIC_API_KEY, OPENAI_API_KEY, ELEVENLABS_API_KEY],
+    secrets: [OPENAI_API_KEY],
     timeoutSeconds: 300,
     memory: "512MiB",
   },
@@ -3838,7 +4265,7 @@ exports.writeManifest = onCall(
     if (entitlement.isSubscribed !== true || expired) {
       throw new HttpsError(
         "resource-exhausted",
-        "Maya Plus writes your manifestations. Start your free trial to begin.",
+        "Mayow Plus writes your manifestations. Start your free trial to begin.",
       );
     }
 
@@ -3864,19 +4291,31 @@ exports.writeManifest = onCall(
       );
     }
 
-    // The first three days are cheaper to be generous with later than now.
+    // The free trial: ten, counted from the day it began, and no more until
+    // it ends. Those ten also count toward the month's sixty.
     const startedAt = Date.parse(entitlement.subscribedAt ?? "");
-    const inTrialWindow =
-      Number.isFinite(startedAt) &&
-      Date.now() - startedAt < TRIAL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+    const trialEndsAt = startedAt + TRIAL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+    const inTrialWindow = Number.isFinite(startedAt) && Date.now() < trialEndsAt;
 
-    if (inTrialWindow && thisMonth >= TRIAL_MANIFEST_LIMIT) {
-      throw new HttpsError(
-        "resource-exhausted",
-        `That's ${TRIAL_MANIFEST_LIMIT} in your first few days — the rest of ` +
-          `your ${MANIFEST_MONTHLY_LIMIT} unlock once the trial period is up. ` +
-          `Affirmations carry on as normal.`,
-      );
+    if (inTrialWindow) {
+      const inTrial = (
+        await db
+          .collection("users")
+          .doc(uid)
+          .collection("manifestations")
+          .where("createdAt", ">=", new Date(startedAt).toISOString())
+          .count()
+          .get()
+      ).data().count;
+
+      if (inTrial >= TRIAL_MANIFEST_LIMIT) {
+        throw new HttpsError(
+          "resource-exhausted",
+          `You've made your ${TRIAL_MANIFEST_LIMIT} free-trial manifestations. ` +
+            `The next one unlocks when your trial ends.`,
+          { trialEndsAt: new Date(trialEndsAt).toISOString() },
+        );
+      }
     }
 
     const name = clean(String(profile.name ?? "").trim(), 40) || "friend";
@@ -3893,7 +4332,7 @@ exports.writeManifest = onCall(
     const brief = manifestBrief({ name, dream, profile, include, answers });
 
     const script = await writeManifestScript(brief);
-    const audio = await narrateWithElevenLabs(forSpeaking(script));
+    const audio = await narrate(forSpeaking(script), TTS_VOICE);
 
     const id = `manifest_${Date.now()}`;
     const { audioUrl, audioPath } = await storeAudio({
@@ -3913,7 +4352,7 @@ exports.writeManifest = onCall(
       audioUrl,
       audioPath,
       durationSeconds: mp3DurationSeconds(audio),
-      voice: ELEVENLABS_VOICE,
+      voice: TTS_VOICE,
       createdAt: new Date().toISOString(),
     };
 
@@ -3929,6 +4368,31 @@ exports.writeManifest = onCall(
       characters: script.length,
       thisMonth: thisMonth + 1,
     });
+
+    // Tell them it is ready. A manifestation takes a minute or more to write,
+    // and people leave the app while it does. Sent as a notification message,
+    // so Android shows it only when the app is in the background — someone
+    // watching the screen is not told twice. Best effort: the story is already
+    // saved and a failed push must never fail the request.
+    try {
+      if (profile.remindersOn === true && typeof profile.fcmToken === "string") {
+        const ready = pickFor(MANIFEST_READY, id);
+        await admin.messaging().send({
+          token: profile.fcmToken,
+          notification: { title: ready.title, body: ready.body },
+          android: {
+            priority: "high",
+            notification: { channelId: "daily_affirmation" },
+          },
+          data: { type: "manifest_ready", id },
+        });
+      }
+    } catch (error) {
+      logger.warn("Manifestation-ready push failed", {
+        uid,
+        reason: String(error?.message ?? error).slice(0, 200),
+      });
+    }
 
     return manifestation;
   },
@@ -4016,27 +4480,10 @@ ${personalisation}`;
  * than a malformed object is to recover.
  */
 async function writeAffirmationLines(brief) {
-  const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
-
-  const response = await withRetry(() =>
-    anthropic.messages.create({
-      model: ANTHROPIC_STORY_MODEL,
-      max_tokens: 1000,
-      messages: [{ role: "user", content: brief }],
-    }),
-  );
-
-  if (response.stop_reason === "refusal") {
-    throw new HttpsError(
-      "invalid-argument",
-      "Those could not be written. Try describing the goal differently.",
-    );
-  }
-
-  const text = response.content.find((block) => block.type === "text")?.text;
-  if (!text) {
-    throw new HttpsError("internal", "The affirmations came back empty.");
-  }
+  const text = await writeWithLuna("affirmations", brief, {
+    maxTokens: 3000,
+    refusal: "Those could not be written. Try describing the goal differently.",
+  });
 
   const lines = text
     .split(/\r?\n/)
@@ -4282,7 +4729,7 @@ For a home-related desire, ask about the home, location, atmosphere, lifestyle, 
 /** Plans the four questions for one desire. */
 exports.planQuestions = onCall(
   {
-    secrets: [ANTHROPIC_API_KEY],
+    secrets: [OPENAI_API_KEY],
     timeoutSeconds: 120,
     memory: "256MiB",
   },
@@ -4301,39 +4748,23 @@ exports.planQuestions = onCall(
       throw new HttpsError("invalid-argument", NO_WISH_MESSAGE);
     }
 
-    const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
-    const response = await withRetry(() =>
-      anthropic.messages.create({
-        model: ANTHROPIC_STORY_MODEL,
-        max_tokens: 2000,
-        output_config: {
-          effort: "low",
-          format: { type: "json_schema", schema: QUESTION_PLAN_SCHEMA },
-        },
-        messages: [
-          {
-            role: "user",
-            content: `${QUESTION_PLAN_BRIEF}\n\nUSER DESIRE: ${desire}`,
-          },
-        ],
-      }),
+    const text = await writeWithLuna(
+      "plan-questions",
+      `${QUESTION_PLAN_BRIEF}
+
+USER DESIRE: ${desire}`,
+      {
+        maxTokens: 3000,
+        schema: QUESTION_PLAN_SCHEMA,
+        refusal: "Mayow could not work with that one. Try describing it differently.",
+      },
     );
-
-    if (response.stop_reason === "refusal") {
-      throw new HttpsError(
-        "invalid-argument",
-        "Maya could not work with that one. Try describing it differently.",
-      );
-    }
-
-    const text = response.content.find((block) => block.type === "text")?.text;
-    if (!text) throw new HttpsError("internal", "No questions came back.");
 
     const plan = shapePlan(JSON.parse(text));
     if (!plan) {
       throw new HttpsError(
         "internal",
-        "Maya could not think of what to ask. Try again in a moment.",
+        "Mayow could not think of what to ask. Try again in a moment.",
       );
     }
 

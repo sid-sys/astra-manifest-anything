@@ -54,3 +54,30 @@ exists is free; making a new one is not. Capping the expensive half and
 leaving the free half alone is both cheaper to honour and easier to explain
 than the competitor who caps plays at three a day while advertising
 unlimited generation.
+
+## After the move to OpenAI "sage" and GPT-5.6 Luna (October 2026)
+
+Manifestation narration is now OpenAI `gpt-4o-mini-tts`, voice `sage`, and the
+manifestation script, the four questions and the five affirmation lines are
+written by `gpt-5.6-luna`. ElevenLabs is commented out in `functions/index.js`,
+not deleted: the voice is wanted back later.
+
+One manifestation, about $0.042: narration $0.030 (about 2.5 minutes of audio,
+at the $0.0119 a minute measured from a real story), writing about $0.002,
+storage and traffic about $0.010. It was $0.161. The writing figure is
+estimated from token counts; filter the function logs on "Writer usage" to
+replace it with real numbers.
+
+Margin on the shelf price, Google's cut ignored:
+
+    margin at n = (price − n × $0.042 − $0.05) / price
+
+| manifests/month | $7.99 monthly | $79.99 yearly ($6.67/mo) |
+|-----------------|---------------|--------------------------|
+| 30              | 83.6%         | 80.3%                    |
+| 40              | 78.3%         | 74.0%                    |
+| 50              | 73.1%         | 67.7%                    |
+| 60              | 67.8%         | 61.4%                    |
+
+The cap is still 10 (`MANIFEST_MONTHLY_LIMIT`, `Plan.manifestMonthly`).
+Raising it means changing both and the unit cost in `test/pricing_test.dart`.

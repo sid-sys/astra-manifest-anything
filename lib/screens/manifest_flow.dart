@@ -84,7 +84,7 @@ Future<bool> weaveManifestation(
   } catch (error) {
     if (cancelled) return false;
     navigator.removeRoute(waiting);
-    debugPrint('Maya: manifestation failed — $error');
+    debugPrint('Mayow: manifestation failed — $error');
     messenger.showSnackBar(
       const SnackBar(
         content: Text("That didn't come through. Try again in a moment."),

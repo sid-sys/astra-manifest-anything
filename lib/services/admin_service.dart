@@ -1,6 +1,8 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 
+import '../app_build.dart';
 import '../models/plan.dart';
 
 /// The address allowed to open the admin panel.
@@ -35,7 +37,28 @@ class AdminUser {
     this.trialShown,
     this.lastError,
     this.wishes = const [],
+    this.typed = const [],
+    this.typedCount = 0,
+    this.madeCount = 0,
+    this.generateOk = 0,
+    this.generateFailed = 0,
+    this.pushReady = false,
+    this.appBuild = 0,
+    this.signupBuild = 0,
   });
+
+  /// The newest build this account has opened; 0 if it has only ever used an
+  /// older one.
+  final int appBuild;
+
+  /// The build that created the account; 0 if it predates the paywall build.
+  final int signupBuild;
+
+  /// Has the new app (the one with the paywall and the 7-day trial).
+  bool get onNewApp => appBuild >= kGateFromBuild;
+
+  /// Signed up on the new app, so it is behind the paywall.
+  bool get isNewSignup => signupBuild >= kGateFromBuild;
 
   /// The last wish this person typed on Home or Affirmations, in their words.
   final String? wish;
@@ -57,6 +80,22 @@ class AdminUser {
   /// Every manifestation this account typed, newest first — the wish itself,
   /// never the script written from it.
   final List<AdminWish> wishes;
+
+  /// Every wish this account typed, newest first, each marked with whether it
+  /// ever produced a manifestation or a set of affirmations.
+  final List<AdminTyped> typed;
+
+  /// How many times they pressed Continue on a wish, how many distinct wishes
+  /// turned into something, and how many generation attempts succeeded or
+  /// failed (counted since tracking began).
+  final int typedCount;
+  final int madeCount;
+  final int generateOk;
+  final int generateFailed;
+
+  /// Whether this phone can be reached by a push at all — reminders on, with a
+  /// push address stored.
+  final bool pushReady;
 
   final String uid;
   final String? email;
@@ -106,6 +145,16 @@ class AdminUser {
     wishes: ((map['wishes'] as List?) ?? const [])
         .map((w) => AdminWish.fromMap(Map<String, dynamic>.from(w as Map)))
         .toList(),
+    typed: ((map['typed'] as List?) ?? const [])
+        .map((w) => AdminTyped.fromMap(Map<String, dynamic>.from(w as Map)))
+        .toList(),
+    typedCount: (map['typedCount'] as num?)?.toInt() ?? 0,
+    madeCount: (map['madeCount'] as num?)?.toInt() ?? 0,
+    generateOk: (map['generateOk'] as num?)?.toInt() ?? 0,
+    generateFailed: (map['generateFailed'] as num?)?.toInt() ?? 0,
+    pushReady: map['pushReady'] as bool? ?? false,
+    appBuild: (map['appBuild'] as num?)?.toInt() ?? 0,
+    signupBuild: (map['signupBuild'] as num?)?.toInt() ?? 0,
   );
 }
 
@@ -119,6 +168,26 @@ class AdminWish {
   factory AdminWish.fromMap(Map<String, dynamic> map) => AdminWish(
     dream: map['dream'] as String? ?? '',
     createdAt: DateTime.tryParse(map['createdAt'] as String? ?? ''),
+  );
+}
+
+/// One wish an account typed, and what became of it.
+class AdminTyped {
+  const AdminTyped({required this.wish, this.at, this.made});
+
+  final String wish;
+  final DateTime? at;
+
+  /// "manifestation", "affirmations", or null when nothing was ever generated
+  /// from it.
+  final String? made;
+
+  bool get wasMade => made != null;
+
+  factory AdminTyped.fromMap(Map<String, dynamic> map) => AdminTyped(
+    wish: map['wish'] as String? ?? '',
+    at: DateTime.tryParse(map['at'] as String? ?? ''),
+    made: map['made'] as String?,
   );
 }
 
@@ -194,6 +263,7 @@ class AdminOverview {
     required this.totalUsers,
     required this.totalStories,
     this.totalAffirmations = 0,
+    this.pushReachable = 0,
     required this.subscribers,
     required this.users,
     this.deleted = const [],
@@ -202,6 +272,10 @@ class AdminOverview {
   final int totalUsers;
   final int totalStories;
   final int totalAffirmations;
+
+  /// Accounts with a push address stored — the ceiling on who an
+  /// announcement can reach.
+  final int pushReachable;
   final int subscribers;
   final List<AdminUser> users;
 
@@ -212,6 +286,7 @@ class AdminOverview {
     totalUsers: (map['totalUsers'] as num?)?.toInt() ?? 0,
     totalStories: (map['totalStories'] as num?)?.toInt() ?? 0,
     totalAffirmations: (map['totalAffirmations'] as num?)?.toInt() ?? 0,
+    pushReachable: (map['pushReachable'] as num?)?.toInt() ?? 0,
     subscribers: (map['subscribers'] as num?)?.toInt() ?? 0,
     users: ((map['users'] as List?) ?? const [])
         .map((user) => AdminUser.fromMap(Map<String, dynamic>.from(user as Map)))
@@ -331,6 +406,11 @@ class AdminService {
   /// The server checks the same two claims on the same token and refuses on its
   /// own account. This just avoids drawing a button that would fail.
   static Future<bool> isAdmin(User? user) async {
+    // Debug builds only: a test guest may open the panel to see how it looks.
+    // It shows sample data (see [overview]) and every action still goes to the
+    // server, which refuses anyone but the real admin account.
+    if (kDebugMode && (user?.isAnonymous ?? false)) return true;
+
     if (user == null || user.email != adminEmail) return false;
 
     try {
@@ -344,6 +424,10 @@ class AdminService {
   }
 
   Future<AdminOverview> overview() async {
+    if (kDebugMode && (FirebaseAuth.instance.currentUser?.isAnonymous ?? false)) {
+      return _sampleOverview();
+    }
+
     final result = await _functions
         .httpsCallable('adminOverview')
         .call<Map<Object?, Object?>>();
@@ -447,4 +531,92 @@ class AdminService {
     final data = Map<String, dynamic>.from(result.data);
     return DateTime.tryParse(data['purgeAfter'] as String? ?? '');
   }
+}
+
+/// Made-up people, for looking at the panel without the real admin account.
+/// Debug builds only, and only ever returned to a test guest.
+AdminOverview _sampleOverview() {
+  final now = DateTime.now();
+  AdminUser user(
+    String name,
+    String email, {
+    required AdminStage stage,
+    int opens = 1,
+    int typed = 0,
+    int made = 0,
+    int views = 0,
+    int taps = 0,
+    int cancels = 0,
+    int errors = 0,
+    int genFailed = 0,
+    bool? trial,
+    bool subscribed = false,
+    bool push = false,
+    String? lastError,
+    List<AdminTyped> wishes = const [],
+    int daysAgo = 1,
+    int build = 0,
+  }) => AdminUser(
+    uid: email,
+    email: email,
+    name: name,
+    providers: const ['google.com'],
+    signedUpAt: now.subtract(Duration(days: daysAgo)),
+    lastSeenAt: now.subtract(Duration(hours: daysAgo * 3)),
+    stories: made,
+    storiesThisMonth: made,
+    subscribed: subscribed,
+    stage: stage,
+    manifests: made,
+    affirmations: made,
+    appOpens: opens,
+    typedCount: typed,
+    madeCount: wishes.where((w) => w.wasMade).length,
+    paywallViews: views,
+    subscribeTaps: taps,
+    purchaseCancels: cancels,
+    purchaseFails: errors,
+    generateFailed: genFailed,
+    trialShown: trial,
+    pushReady: push,
+    appBuild: build,
+    signupBuild: build,
+    lastError: lastError,
+    typed: wishes,
+    wish: wishes.isEmpty ? null : wishes.first.wish,
+  );
+
+  return AdminOverview(
+    totalUsers: 4,
+    totalStories: 3,
+    totalAffirmations: 5,
+    pushReachable: 1,
+    subscribers: 1,
+    users: [
+      user('Sample Priya', 'priya@example.com',
+          stage: AdminStage.writing,
+          opens: 9, typed: 3, made: 2, views: 2, taps: 1, trial: true,
+          subscribed: true, push: true, daysAgo: 6, build: 40,
+          wishes: [
+            AdminTyped(wish: 'I want to buy my dream home', at: now, made: 'manifestation'),
+            AdminTyped(wish: 'I want to feel calm before exams', at: now, made: 'affirmations'),
+            AdminTyped(wish: 'I want a promotion this year', at: now),
+          ]),
+      user('Sample Larry', 'larry@example.com',
+          stage: AdminStage.sawPaywall,
+          opens: 2, typed: 1, views: 2, trial: true, daysAgo: 1, build: 40,
+          wishes: [AdminTyped(wish: 'I want the lines under my eyes to go away', at: now)]),
+      user('Sample Karen', 'karen@example.com',
+          stage: AdminStage.tappedSubscribe,
+          opens: 4, typed: 2, views: 3, taps: 2, cancels: 1, errors: 1,
+          trial: false, lastError: 'PlatformException(BillingResponse.itemUnavailable)',
+          daysAgo: 2,
+          wishes: [
+            AdminTyped(wish: 'I want to leave the job that is making me small', at: now),
+            AdminTyped(wish: 'I want to speak up in the room and not shake', at: now),
+          ]),
+      user('Sample Betty', 'betty@example.com',
+          stage: AdminStage.opened, daysAgo: 0),
+    ],
+  );
 }

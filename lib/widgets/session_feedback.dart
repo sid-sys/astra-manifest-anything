@@ -89,7 +89,7 @@ class _SessionFeedbackState extends ConsumerState<SessionFeedback> {
           Text('How do you feel after that?', style: AstraTextStyles.label),
           const SizedBox(height: 2),
           Text(
-            'One tap. It shapes what Maya writes you next.',
+            'One tap. It shapes what Mayow writes you next.',
             style: AstraTextStyles.small,
           ),
           const SizedBox(height: AstraSpacing.md),

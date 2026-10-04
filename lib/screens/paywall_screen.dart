@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 
 import '../models/plan.dart';
-import '../models/story_preferences.dart';
 import '../providers.dart';
 import '../services/billing_service.dart';
 import '../services/legal_links.dart';
@@ -30,7 +28,12 @@ import '../widgets/aura_background.dart';
 /// paywall that button is the *only* thing standing between them and a second
 /// subscription.
 class PaywallScreen extends ConsumerStatefulWidget {
-  const PaywallScreen({super.key, this.hard = false});
+  const PaywallScreen({super.key, this.hard = false, this.onBack});
+
+  /// Shown as a back arrow when there is no route underneath to pop to — the
+  /// paywall that stops a new account. It leads back to the questions and
+  /// never forward to the app.
+  final VoidCallback? onBack;
 
   /// No "Not now", and no back — the screen cannot be dismissed without
   /// subscribing or restoring.
@@ -44,6 +47,9 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   Plan? _chosen;
   bool _busy = false;
   String? _error;
+
+  /// Whether the "your trial ends tomorrow" notice can reach this phone.
+  bool _remind = false;
 
   /// Guards the exits against each other. A purchase pops, and the entitlement
   /// arriving pops, and those are the same event seen from two sides.
@@ -87,6 +93,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   @override
   void initState() {
     super.initState();
+    _remind = ref.read(profileProvider).trialPushToken != null;
     unawaited(_loadPrices());
   }
 
@@ -100,7 +107,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
         if (!mounted) return;
         setState(() => _storePrices = offers);
       } catch (error) {
-        debugPrint('Maya: could not load store prices — $error');
+        debugPrint('Mayow: could not load store prices — $error');
       }
     } finally {
       // Reported once the store has answered or failed to, so the panel can
@@ -147,10 +154,25 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
       ? BillingService.yearlyId
       : BillingService.monthlyId;
 
+  /// Asks to send the "your trial ends tomorrow" notice. It is the message
+  /// that tells somebody how to cancel before they are charged, so it is asked
+  /// for here, where the reason is on screen, and not buried in settings.
+  Future<void> _allowReminder() async {
+    final ok = await enableTrialNotice(ref);
+    if (!mounted) return;
+    setState(() => _remind = ok);
+    unawaited(ref.read(trackingProvider).log(ok ? 'trial_push_on' : 'trial_push_denied'));
+  }
+
   Future<void> _subscribe(Plan plan) async {
     final billing = ref.read(billingServiceProvider);
     final tracker = ref.read(trackingProvider);
     unawaited(tracker.log('subscribe_tap'));
+
+    // Last chance to be warned before the charge: ask now if it has not been
+    // allowed yet. Declining does not block the trial.
+    if (!_remind) await _allowReminder();
+    if (!mounted) return;
 
     setState(() {
       _busy = true;
@@ -195,7 +217,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
           // here will ever work and "that did not go through" invites them to
           // keep tapping.
           _ when !billing.hasStore =>
-            'This is the web build. Purchases only work in the Maya app on '
+            'This is the web build. Purchases only work in the Mayow app on '
                 'Android.',
           _BillingUnavailable() =>
             'Purchases are not available on this device yet.',
@@ -287,11 +309,6 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     final selected = _chosen ??
         plans.firstWhere((p) => p.popular, orElse: () => plans.first);
 
-    // The answers are saved before this screen opens, so on the hard paywall
-    // the category is the one the user picked a minute ago. Everywhere else it
-    // is whatever their profile holds, and `other` when there is nothing yet.
-    final category = ref.watch(profileProvider).preferences.category;
-
     // The entitlement is a live document, and it can turn true without anybody
     // touching this screen: a purchase verified from the other side, a Play
     // restore that resolves late, an entitlement granted from the admin panel.
@@ -323,258 +340,254 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
     // whose only escape was to force-quit it, which then let the user in for
     // free. The lock is now where it belongs, on Home, so this screen does not
     // have to be a cage to do its job.
+    final trial = _trialLive(selected);
+    // Without the period: Play's string is just the amount, but the local
+    // fallback reads "$7.99 / month", and the sentences below add their own
+    // "per month" — which printed it twice.
+    final price =
+        (_storePrices[_productIdFor(selected)]?.price ?? selected.headline)
+            .split(' / ')
+            .first;
+    final per = selected.periodLabel;
+
     return Scaffold(
       body: AuraBackground(
         child: SafeArea(
           child: Padding(
             padding: AstraSpacing.screenPadding,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: AstraSpacing.sm),
-
                 // Back, but only where there is something behind this screen.
                 //
                 // Drawn from `canPop` rather than from `hard`, because the same
                 // widget is both a pushed route and the app's root depending on
-                // how it was reached, and a back button on the root is a button
-                // that blanks the app. Where there is no way back, the way out
-                // is to sign out — offered below.
+                // how it was reached, and a back button on the root blanks the
+                // app. Where there is no way back, the way out is to sign out.
                 SizedBox(
-                  height: 40,
+                  height: 48,
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Navigator.of(context).canPop()
                         ? _Close(onTap: _busy ? null : () => _leave(false))
+                        : widget.onBack != null
+                        ? _Close(onTap: _busy ? null : widget.onBack)
                         : const SizedBox.shrink(),
                   ),
                 ),
-                const SizedBox(height: AstraSpacing.sm),
-                const Wordmark('Maya Plus'),
 
-                // Everything between the wordmark and the button scrolls, and
-                // the button never does.
-                //
-                // This was a plain Column with the samples in an Expanded at
-                // the end, which meant the samples were given whatever height
-                // the plans had not already taken — on a laptop browser, about
-                // a card and a half, with the second one sliced off mid-word.
-                // Sizing content by subtraction only works while the content
-                // above it is fixed, and a paywall's is not: the blurb grows
-                // when a trial is live, the error line appears, the disclosure
-                // wraps differently in every currency.
-                //
-                // So the offer scrolls as one object and the CTA is pinned
-                // under it. On a tall screen nothing scrolls at all; on a
-                // short one everything is reachable instead of some of it
-                // being clipped.
+                // Everything above the button scrolls and the button never
+                // does, so a short screen or a long currency string cannot push
+                // the call to action off the bottom.
                 Expanded(
                   child: ListView(
                     padding: const EdgeInsets.only(bottom: AstraSpacing.md),
                     children: [
-                const SizedBox(height: AstraSpacing.xl),
-                Text(
-                  widget.hard
-                      ? 'Your manifestation is ready to write.'
-                      : 'Keep writing.',
-                  style: AstraTextStyles.display(26),
-                ),
-                const SizedBox(height: AstraSpacing.sm),
-                Text(
-                  _trialLive(selected)
-                      ? '${PricingCatalog.trialDays} days free, then your plan. '
-                            'Maya Plus writes '
-                            '${PricingCatalog.manifestMonthly} manifestations a '
-                            'month, and everything you make replays forever.'
-                      : 'Maya Plus writes '
-                            '${PricingCatalog.manifestMonthly} manifestations a '
-                            'month, and everything you already have replays for '
-                            'nothing, forever.',
-                  style: AstraTextStyles.bodyDim,
-                ),
-                const SizedBox(height: AstraSpacing.xl),
+                      Center(
+                        child: AstraMascot(
+                          trial ? 'mascot_gift' : 'mascot_cheer',
+                          size: 104,
+                        ),
+                      ),
+                      const SizedBox(height: AstraSpacing.sm),
+                      Text(
+                        trial
+                            ? 'Try Mayow free for ${PricingCatalog.trialDays} days'
+                            : 'Make it real with Mayow Plus',
+                        textAlign: TextAlign.center,
+                        style: AstraTextStyles.display(28),
+                      ),
+                      const SizedBox(height: AstraSpacing.lg),
 
-                for (final plan in plans) ...[
-                  _PlanTile(
-                    plan: plan,
-                    selected: plan.id == selected.id,
-                    // The store's price when it has answered, the local table
-                    // when it has not. Play's number is the one that will be
-                    // charged — right currency, right tax, right country — so
-                    // it wins wherever it exists.
-                    storePrice: _storePrices[_productIdFor(plan)]?.price,
-                    onTap: _busy
-                        ? null
-                        : () => setState(() => _chosen = plan),
-                  ),
-                  const SizedBox(height: AstraSpacing.sm),
-                ],
+                      for (final plan in plans) ...[
+                        _PlanTile(
+                          plan: plan,
+                          selected: plan.id == selected.id,
+                          trial: _trialLive(plan),
+                          // The store's price when it has answered, the local
+                          // table when it has not. Play's number is the one
+                          // that will be charged — right currency, right tax,
+                          // right country — so it wins wherever it exists.
+                          storePrice: _storePrices[_productIdFor(plan)]?.price,
+                          onTap: _busy
+                              ? null
+                              : () => setState(() => _chosen = plan),
+                        ),
+                        const SizedBox(height: AstraSpacing.md),
+                      ],
 
-                const SizedBox(height: AstraSpacing.sm),
-                Text(
-                  // Affirmations are deliberately not sold here. They are free
-                  // to everybody, so listing them as a benefit of paying would
-                  // be selling something the app gives away.
-                  '${PricingCatalog.manifestMonthly} manifestations a month · '
-                  'unlimited listening · everything you keep, kept',
-                  style: AstraTextStyles.small,
-                ),
-
-                if (_error != null) ...[
-                  const SizedBox(height: AstraSpacing.md),
-                  Text(
-                    _error!,
-                    style: AstraTextStyles.small.copyWith(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ],
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const AstraIcon('ui_check', size: 22),
+                          const SizedBox(width: 8),
+                          Text(
+                            trial
+                                ? 'No payment due now'
+                                : 'Cancel any time in Google Play',
+                            style: AstraTextStyles.label,
+                          ),
+                        ],
+                      ),
 
                       const SizedBox(height: AstraSpacing.xl),
-                      Text('WHAT YOURS WILL SOUND LIKE',
-                          style: AstraTextStyles.eyebrow),
-                      const SizedBox(height: AstraSpacing.md),
-                      for (final (index, line)
-                          in [..._previewLines(category), _listeningLine]
-                              .indexed) ...[
-                        _PreviewLine(line, tilt: _tilts[index % _tilts.length]),
-                        const SizedBox(height: AstraSpacing.sm),
+
+                      // What happens, and when. The trial's whole risk is the
+                      // day it turns into a charge, so that day is printed
+                      // with the others instead of left to the small print.
+                      if (trial) ...[
+                        _Step(
+                          icon: Icons.lock_open_rounded,
+                          colour: AstraColors.accent,
+                          title: 'Today',
+                          body:
+                              'Write up to ${PricingCatalog.trialManifests} '
+                              'personal manifestations in your own words, '
+                              'in a voice you will want to close your eyes '
+                              'to.',
+                        ),
+                        _Step(
+                          icon: Icons.notifications_active_rounded,
+                          colour: AstraColors.accent,
+                          title: 'In ${PricingCatalog.trialDays - 1} days',
+                          body:
+                              'We send you a reminder the day before your '
+                              'trial ends, so you can cancel in Google Play '
+                              'if it is not for you.',
+                        ),
+                        _Step(
+                          icon: Icons.workspace_premium_rounded,
+                          colour: AstraColors.cta,
+                          title: 'In ${PricingCatalog.trialDays} days',
+                          body:
+                              'Your plan starts at $price a $per, with up to '
+                              '${PricingCatalog.manifestMonthly} manifestations '
+                              'a month. Cancel before then in Google Play and '
+                              'you pay nothing.',
+                          last: true,
+                        ),
+                      ] else ...[
+                        _Step(
+                          icon: Icons.auto_awesome_rounded,
+                          colour: AstraColors.accent,
+                          title: 'Today',
+                          body:
+                              'Write up to ${PricingCatalog.manifestMonthly} '
+                              'personal manifestations a month, in your own '
+                              'words.',
+                        ),
+                        _Step(
+                          icon: Icons.headphones_rounded,
+                          colour: AstraColors.accent,
+                          title: 'Always',
+                          body:
+                              'Replay everything you have made as often as you '
+                              'like. Affirmations stay free for everyone.',
+                        ),
+                        _Step(
+                          icon: Icons.favorite_rounded,
+                          colour: AstraColors.cta,
+                          title: 'Any time',
+                          body:
+                              'Cancel in Google Play whenever you want. No '
+                              'questions asked.',
+                          last: true,
+                        ),
                       ],
-                      const SizedBox(height: AstraSpacing.xs),
-                      Text(
-                        // Says out loud that these are examples. They are
-                        // written to show the shape of a scene rather than to
-                        // stand in for a person — a made-up sentence presented
-                        // as somebody's result is a fake testimonial, which is
-                        // both a lie and the Misleading Claims section of
-                        // Play's policy.
-                        'Examples of how Maya writes. Yours are written from '
-                        'the answers you just gave.',
-                        style: AstraTextStyles.small,
-                      ),
+                      if (trial) ...[
+                        const SizedBox(height: AstraSpacing.md),
+                        _ReminderCard(on: _remind, onTap: _busy ? null : _allowReminder),
+                      ],
+                      const SizedBox(height: AstraSpacing.lg),
+
+                      if (_error != null) ...[
+                        const SizedBox(height: AstraSpacing.md),
+                        Text(
+                          _error!,
+                          textAlign: TextAlign.center,
+                          style: AstraTextStyles.small.copyWith(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
 
                 AstraButton(
-                  label: _trialLive(selected)
+                  label: trial
                       ? 'Start my ${PricingCatalog.trialDays}-day free trial'
-                      : 'Start Maya Plus — '
-                            '${_storePrices[_productIdFor(selected)]?.price ?? selected.headline}',
+                      : 'Continue — $price',
                   busy: _busy,
                   onPressed: _busy ? null : () => _subscribe(selected),
                 ),
 
+                // What happens after the trial, on the screen that starts it.
+                // Play requires the disclosure, and a trial that hides its own
+                // end date is the thing people file chargebacks over.
+                Text(
+                  trial
+                      ? '${PricingCatalog.trialDays} days free, then $price '
+                            'per $per. Renews automatically unless you cancel '
+                            'in Google Play before the trial ends.'
+                      : '$price per $per. Renews automatically until you '
+                            'cancel in Google Play. Cancelling stops the next '
+                            'payment and you keep Plus until the period you '
+                            'have paid for ends.',
+                  textAlign: TextAlign.center,
+                  style: AstraTextStyles.small,
+                ),
 
-                // What happens after the trial, on the screen that starts it,
-                // in the same size type as everything else. Play requires the
-                // disclosure and a trial that hides its own end date is the
-                // thing users file chargebacks over.
-                ...[
-                  const SizedBox(height: AstraSpacing.sm),
-                  Text(
-                    _trialLive(selected)
-                        ? 'Free for ${PricingCatalog.trialDays} days. After '
-                              'that ${_storePrices[_productIdFor(selected)]?.price ?? selected.headline}, '
-                              'unless you cancel in Google Play before it ends.'
-                        : '${_storePrices[_productIdFor(selected)]?.price ?? selected.headline} '
-                              '${selected.periodLabel == 'year' ? 'a year' : 'a month'}, '
-                              'billed now. Cancel any time in Google Play.',
-                    textAlign: TextAlign.center,
-                    style: AstraTextStyles.small,
-                  ),
-                ],
                 if (!widget.hard) ...[
                   const SizedBox(height: AstraSpacing.sm),
                   AstraGhostButton(
-                    // The way out, worded as what the user keeps rather than
-                    // as a refusal. Routed through [_leave] like every other
-                    // exit, so it cannot blank the app on the one screen this
+                    // The way out, routed through [_leave] like every other
+                    // exit so it cannot blank the app on the one screen this
                     // widget is the root of.
                     label: 'Not now',
                     onPressed: _busy ? null : () => _leave(false),
                   ),
                 ],
 
-                const SizedBox(height: AstraSpacing.sm),
-                Center(
-                  child: TextButton(
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
                     // Required by Play, and needed regardless: a subscription
                     // lives on the Google account, not the phone, so without
                     // this a paying user who reinstalls lands in the free tier.
-                    onPressed: _busy ? null : _restore,
-                    child: Text(
-                      'Restore a purchase',
-                      style: AstraTextStyles.small.copyWith(
-                        color: AstraColors.accent,
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Sign out, but only on the root paywall.
-                //
-                // That screen has no back button, by necessity — there is
-                // nothing behind it — which would otherwise leave somebody who
-                // does not want to pay with no way to reach any other part of
-                // the app, including the account they are signed in as. They
-                // could not even switch to the account that *is* subscribed.
-                //
-                // It gets nobody in for free: signing out returns to the login
-                // screen, and signing back in runs the same subscription check
-                // this screen is the result of.
-                if (!Navigator.of(context).canPop())
-                  Center(
-                    child: TextButton(
-                      onPressed: _busy ? null : () => _logOut(),
-                      child: Text(
-                        'Sign out',
-                        style: AstraTextStyles.small.copyWith(
-                          color: AstraColors.dim,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                // The renewal terms, said plainly, on the screen that takes the
-                // money — not buried in a policy page nobody opens. Play
-                // requires the disclosure; the app this one is modelled on was
-                // reviewed hardest for a price whose period was not obvious.
-                Text(
-                  'Renews automatically until you cancel in Google Play. '
-                  'Cancelling stops the next payment and you keep Plus until '
-                  'the period you have paid for ends.',
-                  textAlign: TextAlign.center,
-                  style: AstraTextStyles.small,
-                ),
-                const SizedBox(height: AstraSpacing.xs),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
                     TextButton(
-                      onPressed: () =>
-                          LegalLinks.open(context, LegalLinks.terms),
+                      onPressed: _busy ? null : _restore,
                       child: Text(
-                        'Terms',
+                        'Restore purchase',
                         style: AstraTextStyles.small.copyWith(
-                          color: AstraColors.text,
+                          color: AstraColors.accent,
                         ),
                       ),
                     ),
                     Text('·', style: AstraTextStyles.small),
                     TextButton(
                       onPressed: () =>
-                          LegalLinks.open(context, LegalLinks.privacy),
-                      child: Text(
-                        'Privacy',
-                        style: AstraTextStyles.small.copyWith(
-                          color: AstraColors.text,
-                        ),
-                      ),
+                          LegalLinks.open(context, LegalLinks.terms),
+                      child: Text('Terms', style: AstraTextStyles.small),
                     ),
+                    Text('·', style: AstraTextStyles.small),
+                    TextButton(
+                      onPressed: () =>
+                          LegalLinks.open(context, LegalLinks.privacy),
+                      child: Text('Privacy', style: AstraTextStyles.small),
+                    ),
+                    // Sign out, but only on the root paywall, which has no back
+                    // button. It gets nobody in for free: signing out returns
+                    // to login, and signing back in runs the same check.
+                    if (!Navigator.of(context).canPop()) ...[
+                      Text('·', style: AstraTextStyles.small),
+                      TextButton(
+                        onPressed: _busy ? null : () => _logOut(),
+                        child: Text('Sign out', style: AstraTextStyles.small),
+                      ),
+                    ],
                   ],
                 ),
-                const SizedBox(height: AstraSpacing.sm),
               ],
             ),
           ),
@@ -590,171 +603,226 @@ class _BillingUnavailable implements Exception {
   const _BillingUnavailable();
 }
 
-/// Example opening lines, chosen to match what the user said they want.
-///
-/// Not testimonials, and the label under them says so. Nobody said these; they
-/// are there to show the *shape* of a scene — first person, past tense, one
-/// small concrete moment — because "ten manifestations a month" describes a
-/// quantity and tells you nothing about what arrives.
-///
-/// Written from the user's own category so the samples are about their life
-/// rather than a stranger's. A person who answered "Money" should not be shown
-/// three lines about a wedding.
-List<String> _previewLines(DesireCategory category) => switch (category) {
-  DesireCategory.love => const [
-    'Rachel texted first. She said she had not stopped thinking about me.',
-    'Clara said yes before I finished asking.',
-    'He put his phone face down and said he was not going anywhere. Ever.',
-  ],
-  DesireCategory.money => const [
-    'The transfer landed while I was making coffee. Twice what I asked for.',
-    'I checked the balance three times before I let myself believe it.',
-    'I paid it off in one go, and nobody had to know how close it had been.',
-  ],
-  DesireCategory.career => const [
-    'My manager asked me to stay behind, and the role was mine.',
-    'The offer came in writing before I got home.',
-    'They introduced me to the room as the person who runs it now.',
-  ],
-  DesireCategory.studies => const [
-    'I got home and my professor called to say I had won the competition.',
-    'My name was on the list. Third from the top.',
-    'I read it twice, then sat down on the stairs and let it land.',
-  ],
-  DesireCategory.health => const [
-    'I finished the whole run without stopping, and stood there laughing.',
-    'The doctor looked at the numbers and said to keep doing what I was doing.',
-    'I caught myself in the mirror and liked what was there.',
-  ],
-  DesireCategory.family => const [
-    'Mum saw the flat and just stood in the doorway, smiling.',
-    'We were all at one table again, talking over each other.',
-    'My dad said he was proud of me, out loud, in front of everyone.',
-  ],
-  DesireCategory.home => const [
-    'I turned the key and the place was actually mine.',
-    'The light came through the kitchen window and I stayed there a while.',
-    'I put my things down, and nothing about it felt temporary.',
-  ],
-  DesireCategory.travel => const [
-    'The plane tilted and the coast came up under the wing.',
-    'I woke up somewhere I had only ever seen in photographs.',
-    'We missed the last train, and it did not matter at all.',
-  ],
-  DesireCategory.growth => const [
-    'I said no, and did not apologise for it.',
-    'I noticed I had not checked my phone all morning.',
-    'Someone asked how I was, and I meant it when I said good.',
-  ],
-  DesireCategory.other => const [
-    'Clara said yes before I finished asking.',
-    'I got home and my professor called to say I had won the competition.',
-    'The transfer landed while I was making coffee. Twice what I asked for.',
-  ],
-};
+/// One row of the "what happens, and when" timeline.
+class _Step extends StatelessWidget {
+  const _Step({
+    required this.icon,
+    required this.colour,
+    required this.title,
+    required this.body,
+    this.last = false,
+  });
 
-/// How far each card leans, in degrees, top to bottom.
-///
-/// Small on purpose. The tilt says "loose pages, not a specification" — past
-/// about two degrees the text reads as broken layout instead of deliberate.
-const _tilts = <double>[-1.6, 1.1, -0.8, 1.4];
+  final IconData icon;
+  final Color colour;
+  final String title;
+  final String body;
 
-/// The last card, the same for everyone.
-///
-/// The other three are the writing; this one is the listening, which is the part
-/// a paywall otherwise never shows. Written as a scene and not as a result —
-/// "it worked" is a claim about what Maya does to a life, and dressed up as
-/// somebody's quote it would be a fabricated review. All this says is that a
-/// person listened to their own manifestation and felt different for a few
-/// minutes,
-/// which is what the app actually does.
-const _listeningLine =
-    'I played mine on the walk home. By the time I got in, it had stopped '
-    'feeling like a maybe.';
-
-/// One example line, set as a scene rather than as a quotation.
-class _PreviewLine extends StatelessWidget {
-  const _PreviewLine(this.line, {required this.tilt});
-
-  final String line;
-
-  /// Degrees. Negative leans left.
-  final double tilt;
+  /// The final step has no rail running down out of it.
+  final bool last;
 
   @override
-  Widget build(BuildContext context) => Transform.rotate(
-    angle: tilt * math.pi / 180,
-    child: Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AstraColors.card, AstraColors.accentWash],
-        ),
-        borderRadius: BorderRadius.circular(AstraSpacing.cardRadius),
-        border: Border.all(color: AstraColors.line),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x14000000),
-            blurRadius: 12,
-            offset: Offset(0, 4),
+  Widget build(BuildContext context) => IntrinsicHeight(
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          width: 44,
+          child: Column(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(color: colour, shape: BoxShape.circle),
+                child: Icon(
+                  icon,
+                  size: 22,
+                  color: colour == AstraColors.cta
+                      ? AstraColors.onCta
+                      : AstraColors.onAccent,
+                ),
+              ),
+              if (!last)
+                Expanded(
+                  child: Container(
+                    width: 6,
+                    margin: const EdgeInsets.symmetric(vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AstraColors.accent.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ),
+            ],
           ),
-        ],
-      ),
-      child: Text(
-        line,
-        style: AstraTextStyles.bodyDim.copyWith(
-          color: AstraColors.text,
-          fontStyle: FontStyle.italic,
-          height: 1.35,
         ),
-      ),
+        const SizedBox(width: AstraSpacing.md),
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(bottom: last ? 0 : AstraSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: AstraTextStyles.display(19)),
+                const SizedBox(height: 2),
+                Text(body, style: AstraTextStyles.bodyDim),
+              ],
+            ),
+          ),
+        ),
+      ],
     ),
   );
 }
 
+/// A plan, as a big tappable card. The chosen one gets a thick yellow edge, a
+/// tick, and — if it carries a trial — a banner across the top saying so.
 class _PlanTile extends StatelessWidget {
   const _PlanTile({
     required this.plan,
     required this.selected,
     required this.onTap,
+    this.trial = false,
     this.storePrice,
   });
 
   final Plan plan;
   final bool selected;
+  final bool trial;
   final VoidCallback? onTap;
 
   /// Play's own formatted price, when the store has answered.
   final String? storePrice;
 
   @override
-  Widget build(BuildContext context) => AstraCard(
-    onTap: onTap,
-    borderColor: selected ? AstraColors.accent : AstraColors.line,
-    child: Row(
-      children: [
-        Expanded(
+  Widget build(BuildContext context) {
+    final yearly = plan.period == BillingPeriod.year;
+    final price = storePrice ?? plan.headline.split(' / ').first;
+    final title = yearly
+        ? (plan.badge == null
+              ? 'Yearly'
+              : 'Yearly · ${plan.badge!.toLowerCase()}')
+        : 'Monthly';
+    final sub = yearly ? 'Billed once a year' : 'Billed every month';
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: selected ? AstraColors.cardRaised : AstraColors.card,
+            borderRadius: BorderRadius.circular(AstraSpacing.cardRadius),
+            border: Border.all(
+              color: selected ? AstraColors.accent : AstraColors.line,
+              width: selected ? 3 : 1.5,
+            ),
+          ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                storePrice == null
-                    ? plan.headline
-                    : '$storePrice / ${plan.periodLabel}',
-                style: AstraTextStyles.price,
+              if (trial)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 5),
+                  color: selected ? AstraColors.accent : AstraColors.line,
+                  child: Text(
+                    '${PricingCatalog.trialDays} DAYS FREE',
+                    textAlign: TextAlign.center,
+                    style: AstraTextStyles.eyebrow.copyWith(
+                      color: selected ? AstraColors.onAccent : AstraColors.text,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+                child: Row(
+                  children: [
+                    selected
+                        ? const AstraIcon('ui_check', size: 34)
+                        : Container(
+                            width: 30,
+                            height: 30,
+                            margin: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: AstraColors.line,
+                                width: 2.5,
+                              ),
+                            ),
+                          ),
+                    const SizedBox(width: AstraSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(title, style: AstraTextStyles.label),
+                          Text(sub, style: AstraTextStyles.small),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(price, style: AstraTextStyles.price),
+                        Text(
+                          yearly ? 'per year' : 'per month',
+                          style: AstraTextStyles.small,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 2),
-              Text(plan.subline, style: AstraTextStyles.small),
             ],
           ),
         ),
-        if (plan.badge != null)
-          TagChip(label: plan.badge!, selected: selected)
-        else if (plan.popular)
-          TagChip(label: 'Popular', selected: selected),
+      ),
+    );
+  }
+}
+
+/// Asks for notifications for one reason, said out loud: the reminder that
+/// arrives the day before the free trial ends and how to cancel it.
+class _ReminderCard extends StatelessWidget {
+  const _ReminderCard({required this.on, required this.onTap});
+
+  final bool on;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => AstraCard(
+    child: Row(
+      children: [
+        const AstraIcon('ui_bell', size: 32),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            on
+                ? 'Reminder is on. We will tell you the day before your '
+                      'trial ends.'
+                : 'Get a reminder the day before your trial ends, with a '
+                      'way to cancel. Needs notifications.',
+            style: AstraTextStyles.small,
+          ),
+        ),
+        if (!on) ...[
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: onTap,
+            child: Text(
+              'Allow',
+              style: AstraTextStyles.small.copyWith(color: AstraColors.accent),
+            ),
+          ),
+        ],
       ],
     ),
   );
@@ -782,11 +850,7 @@ class _Close extends StatelessWidget {
           shape: BoxShape.circle,
           border: Border.all(color: AstraColors.line),
         ),
-        child: Icon(
-          Icons.arrow_back_rounded,
-          size: 18,
-          color: AstraColors.text,
-        ),
+        child: const Center(child: AstraIcon('ui_back', size: 26)),
       ),
     ),
   );
