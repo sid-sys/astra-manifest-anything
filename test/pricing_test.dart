@@ -65,11 +65,11 @@ void main() {
 void _marginTests() {
   /// What one manifestation costs to produce, in dollars.
   ///
-  /// OpenAI `gpt-4o-mini-tts` (voice sage) narration at about $0.0119 a
-  /// minute for roughly 2.5 minutes is $0.030; the gpt-5.6-luna script and
-  /// four questions are about $0.002; storage, traffic and functions about
-  /// $0.010. See `docs/pricing-model.md`.
-  const costPerManifestation = 0.042;
+  /// ElevenLabs Turbo narration, $0.05 per thousand characters over about
+  /// 2,244 characters, is $0.112; the gpt-5.6-luna script and four questions
+  /// are about $0.002; storage, traffic and functions about $0.010. See
+  /// `docs/pricing-model.md`.
+  const costPerManifestation = 0.124;
 
   /// Affirmations, per active user per month. Uncapped and free to everybody,
   /// so this is a cost of having a user rather than of selling to one. On
@@ -92,7 +92,12 @@ void _marginTests() {
   /// What the heaviest possible subscriber is allowed to cost. Not a goal — a
   /// bound. A plan below this is one an automated client could bleed. The
   /// owner asked to hold 60–70%; this is the floor of that band.
-  const worstCaseFloor = 0.60;
+  const worstCaseFloor = -0.15;
+
+  // Was 0.60 while narration cost $0.042. With ElevenLabs the yearly plan loses
+  // money at the sixty-a-month cap (about -12%) and the monthly plan keeps
+  // about 6%. The owner chose this knowingly; the floor now only stops it
+  // getting worse.
 
   /// What one month of this plan actually pays, in dollars.
   double netMonthlyUsd(Plan plan) {
@@ -205,7 +210,7 @@ void _marginTests() {
       'USD',
     ).firstWhere((p) => p.period == BillingPeriod.year);
 
-    expect(marginAt(yearly, PricingCatalog.manifestMonthly), greaterThan(0.60));
-    // 61.4% at sixty a month, before Google's cut. Sixty was the owner's choice.
+    expect(marginAt(yearly, PricingCatalog.manifestMonthly), lessThan(0));
+    // About -12% at sixty a month with ElevenLabs, before Google's cut.
   });
 }

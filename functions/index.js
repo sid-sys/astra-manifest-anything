@@ -22,18 +22,9 @@ admin.initializeApp();
 
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
 const OPENAI_API_KEY = defineSecret("OPENAI_API_KEY");
-// ElevenLabs is parked, not removed: we want its voice back later. To revive it,
-// uncomment this line, the ELEVENLABS_* constants and narrateWithElevenLabs
-// below, add the secret to writeManifest, and swap the narrate call back.
-// The mailbox the "trial ends tomorrow" email is sent from (a Gmail address and
-// an app password). Set with `firebase functions:secrets:set SMTP_USER` and
-// `SMTP_PASS`, then flip EMAIL_ENABLED below and redeploy `trialEndingNotice`.
-const EMAIL_ENABLED = false;
-// Declared only when enabled: a declared secret must have a value to deploy.
-const SMTP_USER = EMAIL_ENABLED ? defineSecret("SMTP_USER") : null;
-const SMTP_PASS = EMAIL_ENABLED ? defineSecret("SMTP_PASS") : null;
-
-// const ELEVENLABS_API_KEY = defineSecret("ELEVENLABS_API_KEY");
+// Manifestations are narrated by ElevenLabs. (OpenAI "sage" is still wired up
+// for stories via `narrate`, and was used for manifestations for a few days.)
+const ELEVENLABS_API_KEY = defineSecret("ELEVENLABS_API_KEY");
 
 // Same region as Firestore — keeps the round trips short.
 setGlobalOptions({ region: "asia-south1", maxInstances: 10 });
@@ -1321,28 +1312,30 @@ const DELETE_LIMITS = [
  * their eyes shut. The user gives one sentence; everything else is the prompt.
  */
 
-// /** The voice, chosen by the owner from the ElevenLabs voice library. */
-// const ELEVENLABS_VOICE = "Nyip1VgoS6bg9Vl30y8v";
-//
-// /**
-//  * Turbo rather than Multilingual v2, and it is a money decision.
-//  *
-//  * v2 costs $0.10 per 1,000 characters against Turbo's $0.05. A manifestation is
-//  * around 2,200 characters, so the choice is 22 cents a script or 11. At ten a
-//  * month on top of twenty stories, that is the difference between roughly 45%
-//  * and 58% margin at the cap on a ₹699 plan — one under the floor, one on it.
-//  *
-//  * The quality gap is smallest on exactly this kind of audio: one voice, no
-//  * dialogue, read slowly. It is the right place to spend half as much.
-//  */
-// const ELEVENLABS_MODEL = "eleven_turbo_v2_5";
+/** The voice, chosen by the owner from the ElevenLabs voice library. */
+const ELEVENLABS_VOICE = "Nyip1VgoS6bg9Vl30y8v";
+
+/**
+ * Turbo rather than Multilingual v2, and it is a money decision.
+ *
+ * v2 costs $0.10 per 1,000 characters against Turbo's $0.05. A manifestation is
+ * around 2,200 characters, so the choice is 22 cents a script or 11. At ten a
+ * month on top of twenty stories, that is the difference between roughly 45%
+ * and 58% margin at the cap on a ₹699 plan — one under the floor, one on it.
+ *
+ * The quality gap is smallest on exactly this kind of audio: one voice, no
+ * dialogue, read slowly. It is the right place to spend half as much.
+ */
+const ELEVENLABS_MODEL = "eleven_turbo_v2_5";
 
 /**
  * Manifestations per month, inside the Plus subscription.
  *
- * Sixty, at roughly $0.042 each (OpenAI "sage" narration plus a gpt-5.6-luna
- * script). That is $2.57 a month in the worst case anybody can reach, which
- * leaves 68% of a $7.99 month and 61% of a $79.99 year. See
+ * Sixty, at roughly $0.124 each (ElevenLabs Turbo narration, $0.112, plus a
+ * gpt-5.6-luna script and storage). That is $7.49 a month in the worst case
+ * anybody can reach: 6% of a $7.99 month left, and a loss on the $79.99 year.
+ * The owner chose sixty knowing this; the number a real subscriber reaches is
+ * far lower (about six a month, 88% to 90% margin). See
  * `docs/pricing-model.md`.
  */
 const MANIFEST_MONTHLY_LIMIT = 60;
@@ -1643,85 +1636,85 @@ function forSpeaking(script) {
 }
 
 
-// /**
-//  * Narrates with ElevenLabs.
-//  *
-//  * Used only for manifestations. Stories stay on OpenAI, which is eight times
-//  * cheaper per character and fine for a five-minute scene — this voice is worth
-//  * paying for on the one piece of audio a person listens to over and over.
-//  */
-// async function narrateWithElevenLabs(script) {
-//   const started = Date.now();
-//
-//   const response = await withRetry(() =>
-//     fetch(
-//       `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE}` +
-//         `?output_format=mp3_44100_128`,
-//       {
-//         method: "POST",
-//         headers: {
-//           "xi-api-key": ELEVENLABS_API_KEY.value(),
-//           "Content-Type": "application/json",
-//         },
-//         body: JSON.stringify({
-//           text: script,
-//           model_id: ELEVENLABS_MODEL,
-//           voice_settings: {
-//             // Steady over expressive. A manifestation read with dramatic
-//             // variation sounds like an advert; the point is a level, certain
-//             // voice that does not pull attention to itself.
-//             stability: 0.55,
-//             similarity_boost: 0.75,
-//             style: 0.0,
-//             use_speaker_boost: true,
-//           },
-//         }),
-//       },
-//     ),
-//   );
-//
-//   if (!response.ok) {
-//     const detail = (await response.text()).slice(0, 300);
-//     logger.error("ElevenLabs refused", {
-//       status: response.status,
-//       reason: detail,
-//     });
-//
-//     // Account and key problems get their own message, because they are not
-//     // things the user can do anything about and "try again" is a lie. The
-//     // commonest by far is a free ElevenLabs plan: library voices are paid-only
-//     // over the API, so the very first call fails 402 no matter how correct the
-//     // request is.
-//     if (response.status === 401 || response.status === 402) {
-//       throw new HttpsError(
-//         "failed-precondition",
-//         "Manifestations are briefly unavailable. Nothing has been charged — " +
-//           "please try again later.",
-//       );
-//     }
-//
-//     if (response.status === 429) {
-//       throw new HttpsError(
-//         "resource-exhausted",
-//         "Mayow is busy right now. Try again in a minute.",
-//       );
-//     }
-//
-//     throw new HttpsError(
-//       "internal",
-//       "That one could not be narrated. Try again in a moment.",
-//     );
-//   }
-//
-//   const audio = Buffer.from(await response.arrayBuffer());
-//   logger.info("Manifestation narrated", {
-//     characters: script.length,
-//     bytes: audio.length,
-//     elapsedMs: Date.now() - started,
-//   });
-//
-//   return audio;
-// }
+/**
+ * Narrates with ElevenLabs.
+ *
+ * Used only for manifestations. Stories stay on OpenAI, which is eight times
+ * cheaper per character and fine for a five-minute scene — this voice is worth
+ * paying for on the one piece of audio a person listens to over and over.
+ */
+async function narrateWithElevenLabs(script) {
+  const started = Date.now();
+
+  const response = await withRetry(() =>
+    fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE}` +
+        `?output_format=mp3_44100_128`,
+      {
+        method: "POST",
+        headers: {
+          "xi-api-key": ELEVENLABS_API_KEY.value(),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: script,
+          model_id: ELEVENLABS_MODEL,
+          voice_settings: {
+            // Steady over expressive. A manifestation read with dramatic
+            // variation sounds like an advert; the point is a level, certain
+            // voice that does not pull attention to itself.
+            stability: 0.55,
+            similarity_boost: 0.75,
+            style: 0.0,
+            use_speaker_boost: true,
+          },
+        }),
+      },
+    ),
+  );
+
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 300);
+    logger.error("ElevenLabs refused", {
+      status: response.status,
+      reason: detail,
+    });
+
+    // Account and key problems get their own message, because they are not
+    // things the user can do anything about and "try again" is a lie. The
+    // commonest by far is a free ElevenLabs plan: library voices are paid-only
+    // over the API, so the very first call fails 402 no matter how correct the
+    // request is.
+    if (response.status === 401 || response.status === 402) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Manifestations are briefly unavailable. Nothing has been charged — " +
+          "please try again later.",
+      );
+    }
+
+    if (response.status === 429) {
+      throw new HttpsError(
+        "resource-exhausted",
+        "Mayow is busy right now. Try again in a minute.",
+      );
+    }
+
+    throw new HttpsError(
+      "internal",
+      "That one could not be narrated. Try again in a moment.",
+    );
+  }
+
+  const audio = Buffer.from(await response.arrayBuffer());
+  logger.info("Manifestation narrated", {
+    characters: script.length,
+    bytes: audio.length,
+    elapsedMs: Date.now() - started,
+  });
+
+  return audio;
+}
 
 // ---------------------------------------------------------------- endpoints
 
@@ -1790,7 +1783,7 @@ exports.writeStory = onCall(
       durationSeconds: Math.round(
         (script.split(/\s+/).length / NARRATION_WPM) * 60,
       ),
-      voice: TTS_VOICE,
+      voice: ELEVENLABS_VOICE,
       createdAt: new Date().toISOString(),
       audioUrl: null,
       audioPath: null,
@@ -4216,7 +4209,7 @@ exports.adminGrantTrial = onCall(
  */
 exports.writeManifest = onCall(
   {
-    secrets: [OPENAI_API_KEY],
+    secrets: [OPENAI_API_KEY, ELEVENLABS_API_KEY],
     timeoutSeconds: 300,
     memory: "512MiB",
   },
@@ -4332,7 +4325,7 @@ exports.writeManifest = onCall(
     const brief = manifestBrief({ name, dream, profile, include, answers });
 
     const script = await writeManifestScript(brief);
-    const audio = await narrate(forSpeaking(script), TTS_VOICE);
+    const audio = await narrateWithElevenLabs(forSpeaking(script));
 
     const id = `manifest_${Date.now()}`;
     const { audioUrl, audioPath } = await storeAudio({

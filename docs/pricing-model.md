@@ -81,3 +81,20 @@ Margin on the shelf price, Google's cut ignored:
 
 The cap is still 10 (`MANIFEST_MONTHLY_LIMIT`, `Plan.manifestMonthly`).
 Raising it means changing both and the unit cost in `test/pricing_test.dart`.
+
+## Back to ElevenLabs (October 2026)
+
+Manifestations are narrated by ElevenLabs Turbo again (OpenAI "sage" was used
+for a few days). Writing stays on gpt-5.6-luna. One manifestation costs about
+$0.124: narration $0.112 (2,244 characters at $0.05 per thousand), writing about
+$0.002, storage and traffic about $0.010. Before Google's cut:
+
+| manifests/month | $7.99 monthly | $79.99 yearly ($6.67/mo) |
+|-----------------|---------------|--------------------------|
+| 6 (expected)    | 90.1%         | 88.1%                    |
+| 30              | 52.8%         | 43.4%                    |
+| 40              | 37.3%         | 24.8%                    |
+| 50              | 21.8%         | 6.2%                     |
+| 60 (the cap)    | 6.3%          | -12.4%                   |
+
+The free trial's ten cost $1.24. The cap is still 60 by the owner's choice.
