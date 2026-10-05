@@ -444,6 +444,33 @@ class AstraIcon extends StatelessWidget {
   );
 }
 
+/// The streak flame: Google's animated fire emoji (Noto Emoji, CC BY 4.0).
+///
+/// Loops on its own, so it is drawn still where motion is switched off and
+/// wherever a screen shows many of them at once (the calendar), where a grid
+/// of moving flames would be noise.
+class AnimatedFire extends StatelessWidget {
+  const AnimatedFire({super.key, this.size = 64, this.still = false});
+
+  final double size;
+  final bool still;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduce = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    return Image.asset(
+      still || reduce
+          ? 'assets/animated/fire_still.png'
+          : 'assets/animated/fire.webp',
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.medium,
+      excludeFromSemantics: true,
+    );
+  }
+}
+
 /// Mayow, the moon cat — the app's mascot (`assets/mascot/<name>.png`).
 ///
 /// Floats up and down a few pixels on a slow loop, which is enough to make

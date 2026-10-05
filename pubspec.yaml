@@ -150,6 +150,7 @@ flutter:
     - assets/brand/orb.webp
     - assets/brand/orb_still.png
     - assets/icons/
+    - assets/animated/
     - assets/mascot/
     - assets/audio/meditation_bed.mp3
 

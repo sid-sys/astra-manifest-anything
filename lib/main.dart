@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -15,6 +16,17 @@ import 'services/maya_audio_handler.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // The animated fire emoji is Google's Noto Emoji, licensed CC BY 4.0, which
+  // requires the credit to be shown with the app's other licences.
+  LicenseRegistry.addLicense(() async* {
+    yield const LicenseEntryWithLineBreaks(
+      ['Noto Emoji animations'],
+      'Animated fire emoji by Google, from Noto Emoji Animation, licensed under '
+      'CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). '
+      'Source: https://googlefonts.github.io/noto-emoji-animation/',
+    );
+  });
 
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);

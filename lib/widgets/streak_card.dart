@@ -69,7 +69,7 @@ class StreakCard extends StatelessWidget {
                   width: 2,
                 ),
               ),
-              child: const AstraIcon('ui_flame', size: 64),
+              child: const AnimatedFire(size: 72),
             ),
             const SizedBox(height: AstraSpacing.md),
             Text(
@@ -170,7 +170,7 @@ class _DayDot extends StatelessWidget {
               ),
             ),
             child: done
-                ? const AstraIcon('ui_flame', size: 24)
+                ? const AnimatedFire(size: 24, still: true)
                 : (icon == null ? null : Icon(icon, size: 17, color: iconColor)),
           ),
         ],
