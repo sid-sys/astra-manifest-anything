@@ -16,15 +16,11 @@
 # ---------------------------------------------------------------- Flutter
 # The engine looks these up from C++ by name.
 -keep class io.flutter.** { *; }
--keep class io.flutter.plugins.** { *; }
--keep class io.flutter.plugin.** { *; }
 -dontwarn io.flutter.embedding.**
 
 # ---------------------------------------------------------------- Firebase
 # Model classes are read and written by reflection, and the whole Firestore
 # serializer works on field names — renaming a field changes the document.
--keep class com.google.firebase.** { *; }
--keep class com.google.android.gms.** { *; }
 -keepattributes Signature
 -keepattributes *Annotation*
 -keepattributes EnclosingMethod
@@ -34,8 +30,6 @@
 
 # Firestore and Cloud Functions ride on gRPC and protobuf, both of which
 # resolve types by name at runtime.
--keep class io.grpc.** { *; }
--keep class com.google.protobuf.** { *; }
 -dontwarn io.grpc.**
 -dontwarn com.google.protobuf.**
 -dontwarn javax.naming.**
@@ -63,8 +57,6 @@
 # name out of the manifest, so the name has to survive.
 -keep class com.ryanheise.audioservice.** { *; }
 -keep class com.ryanheise.just_audio.** { *; }
--keep class androidx.media.** { *; }
--keep class androidx.media3.** { *; }
 -dontwarn com.ryanheise.**
 -dontwarn androidx.media3.**
 
@@ -95,3 +87,16 @@
 # readable. Without these, every trace is a list of `a.b.c(Unknown Source)`.
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
+
+# --- Narrowed (October 2026) -------------------------------------------------
+# Google Play measured the app at "DEX code optimization below threshold": only
+# about 18% of classes were renamed, because whole packages were kept whole here
+# (every Firebase, Play Services, gRPC, protobuf and media3 class). Those
+# libraries ship their own consumer rules for what they really need, so the
+# blanket keeps were removed and only the entry points loaded by name remain.
+-keep class io.flutter.embedding.** { *; }
+-keep class com.google.android.gms.auth.api.signin.** { *; }
+-keep class com.google.firebase.provider.FirebaseInitProvider { *; }
+-keep class com.google.firebase.components.ComponentDiscoveryService { *; }
+-keep class com.google.firebase.messaging.FirebaseMessagingService { *; }
+-keep class androidx.media3.exoplayer.mediacodec.** { *; }

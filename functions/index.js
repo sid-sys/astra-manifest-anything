@@ -24,6 +24,11 @@ const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
 const OPENAI_API_KEY = defineSecret("OPENAI_API_KEY");
 // Manifestations are narrated by ElevenLabs. (OpenAI "sage" is still wired up
 // for stories via `narrate`, and was used for manifestations for a few days.)
+// The "trial ends tomorrow" email is off (not wanted), but its code stays wired.
+const EMAIL_ENABLED = false;
+const SMTP_USER = null;
+const SMTP_PASS = null;
+
 const ELEVENLABS_API_KEY = defineSecret("ELEVENLABS_API_KEY");
 
 // Same region as Firestore — keeps the round trips short.
