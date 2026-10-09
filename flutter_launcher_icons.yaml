@@ -17,8 +17,10 @@ flutter_launcher_icons:
   # Adaptive icons are two layers the launcher animates and masks
   # independently. The background is the app's own night, not white: the cat is
   # dark purple and gold, drawn to sit on that, and on white it loses its edges.
-  adaptive_icon_background: "#8A44CC"
-  adaptive_icon_foreground: "assets/brand/icon_foreground.png"
+  # The same picture as the Play Store icon: it is the background layer, with an
+  # empty foreground, so the launcher shows the store icon exactly.
+  adaptive_icon_background: "assets/brand/icon_adaptive_bg.png"
+  adaptive_icon_foreground: "assets/brand/icon_adaptive_fg.png"
 
   # Play requires a 512x512 icon for the listing; this writes one so the store
   # asset and the launcher asset cannot drift apart.

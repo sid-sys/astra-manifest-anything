@@ -245,9 +245,9 @@ class _Waiting extends StatelessWidget {
             // off-white silhouette and throw away the only piece of the brand
             // that has any colour in it.
             Image.asset(
-              'assets/brand/logo_mark.png',
-              width: 132,
-              height: 132,
+              'assets/brand/splash_icon.png',
+              width: 168,
+              height: 168,
               filterQuality: FilterQuality.medium,
             ),
             const SizedBox(height: AstraSpacing.xxl),
