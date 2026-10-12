@@ -33,8 +33,6 @@ class AdminDashboardScreen extends ConsumerWidget {
               AdminBar(
                 title: 'Admin',
                 actions: [
-                  if (kAdminMock) const MockTag(),
-                  const SizedBox(width: 8),
                   AdminIconButton(
                     icon: Icons.refresh_rounded,
                     label: 'Refresh',
@@ -85,11 +83,10 @@ class _Body extends ConsumerWidget {
         padding: adminPadding.copyWith(bottom: 40),
         children: [
           Text('Signed in as $email', style: AstraTextStyles.small),
-          if (!kAdminMock)
-            Text(
-              'Payments are estimated from plan prices.',
-              style: AstraTextStyles.small,
-            ),
+          Text(
+            'Payments are estimated from plan prices.',
+            style: AstraTextStyles.small,
+          ),
           const SizedBox(height: 14),
           MetricGrid(
             children: [
@@ -106,7 +103,7 @@ class _Body extends ConsumerWidget {
                 value: '${stats.subscribed}',
                 sub:
                     '${(stats.subscribedShare * 100).round()}% of users · '
-                    '${stats.paying} paying · ${stats.lifetime} lifetime',
+                    '${stats.paying} paying',
                 tint: AdminTints.mint,
               ),
               MetricCard(
@@ -174,15 +171,13 @@ class _Body extends ConsumerWidget {
               MaterialPageRoute<void>(builder: (_) => const AdminUsersScreen()),
             ),
           ),
-          if (!kAdminMock) ...[
-            const SizedBox(height: 10),
-            AstraGhostButton(
-              label: 'Tools: announcements, trials, delete',
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (_) => const AdminScreen()),
-              ),
+          const SizedBox(height: 10),
+          AstraGhostButton(
+            label: 'Tools: announcements, trials, delete',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const AdminScreen()),
             ),
-          ],
+          ),
         ],
       ),
     );

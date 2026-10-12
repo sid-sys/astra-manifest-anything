@@ -11,7 +11,6 @@ import '../theme/astra_theme.dart';
 import '../widgets/allowance_ring.dart';
 import '../widgets/astra_widgets.dart';
 import '../widgets/profile_avatar.dart';
-import '../admin/admin_config.dart';
 import '../admin/dashboard_screen.dart';
 import 'confirm_screen.dart';
 import 'paywall_screen.dart';
@@ -294,13 +293,11 @@ class ProfileScreen extends ConsumerWidget {
         // Only ever drawn for the one Google account named in AdminService,
         // and drawing it is all this does — the panel's data comes from a
         // function that checks the same thing again and refuses on its own.
-        // In a mock build (MOCK=true) everybody sees the entry and gets made-up
-        // data; in a release build only the admin account does.
-        if (kAdminMock || (ref.watch(isAdminProvider).valueOrNull ?? false)) ...[
+        if (ref.watch(isAdminProvider).valueOrNull ?? false) ...[
           _AccountRow(
             icon: Icons.insights_rounded,
             label: 'Admin',
-            detail: kAdminMock ? 'Mock data' : 'Users, revenue, profit',
+            detail: 'Users, revenue, profit',
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
                 builder: (_) => const AdminDashboardScreen(),

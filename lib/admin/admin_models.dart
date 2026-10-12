@@ -1,5 +1,5 @@
 /// The plan an account is on. `none` is free, or a subscription that ended.
-enum AdminPlan { none, monthly, yearly, lifetime }
+enum AdminPlan { none, monthly, yearly }
 
 /// The kinds of thing the app reports. One list, so the analytics service, the
 /// mock data and the screens agree on spelling.
@@ -135,7 +135,6 @@ class AdminStats {
     required this.newThisWeek,
     required this.subscribed,
     required this.paying,
-    required this.lifetime,
     required this.activeToday,
     required this.activeThisWeek,
     required this.revenueTotal,
@@ -149,12 +148,11 @@ class AdminStats {
   final int totalUsers;
   final int newThisWeek;
 
-  /// Anyone on a paid plan now (monthly, yearly or lifetime).
+  /// Anyone on a paid plan now (monthly or yearly).
   final int subscribed;
 
-  /// Monthly and yearly only: the ones who pay again.
+  /// Those on a plan that pays again.
   final int paying;
-  final int lifetime;
   final int activeToday;
   final int activeThisWeek;
   final double revenueTotal;

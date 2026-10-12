@@ -1,10 +1,10 @@
-# Play Console upload kit — Mayow 1.0.7 (build 46)
+# Play Console upload kit — Mayow 1.0.7 (build 47)
 
 | What | Where |
 | --- | --- |
-| App bundle (upload this) | `store/play/mayow-1.0.7+46.aab` |
-| Deobfuscation file (upload with it) | `store/play/mapping-1.0.7+46.txt` |
-| Installable test APK | `store/play/mayow-1.0.7+46.apk` |
+| App bundle (upload this) | `store/play/mayow-1.0.7+47.aab` |
+| Deobfuscation file (upload with it) | `store/play/mapping-1.0.7+47.txt` |
+| Installable test APK | `store/play/mayow-1.0.7+47.apk` |
 | Feature graphic, 1024x500 | `store/play/feature-graphic-1024x500.png` |
 | Phone screenshots, 1080x1920 (6) | `store/play/phone/` |
 | 7-inch tablet screenshots, 1080x1920 (6) | `store/play/tablet-7in/` |
@@ -12,4 +12,4 @@
 | Title and short description | `store/play/title-and-short-description.txt` |
 | Long description (copy and paste) | `store/play/long-description.txt` |
 
-Ignore the `+40` to `+45` files; they are older builds.
+Ignore the `+40` to `+46` files; they are older builds.

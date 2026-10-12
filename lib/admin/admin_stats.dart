@@ -49,9 +49,8 @@ AdminStats computeAdminStats(List<AdminUser> users, DateTime now) {
     newThisWeek: users.where((u) => !u.joinedAt.isBefore(weekAgo)).length,
     subscribed: users.where((u) => u.subscribed).length,
     paying: users
-        .where((u) => u.plan == AdminPlan.monthly || u.plan == AdminPlan.yearly)
+        .where((u) => u.plan != AdminPlan.none)
         .length,
-    lifetime: users.where((u) => u.plan == AdminPlan.lifetime).length,
     activeToday: dailyActive.last.count,
     activeThisWeek: users
         .where((u) => u.events.any((e) => !e.time.isBefore(weekAgo)))

@@ -1,6 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 
 import '../admin/admin_config.dart';
 import '../app_build.dart';
@@ -422,11 +421,6 @@ class AdminService {
   /// The server checks the same two claims on the same token and refuses on its
   /// own account. This just avoids drawing a button that would fail.
   static Future<bool> isAdmin(User? user) async {
-    // Debug builds only: a test guest may open the panel to see how it looks.
-    // It shows sample data (see [overview]) and every action still goes to the
-    // server, which refuses anyone but the real admin account.
-    if (kDebugMode && (user?.isAnonymous ?? false)) return true;
-
     if (user == null || user.email != adminEmail) return false;
 
     try {
@@ -440,10 +434,6 @@ class AdminService {
   }
 
   Future<AdminOverview> overview() async {
-    if (kDebugMode && (FirebaseAuth.instance.currentUser?.isAnonymous ?? false)) {
-      return _sampleOverview();
-    }
-
     final result = await _functions
         .httpsCallable('adminOverview')
         .call<Map<Object?, Object?>>();
@@ -547,92 +537,4 @@ class AdminService {
     final data = Map<String, dynamic>.from(result.data);
     return DateTime.tryParse(data['purgeAfter'] as String? ?? '');
   }
-}
-
-/// Made-up people, for looking at the panel without the real admin account.
-/// Debug builds only, and only ever returned to a test guest.
-AdminOverview _sampleOverview() {
-  final now = DateTime.now();
-  AdminUser user(
-    String name,
-    String email, {
-    required AdminStage stage,
-    int opens = 1,
-    int typed = 0,
-    int made = 0,
-    int views = 0,
-    int taps = 0,
-    int cancels = 0,
-    int errors = 0,
-    int genFailed = 0,
-    bool? trial,
-    bool subscribed = false,
-    bool push = false,
-    String? lastError,
-    List<AdminTyped> wishes = const [],
-    int daysAgo = 1,
-    int build = 0,
-  }) => AdminUser(
-    uid: email,
-    email: email,
-    name: name,
-    providers: const ['google.com'],
-    signedUpAt: now.subtract(Duration(days: daysAgo)),
-    lastSeenAt: now.subtract(Duration(hours: daysAgo * 3)),
-    stories: made,
-    storiesThisMonth: made,
-    subscribed: subscribed,
-    stage: stage,
-    manifests: made,
-    affirmations: made,
-    appOpens: opens,
-    typedCount: typed,
-    madeCount: wishes.where((w) => w.wasMade).length,
-    paywallViews: views,
-    subscribeTaps: taps,
-    purchaseCancels: cancels,
-    purchaseFails: errors,
-    generateFailed: genFailed,
-    trialShown: trial,
-    pushReady: push,
-    appBuild: build,
-    signupBuild: build,
-    lastError: lastError,
-    typed: wishes,
-    wish: wishes.isEmpty ? null : wishes.first.wish,
-  );
-
-  return AdminOverview(
-    totalUsers: 4,
-    totalStories: 3,
-    totalAffirmations: 5,
-    pushReachable: 1,
-    subscribers: 1,
-    users: [
-      user('Sample Priya', 'priya@example.com',
-          stage: AdminStage.writing,
-          opens: 9, typed: 3, made: 2, views: 2, taps: 1, trial: true,
-          subscribed: true, push: true, daysAgo: 6, build: 40,
-          wishes: [
-            AdminTyped(wish: 'I want to buy my dream home', at: now, made: 'manifestation'),
-            AdminTyped(wish: 'I want to feel calm before exams', at: now, made: 'affirmations'),
-            AdminTyped(wish: 'I want a promotion this year', at: now),
-          ]),
-      user('Sample Larry', 'larry@example.com',
-          stage: AdminStage.sawPaywall,
-          opens: 2, typed: 1, views: 2, trial: true, daysAgo: 1, build: 40,
-          wishes: [AdminTyped(wish: 'I want the lines under my eyes to go away', at: now)]),
-      user('Sample Karen', 'karen@example.com',
-          stage: AdminStage.tappedSubscribe,
-          opens: 4, typed: 2, views: 3, taps: 2, cancels: 1, errors: 1,
-          trial: false, lastError: 'PlatformException(BillingResponse.itemUnavailable)',
-          daysAgo: 2,
-          wishes: [
-            AdminTyped(wish: 'I want to leave the job that is making me small', at: now),
-            AdminTyped(wish: 'I want to speak up in the room and not shake', at: now),
-          ]),
-      user('Sample Betty', 'betty@example.com',
-          stage: AdminStage.opened, daysAgo: 0),
-    ],
-  );
 }

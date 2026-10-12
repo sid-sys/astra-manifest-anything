@@ -121,25 +121,6 @@ class AdminIconButton extends StatelessWidget {
   );
 }
 
-/// Marks the screen as running on made-up data.
-class MockTag extends StatelessWidget {
-  const MockTag({super.key});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-    decoration: BoxDecoration(
-      color: AdminTints.yellow.withValues(alpha: 0.2),
-      borderRadius: BorderRadius.circular(999),
-      border: Border.all(color: AdminTints.yellow.withValues(alpha: 0.7)),
-    ),
-    child: Text(
-      'MOCK DATA',
-      style: AstraTextStyles.eyebrow.copyWith(color: AdminTints.yellow, fontSize: 11),
-    ),
-  );
-}
-
 /// A card tinted one pastel, used for everything on the dashboard.
 class TintCard extends StatelessWidget {
   const TintCard({
@@ -424,7 +405,6 @@ class PlanPill extends StatelessWidget {
     final (label, tint) = switch (user.plan) {
       AdminPlan.monthly => ('Monthly', AdminTints.mint),
       AdminPlan.yearly => ('Yearly', AdminTints.sky),
-      AdminPlan.lifetime => ('Lifetime', AdminTints.yellow),
       AdminPlan.none when user.churned => ('Ended', AdminTints.peach),
       AdminPlan.none => ('Free', AdminTints.lilac),
     };

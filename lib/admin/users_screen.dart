@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
 import '../widgets/aura_background.dart';
-import 'admin_config.dart';
 import 'admin_models.dart';
 import 'admin_repository.dart';
 import 'user_detail_screen.dart';
@@ -56,10 +55,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              AdminBar(
-                title: 'Users',
-                actions: [if (kAdminMock) const MockTag()],
-              ),
+              const AdminBar(title: 'Users'),
               Padding(
                 padding: adminPadding,
                 child: TextField(

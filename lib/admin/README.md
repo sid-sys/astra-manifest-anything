@@ -1,28 +1,16 @@
 # Admin panel
 
 Three screens (dashboard, users, one user) that read only from an
-`AdminRepository`. Nothing in a screen knows whether the data is real.
+`AdminRepository`. There is no mock or sample data in the app: the panel shows
+the real users from the `adminOverview` Cloud Function, or an error.
 
 | File | What it is |
 | --- | --- |
 | `admin_config.dart` | The admin email, store prices, store cut and every cost. **Edit costs here.** |
 | `admin_models.dart` | `AdminUser`, `AdminEvent`, `AdminPayment`, `AdminStats` |
 | `admin_repository.dart` | The abstract `AdminRepository` and the providers |
-| `mock_admin_repository.dart` | About 50 made-up users from a fixed seed |
 | `real_admin_repository.dart` | The real users, from the `adminOverview` Cloud Function |
 | `admin_stats.dart` | Every dashboard number, worked out from the user list |
-
-## Mock data and the `MOCK` flag
-
-```
-flutter run                                  # MOCK=true: everyone sees the panel, made-up data
-flutter build appbundle --release --dart-define=MOCK=false
-```
-
-In a mock build **every signed-in user** can open Profile > Admin and sees a
-"MOCK DATA" tag. A release build must set `MOCK=false`. As a second guard, the
-default is `false` whenever the build is a release build, so forgetting the flag
-shows nothing to the public rather than sample data.
 
 ## Hiding the button is NOT security
 

@@ -1,19 +1,4 @@
-import 'package:flutter/foundation.dart';
-
 import '../models/plan.dart';
-
-/// Whether the admin panel runs on made-up data.
-///
-/// In a mock build **everyone** can open the panel, and it shows made-up users
-/// under a "MOCK DATA" tag. Release builds must set `--dart-define=MOCK=false`.
-///
-/// The default is `true` while developing and `false` in a release build
-/// ([kReleaseMode]), so a release that forgets the flag still hides the panel
-/// from everybody but the admin instead of showing sample data to the public.
-const bool kAdminMock = bool.fromEnvironment(
-  'MOCK',
-  defaultValue: !kReleaseMode,
-);
 
 /// Everything the admin panel needs that is a number or an address, in one
 /// place. Nothing in a widget should hard-code an email, a price or a cost.
@@ -33,10 +18,6 @@ class AdminConfig {
   /// changes the revenue here.
   static double get monthlyPrice => _price(BillingPeriod.month);
   static double get yearlyPrice => _price(BillingPeriod.year);
-
-  /// Mayow sells no lifetime plan, so there is nothing to charge for one. The
-  /// plan exists in the model so the panel is ready if one is added.
-  static const lifetimePrice = 0.0;
 
   static double _price(BillingPeriod period) =>
       PricingCatalog.plansForCurrency('USD')

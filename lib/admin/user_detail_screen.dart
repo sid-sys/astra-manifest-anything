@@ -30,10 +30,7 @@ class AdminUserDetailScreen extends StatelessWidget {
         child: SafeArea(
           child: Column(
             children: [
-              AdminBar(
-                title: user.name,
-                actions: [if (kAdminMock) const MockTag()],
-              ),
+              AdminBar(title: user.name),
               Expanded(
                 child: ListView(
                   padding: adminPadding.copyWith(bottom: 40),
