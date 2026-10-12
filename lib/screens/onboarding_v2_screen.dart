@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -110,6 +112,10 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
         ? await ref.read(notificationServiceProvider).register()
         : null;
     if (!mounted) return;
+
+    // Reported before saving: saving moves the app on, and this screen is gone
+    // the moment it lands.
+    unawaited(ref.read(trackingProvider).log('onboarding_done'));
 
     await ref.read(profileProvider.notifier).update(
       ref.read(profileProvider).copyWith(

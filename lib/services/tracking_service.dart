@@ -2,6 +2,8 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
+import 'analytics_service.dart';
+
 /// Tells the server what people do in the app, so the admin panel can show
 /// where they stop.
 ///
@@ -22,6 +24,9 @@ class TrackingService {
     bool? trialShown,
     bool? storeAnswered,
   }) async {
+    final type = AnalyticsService.typeFor(event, detail: detail);
+    if (type != null) await AnalyticsService.log(type, detail: wish ?? detail ?? '');
+
     try {
       if (FirebaseAuth.instance.currentUser == null) return;
       await _functions.httpsCallable('trackEvent').call<Object?>({

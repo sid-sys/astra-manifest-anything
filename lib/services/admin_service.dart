@@ -2,6 +2,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 
+import '../admin/admin_config.dart';
 import '../app_build.dart';
 import '../models/plan.dart';
 
@@ -11,7 +12,7 @@ import '../models/plan.dart';
 /// copy in the function is the one that decides. This one only chooses whether
 /// to draw a button — nothing on a device can be trusted to grant access, since
 /// anyone can edit an APK and hand themselves any answer they like.
-const adminEmail = 'sidharthbabu9@gmail.com';
+const adminEmail = AdminConfig.adminEmail;
 
 /// One account, as the panel shows it.
 class AdminUser {
@@ -45,7 +46,18 @@ class AdminUser {
     this.pushReady = false,
     this.appBuild = 0,
     this.signupBuild = 0,
+    this.plan,
+    this.subscribedAt,
+    this.onboardingDone = false,
+    this.timezone,
   });
+
+  /// `monthly`, `yearly`, or null. Sent by `adminOverview` since the admin
+  /// dashboard; absent from older responses.
+  final String? plan;
+  final DateTime? subscribedAt;
+  final bool onboardingDone;
+  final String? timezone;
 
   /// The newest build this account has opened; 0 if it has only ever used an
   /// older one.
@@ -155,6 +167,10 @@ class AdminUser {
     pushReady: map['pushReady'] as bool? ?? false,
     appBuild: (map['appBuild'] as num?)?.toInt() ?? 0,
     signupBuild: (map['signupBuild'] as num?)?.toInt() ?? 0,
+    plan: map['plan'] as String?,
+    subscribedAt: DateTime.tryParse(map['subscribedAt'] as String? ?? ''),
+    onboardingDone: map['onboardingDone'] as bool? ?? false,
+    timezone: map['timezone'] as String?,
   );
 }
 

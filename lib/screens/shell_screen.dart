@@ -3,6 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../admin/dashboard_screen.dart';
+import '../admin/mock_admin_repository.dart';
+import '../admin/user_detail_screen.dart';
+import '../admin/users_screen.dart';
 import '../demo/demo_data.dart';
 import '../providers.dart';
 import '../theme/astra_theme.dart';
@@ -91,6 +95,25 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
         if (!mounted) return;
         await Navigator.of(context).push(
           MaterialPageRoute<void>(builder: (_) => const PlayerScreen()),
+        );
+
+      // The admin dashboard's three screens, for screenshots. They run on the
+      // mock data, which is on in every non-release build.
+      case 'admin':
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const AdminDashboardScreen()),
+        );
+      case 'admin-users':
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const AdminUsersScreen()),
+        );
+      case 'admin-user':
+        final users = generateMockUsers(now: DateTime.now())
+          ..sort((a, b) => b.paidTotal.compareTo(a.paidTotal));
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => AdminUserDetailScreen(user: users.first),
+          ),
         );
     }
   }

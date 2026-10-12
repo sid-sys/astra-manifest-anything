@@ -3157,6 +3157,7 @@ function assertAdmin(request) {
  */
 const TRACKED_EVENTS = new Set([
   "app_open",
+  "onboarding_done",
   "wish_typed",
   "paywall_view",
   "paywall_close",
@@ -3537,6 +3538,16 @@ exports.adminOverview = onCall(
           (typeof profile.fcmToken === "string" && profile.fcmToken.length > 20) ||
           (typeof profile.trialPushToken === "string" &&
             profile.trialPushToken.length > 20),
+        // For the admin dashboard: the plan by name, whether onboarding was
+        // finished, and the phone's timezone (the nearest thing to a country).
+        plan: subscribed
+          ? /yearly/i.test(String(entitlement.productId ?? ""))
+            ? "yearly"
+            : "monthly"
+          : null,
+        subscribedAt: asIso(entitlement.subscribedAt),
+        onboardingDone: profile.onboardingV2Done === true,
+        timezone: typeof profile.timezone === "string" ? profile.timezone : null,
         appBuild: Number(profile.appBuild) || 0,
         signupBuild: Number(profile.signupBuild) || 0,
         paywallViews: c.paywall_view ?? 0,
