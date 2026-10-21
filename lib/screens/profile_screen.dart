@@ -13,6 +13,7 @@ import '../widgets/astra_widgets.dart';
 import '../widgets/profile_avatar.dart';
 import '../admin/dashboard_screen.dart';
 import 'confirm_screen.dart';
+import 'feedback_screen.dart';
 import 'paywall_screen.dart';
 import 'player_screen.dart';
 
@@ -344,6 +345,16 @@ class ProfileScreen extends ConsumerWidget {
         // URLs are what Play holds on file, so what a reviewer reads and what a
         // user reads are the same page.
         const SizedBox(height: AstraSpacing.xxl),
+        _AccountRow(
+          icon: Icons.chat_bubble_outline_rounded,
+          label: 'Send feedback or report a bug',
+          detail: 'Goes straight to the person who makes Mayow',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const FeedbackScreen()),
+          ),
+        ),
+        const SizedBox(height: AstraSpacing.md),
+
         Text('Legal', style: AstraTextStyles.label),
         const SizedBox(height: AstraSpacing.sm),
 

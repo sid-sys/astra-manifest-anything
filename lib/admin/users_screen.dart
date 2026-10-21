@@ -1,28 +1,47 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../theme/astra_theme.dart';
-import '../widgets/astra_widgets.dart';
 import '../widgets/aura_background.dart';
+import 'admin_config.dart';
 import 'admin_models.dart';
-import 'admin_repository.dart';
+import 'admin_stats.dart';
 import 'user_detail_screen.dart';
 import 'widgets/admin_widgets.dart';
 
 enum _Filter { all, subscribed, free, activeToday }
 
-/// Everybody, searchable, with the people who did something most recently at
-/// the top.
-class AdminUsersScreen extends ConsumerStatefulWidget {
-  const AdminUsersScreen({super.key});
+enum _Sort { signedUp, lastSeen, installed, uninstalled }
+
+/// A list of real people: all of them, or the ones behind a card or a bar.
+///
+/// With [full] it has the filter chips and the sort order; without, it is a
+/// plain list in the order given, with a search box.
+class AdminUsersScreen extends StatefulWidget {
+  const AdminUsersScreen({
+    super.key,
+    required this.title,
+    required this.entries,
+    this.emptyText = 'Nobody here yet.',
+    this.full = false,
+    this.reasons = const {},
+  });
+
+  final String title;
+  final List<PersonEntry> entries;
+  final String emptyText;
+  final bool full;
+
+  /// For the hidden-accounts list: why each account (by id) is left out.
+  final Map<String, String> reasons;
 
   @override
-  ConsumerState<AdminUsersScreen> createState() => _AdminUsersScreenState();
+  State<AdminUsersScreen> createState() => _AdminUsersScreenState();
 }
 
-class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
+class _AdminUsersScreenState extends State<AdminUsersScreen> {
   final _search = TextEditingController();
   _Filter _filter = _Filter.all;
+  _Sort _sort = _Sort.signedUp;
 
   @override
   void dispose() {
@@ -30,8 +49,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
     super.dispose();
   }
 
-  bool _keep(AdminUser user, DateTime now) {
-    final today = DateTime(now.year, now.month, now.day);
+  bool _keep(AdminUser user, String today) {
     final matchesFilter = switch (_filter) {
       _Filter.all => true,
       _Filter.subscribed => user.subscribed,
@@ -42,27 +60,45 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
 
     final query = _search.text.trim().toLowerCase();
     return query.isEmpty ||
-        user.name.toLowerCase().contains(query) ||
+        user.displayName.toLowerCase().contains(query) ||
         user.email.toLowerCase().contains(query);
+  }
+
+  int _compare(PersonEntry a, PersonEntry b) {
+    int later(DateTime? x, DateTime? y) {
+      if (x == null && y == null) return 0;
+      if (x == null) return 1;
+      if (y == null) return -1;
+      return y.compareTo(x);
+    }
+
+    return switch (_sort) {
+      _Sort.signedUp => b.user.joinedAt.compareTo(a.user.joinedAt),
+      _Sort.lastSeen => b.user.lastSeen.compareTo(a.user.lastSeen),
+      _Sort.installed => later(a.user.installedAt, b.user.installedAt),
+      _Sort.uninstalled => later(a.user.uninstalledAt, b.user.uninstalledAt),
+    };
   }
 
   @override
   Widget build(BuildContext context) {
-    final users = ref.watch(adminUsersProvider);
+    final today = utcDayKey(DateTime.now());
+    var shown = widget.entries.where((e) => _keep(e.user, today)).toList();
+    if (widget.full) shown = [...shown]..sort(_compare);
 
     return Scaffold(
       body: AuraBackground(
         child: SafeArea(
           child: Column(
             children: [
-              const AdminBar(title: 'Users'),
+              AdminBar(title: widget.title),
               Padding(
                 padding: adminPadding,
                 child: TextField(
                   controller: _search,
                   onChanged: (_) => setState(() {}),
                   style: AstraTextStyles.body,
-                  cursorColor: AstraColors.accent,
+                  cursorColor: AdminColors.highlight,
                   decoration: InputDecoration(
                     hintText: 'Search name or email',
                     hintStyle: AstraTextStyles.bodyDim,
@@ -81,70 +117,78 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 10),
-              Padding(
-                padding: adminPadding,
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: [
-                      for (final (filter, label) in const [
-                        (_Filter.all, 'All'),
-                        (_Filter.subscribed, 'Subscribed'),
-                        (_Filter.free, 'Free'),
-                        (_Filter.activeToday, 'Active today'),
-                      ])
-                        TagChip(
-                          label: label,
-                          selected: _filter == filter,
-                          onTap: () => setState(() => _filter = filter),
-                        ),
-                    ],
+              if (widget.full) ...[
+                const SizedBox(height: 10),
+                Padding(
+                  padding: adminPadding,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        for (final (filter, label) in const [
+                          (_Filter.all, 'All'),
+                          (_Filter.subscribed, 'Subscribed'),
+                          (_Filter.free, 'Free'),
+                          (_Filter.activeToday, 'Active today'),
+                        ])
+                          AdminChip(
+                            label: label,
+                            selected: _filter == filter,
+                            onTap: () => setState(() => _filter = filter),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: adminPadding,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text('Sort', style: AstraTextStyles.small),
+                        for (final (sort, label) in const [
+                          (_Sort.signedUp, 'Signed up'),
+                          (_Sort.lastSeen, 'Last seen'),
+                          (_Sort.installed, 'Installed'),
+                          (_Sort.uninstalled, 'Uninstalled'),
+                        ])
+                          AdminChip(
+                            label: label,
+                            selected: _sort == sort,
+                            onTap: () => setState(() => _sort = sort),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 10),
               Expanded(
-                child: users.when(
-                  loading: () => const Center(
-                    child: SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ),
-                  error: (error, _) => Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text('$error', style: AstraTextStyles.small),
-                    ),
-                  ),
-                  data: (all) {
-                    final now = DateTime.now();
-                    final shown = all.where((u) => _keep(u, now)).toList();
-                    if (shown.isEmpty) {
-                      return Center(
-                        child: Text('Nobody matches.', style: AstraTextStyles.bodyDim),
-                      );
-                    }
-                    return ListView.separated(
-                      padding: adminPadding.copyWith(bottom: 32),
-                      itemCount: shown.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 8),
-                      itemBuilder: (context, i) => _UserRow(
-                        user: shown[i],
-                        now: now,
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => AdminUserDetailScreen(user: shown[i]),
+                child: shown.isEmpty
+                    ? EmptyNote(
+                        widget.entries.isEmpty ? widget.emptyText : 'Nobody matches.',
+                      )
+                    : ListView.separated(
+                        padding: adminPadding.copyWith(bottom: 32),
+                        itemCount: shown.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        itemBuilder: (context, i) => PersonRow(
+                          entry: shown[i],
+                          reason: widget.reasons[shown[i].user.id],
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => AdminUserDetailScreen(user: shown[i].user),
+                            ),
                           ),
                         ),
                       ),
-                    );
-                  },
-                ),
               ),
             ],
           ),
@@ -152,50 +196,4 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
       ),
     );
   }
-}
-
-class _UserRow extends StatelessWidget {
-  const _UserRow({required this.user, required this.now, required this.onTap});
-
-  final AdminUser user;
-  final DateTime now;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => AstraCard(
-    onTap: onTap,
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    child: Row(
-      children: [
-        AdminAvatar(initials: user.initials),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                user.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AstraTextStyles.body.copyWith(fontWeight: FontWeight.w800),
-              ),
-              Text(
-                user.email,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AstraTextStyles.small,
-              ),
-              Text(
-                'Joined ${shortDate(user.joinedAt)} · Seen ${ago(user.lastSeen, now)}',
-                maxLines: 2,
-                style: AstraTextStyles.small,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 8),
-        PlanPill(user: user),
-      ],
-    ),
-  );
 }

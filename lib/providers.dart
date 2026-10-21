@@ -23,6 +23,8 @@ import 'services/affirmation_service.dart';
 import 'services/affirmations.dart';
 import 'services/auth_service.dart';
 import 'services/billing_service.dart';
+import 'services/device_service.dart';
+import 'services/feedback_service.dart';
 import 'services/manifest_service.dart';
 import 'services/astra_repository.dart';
 import 'services/notification_service.dart';
@@ -495,6 +497,12 @@ final storyComposerProvider = Provider<StoryComposer>(StoryComposer.new);
 
 /// Reports what people do in the app to the admin panel.
 final trackingProvider = Provider<TrackingService>((ref) => TrackingService());
+
+final deviceServiceProvider = Provider<DeviceService>((ref) => DeviceService());
+
+final feedbackServiceProvider = Provider<FeedbackService>(
+  (ref) => FeedbackService(),
+);
 
 // -------------------------------------------------------------- manifest
 

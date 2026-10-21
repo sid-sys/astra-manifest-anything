@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -431,6 +433,40 @@ class AdminService {
       // a button, and the panel needs the network anyway.
       return false;
     }
+  }
+
+  /// The overview exactly as the server sent it, as plain JSON maps, for the
+  /// dashboard's own parser.
+  Future<Map<String, dynamic>> rawOverview() async {
+    final result = await _functions
+        .httpsCallable('adminOverview')
+        .call<Map<Object?, Object?>>();
+    return jsonDecode(jsonEncode(result.data)) as Map<String, dynamic>;
+  }
+
+  /// Feedback, bug reports and content reports, newest first.
+  Future<List<Map<String, dynamic>>> feedback() async {
+    final result = await _functions
+        .httpsCallable('adminFeedback')
+        .call<Map<Object?, Object?>>();
+    final data = jsonDecode(jsonEncode(result.data)) as Map<String, dynamic>;
+    return [
+      for (final item in (data['items'] as List?) ?? const [])
+        Map<String, dynamic>.from(item as Map),
+    ];
+  }
+
+  /// Ticks an item as handled (or un-ticks it). The one thing the panel writes.
+  Future<void> setFeedbackHandled({
+    required String source,
+    required String id,
+    required bool handled,
+  }) async {
+    await _functions.httpsCallable('adminSetFeedbackHandled').call<Object?>({
+      'source': source,
+      'id': id,
+      'handled': handled,
+    });
   }
 
   Future<AdminOverview> overview() async {

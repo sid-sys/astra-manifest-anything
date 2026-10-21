@@ -3,13 +3,10 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../admin/admin_models.dart';
-
 /// Counts what people do in the app, on this phone.
 ///
-/// The admin dashboard is built around a stream of events with the same names
-/// ([EventType]); this is where they start. For now it only keeps counts
-/// locally. The server-side `trackEvent` function already stores counts per
+/// The admin dashboard reads its events from the server (`trackEvent`); this
+/// keeps the same counts on the phone as well. The server-side `trackEvent` function already stores counts per
 /// account for the real admin numbers.
 ///
 /// **Next step:** send each call here to Firestore, under
@@ -46,19 +43,20 @@ class AnalyticsService {
     );
   }
 
-  /// The admin event type for something the app reports, or null if the admin
-  /// panel has no use for it.
+  /// The events worth counting on the phone: the funnel and the money steps.
+  /// Null for anything else.
   static String? typeFor(String event, {String? detail}) => switch (event) {
-    'app_open' => EventType.opened,
-    'onboarding_done' => EventType.onboardingDone,
-    'wish_typed' => EventType.wishTyped,
-    'paywall_view' => EventType.paywallView,
-    'subscribe_tap' => EventType.paymentAttempt,
-    'purchase_ok' => EventType.subscribed,
+    'app_open' ||
+    'onboarding_start' ||
+    'onboarding_done' ||
+    'wish_typed' ||
+    'paywall_view' ||
+    'subscribe_tap' ||
+    'purchase_ok' ||
+    'purchase_cancelled' ||
+    'purchase_failed' => event,
     'generate_ok' =>
-      detail == 'affirmations'
-          ? EventType.affirmationsMade
-          : EventType.manifestationMade,
+      detail == 'affirmations' ? 'affirmations_made' : 'manifestation_made',
     _ => null,
   };
 }

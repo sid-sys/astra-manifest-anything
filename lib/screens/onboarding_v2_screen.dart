@@ -35,26 +35,28 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
   final Set<Intention> _areas = {};
   String? _importance;
   String? _reminderPref;
+  String? _source;
 
   /// Whether the person said yes to the system notification prompt on the
   /// reminder question. Written to the profile in [_finish].
   bool _allowed = false;
   bool _busy = false;
 
-  static const _pageCount = 6; // welcome, 4 questions, ready
+  static const _pageCount = 7; // welcome, 5 questions, ready
 
   bool get _canContinue => switch (_page) {
     0 => true,
     1 => _belief != null,
     2 => _areas.isNotEmpty,
     3 => _importance != null,
-    4 => _reminderPref != null,
+    4 => _source != null,
+    5 => _reminderPref != null,
     _ => true,
   };
 
   /// True on the reminder question once they picked a time other than "later".
   bool get _asksPermission =>
-      _page == 4 && _reminderPref != null && _reminderPref != 'later';
+      _page == 5 && _reminderPref != null && _reminderPref != 'later';
 
   Future<void> _next() async {
     if (!_canContinue || _busy) return;
@@ -126,6 +128,7 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
         intentions: _areas,
         importance: _importance,
         reminderPref: _reminderPref,
+        heardFrom: _source,
         onboardingV2Done: true,
         sendMorning: sendMorning,
         sendEvening: sendEvening,
@@ -135,6 +138,14 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
     // Nothing to navigate to. Saving `onboardingV2Done` is what moves the app
     // on: `app.dart` is watching it, and shows the paywall to a new account
     // or Home to anyone else.
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // When onboarding began, so the admin panel can tell a person who read and
+    // answered from a robot that tapped through in seconds.
+    unawaited(ref.read(trackingProvider).log('onboarding_start'));
   }
 
   @override
@@ -174,7 +185,18 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
                 child: PageView(
                   controller: _controller,
                   physics: const NeverScrollableScrollPhysics(),
-                  onPageChanged: (page) => setState(() => _page = page),
+                  onPageChanged: (page) {
+                    setState(() => _page = page);
+                    // Which question was reached, for the admin funnel.
+                    if (page > 0 && page < _pageCount - 1) {
+                      unawaited(
+                        ref.read(trackingProvider).log(
+                          'onboarding_page',
+                          detail: '$page',
+                        ),
+                      );
+                    }
+                  },
                   children: [
                     _Welcome(onNext: _next),
                     _Belief(
@@ -193,6 +215,10 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
                       value: _importance,
                       onChanged: (v) => setState(() => _importance = v),
                     ),
+                    _Source(
+                      value: _source,
+                      onChanged: (v) => setState(() => _source = v),
+                    ),
                     _ReminderPref(
                       value: _reminderPref,
                       onChanged: (v) => setState(() => _reminderPref = v),
@@ -205,8 +231,8 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
               AstraButton(
                 label: switch (_page) {
                   0 => 'Get Started',
-                  4 when _asksPermission => 'Allow notifications',
-                  5 => 'Continue to Mayow',
+                  5 when _asksPermission => 'Allow notifications',
+                  6 => 'Continue to Mayow',
                   _ => 'Continue',
                 },
                 busy: _busy,
@@ -381,6 +407,37 @@ class _Importance extends StatelessWidget {
     children: [
       const SizedBox(height: AstraSpacing.lg),
       Text('How important is this\nchange to you?', style: AstraTextStyles.display(24)),
+      const SizedBox(height: AstraSpacing.lg),
+      for (final (key, label) in _options) ...[
+        _Choice(label: label, selected: value == key, onTap: () => onChanged(key)),
+        const SizedBox(height: AstraSpacing.sm),
+      ],
+    ],
+  );
+}
+
+class _Source extends StatelessWidget {
+  const _Source({required this.value, required this.onChanged});
+
+  final String? value;
+  final ValueChanged<String> onChanged;
+
+  static const _options = [
+    ('instagram', 'Instagram'),
+    ('tiktok', 'TikTok'),
+    ('youtube', 'YouTube'),
+    ('friend', 'A friend or family'),
+    ('play-store', 'Searching Google Play'),
+    ('other', 'Somewhere else'),
+  ];
+
+  @override
+  Widget build(BuildContext context) => ListView(
+    children: [
+      const SizedBox(height: AstraSpacing.lg),
+      Text('Where did you hear\nabout Mayow?', style: AstraTextStyles.display(24)),
+      const SizedBox(height: AstraSpacing.sm),
+      Text('This helps us find more people like you.', style: AstraTextStyles.bodyDim),
       const SizedBox(height: AstraSpacing.lg),
       for (final (key, label) in _options) ...[
         _Choice(label: label, selected: value == key, onTap: () => onChanged(key)),

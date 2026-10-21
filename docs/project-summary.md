@@ -1,6 +1,6 @@
 # Mayow: what has been done so far
 
-Written 18 October 2026, in plain words. The newest build is **1.0.7+47**.
+Written 18 October 2026, in plain words. The newest build is **1.0.7+48**.
 
 ## What the app is
 Mayow (store name: "Personal Manifestation: Mayow", package `com.astraapp.astra`)
@@ -39,15 +39,26 @@ in `asia-south1`).
 - Home Continue button did nothing on an empty box (now says "Use this idea").
 - Several text and layout fixes; globe removed from "Writing your story".
 
-## Admin panel (real data only)
-- Dashboard: users, subscribers, active today, revenue, profit before and after
-  Google's cut, a 14-day active chart, the joining-to-subscribing funnel.
-- Users list with search and filters, and a detail page for each person.
-- Only `sidharthbabu9@gmail.com` signed in with Google sees it, and the server
-  checks the same thing again. Notes in `lib/admin/README.md`.
-- Payments are estimated from plan prices (the server keeps no receipts).
-- Each user is marked NEW APP or OLD APP (build 40 or newer).
-- Old tools (announcements, grant trial, delete account) are behind a button.
+## Admin panel (real data only, redesigned 21 October 2026)
+- Follows `ADMIN_PANEL_PROMPT.md`. Brand colours (pink buttons and bars, yellow
+  highlight), small logo, phone layout and a wide two-column layout.
+- **Real users only** switch (on by default) hides your own account, the Play
+  review login, Google test robots, automated sign-ups, licence-tester
+  purchases and robots that finish onboarding in under 25 seconds, from every
+  number. Tap the line to see who is hidden and why. Rules: `lib/admin/admin_config.dart`.
+- Six number cards (each opens its people), one chart card with a toggle
+  (Active users | Installs and uninstalls, 30 days, tap a bar to see the
+  people), the install-to-subscribe funnel, why payments failed, and where
+  people heard about us.
+- All users (search, filters, sort by signed up / last seen / installed /
+  uninstalled), one-user page (journey, what they told us, activity), and a
+  feedback and bug list with a "handled" tick.
+- New tracking: a daily phone report (`devices`), a daily uninstall check
+  (Google dry run at 04:00 India time), open days, step times, payment failures,
+  onboarding timing, a "where did you hear about us" question, and a
+  Profile > "Send feedback or report a bug" box.
+- Payments are still estimated from plan prices. Details and setup:
+  `lib/admin/README.md`. Needs the functions deployed and a new app build.
 
 ## Play Store and legal
 - Ready to upload, in `store/play/`: the `.aab` and `mapping` file, 512px app
@@ -68,7 +79,8 @@ pages.
 1. In Play Console: set the free trial to **7 days** on both plans, upload the
    `.aab` and `mapping` file, paste the new title and descriptions, and update
    the subscription names and benefits.
-2. Test the release build on a phone: sign-in, audio, reminders, the admin panel.
+2. Deploy the new functions and ship build 48, then publish the updated privacy page.
+3. Test the release build on a phone: sign-in, audio, reminders, the admin panel.
 3. Delete the 3 test guest accounts in Firebase (listed in the chat history).
 4. Replace the guessed fixed costs in `lib/admin/admin_config.dart` with real bills.
 5. Decide about the thin margin at the 60-a-month cap (cheaper voice for the trial,

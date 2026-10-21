@@ -3,33 +3,23 @@ import 'package:intl/intl.dart';
 
 import '../../theme/astra_theme.dart';
 import '../../widgets/astra_widgets.dart';
+import '../admin_config.dart';
 import '../admin_models.dart';
-
-/// Soft tints for the dashboard cards. Washed over the app's violet, so they
-/// read as pastel without leaving the app's own look.
-class AdminTints {
-  const AdminTints._();
-
-  static const mint = Color(0xFF7BE0A8);
-  static const pink = Color(0xFFFFA6C9);
-  static const yellow = Color(0xFFFFD84D);
-  static const sky = Color(0xFF7FD1FF);
-  static const lilac = Color(0xFFC9B6FF);
-  static const peach = Color(0xFFFFB38A);
-}
 
 /// Side padding for every admin screen.
 const adminPadding = EdgeInsets.symmetric(horizontal: 16);
 
 String money(double value) {
-  final negative = value < 0;
   final text = NumberFormat.currency(symbol: r'$', decimalDigits: 2).format(value.abs());
-  return negative ? '-$text' : text;
+  return value < 0 ? '-$text' : text;
 }
 
-String shortDate(DateTime time) => DateFormat('d MMM').format(time);
+String shortDate(DateTime time) => DateFormat('d MMM').format(time.toLocal());
 
-String timeOfDay(DateTime time) => DateFormat('h:mm a').format(time);
+String timeOfDay(DateTime time) => DateFormat('h:mm a').format(time.toLocal());
+
+/// "Tue 14 Oct", for list titles. [day] is a UTC calendar day.
+String dayTitle(DateTime day) => DateFormat('EEE d MMM').format(day);
 
 /// "just now", "3h ago", "5d ago".
 String ago(DateTime time, [DateTime? now]) {
@@ -41,12 +31,13 @@ String ago(DateTime time, [DateTime? now]) {
   return shortDate(time);
 }
 
-/// The back button, a title, and anything the screen wants on the right.
+/// The back button, the small logo, a title, and anything on the right.
 class AdminBar extends StatelessWidget {
-  const AdminBar({super.key, required this.title, this.actions = const []});
+  const AdminBar({super.key, required this.title, this.actions = const [], this.logo = false});
 
   final String title;
   final List<Widget> actions;
+  final bool logo;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -64,21 +55,28 @@ class AdminBar extends StatelessWidget {
               height: 40,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: AstraColors.card,
+                color: AdminColors.card,
                 shape: BoxShape.circle,
-                border: Border.all(color: AstraColors.line),
+                border: Border.all(color: AdminColors.cardEdge),
               ),
               child: const AstraIcon('ui_back', size: 26),
             ),
           ),
         ),
         const SizedBox(width: 12),
+        if (logo) ...[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.asset('assets/brand/splash_icon.png', width: 30, height: 30),
+          ),
+          const SizedBox(width: 8),
+        ],
         Expanded(
           child: Text(
             title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AstraTextStyles.display(22),
+            style: AstraTextStyles.display(21),
           ),
         ),
         ...actions,
@@ -111,27 +109,25 @@ class AdminIconButton extends StatelessWidget {
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: AstraColors.card,
+          color: AdminColors.card,
           shape: BoxShape.circle,
-          border: Border.all(color: AstraColors.line),
+          border: Border.all(color: AdminColors.cardEdge),
         ),
-        child: Icon(icon, size: 20, color: AstraColors.text),
+        child: const Icon(Icons.refresh_rounded, size: 20, color: AdminColors.text),
       ),
     ),
   );
 }
 
-/// A card tinted one pastel, used for everything on the dashboard.
-class TintCard extends StatelessWidget {
-  const TintCard({
+/// The panel's card: a shade off the background, with a hairline edge.
+class AdminCard extends StatelessWidget {
+  const AdminCard({
     super.key,
-    required this.tint,
     required this.child,
     this.padding = const EdgeInsets.all(14),
     this.onTap,
   });
 
-  final Color tint;
   final Widget child;
   final EdgeInsets padding;
   final VoidCallback? onTap;
@@ -141,13 +137,13 @@ class TintCard extends StatelessWidget {
     color: Colors.transparent,
     child: InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(20),
       child: Ink(
         padding: padding,
         decoration: BoxDecoration(
-          color: Color.alphaBlend(tint.withValues(alpha: 0.16), AstraColors.cardRaised),
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: tint.withValues(alpha: 0.45)),
+          color: AdminColors.card,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AdminColors.cardEdge),
         ),
         child: child,
       ),
@@ -155,7 +151,26 @@ class TintCard extends StatelessWidget {
   );
 }
 
-/// A number with a title, a sub-line and an emoji.
+/// A section title.
+class AdminHeading extends StatelessWidget {
+  const AdminHeading(this.text, {super.key, this.trailing});
+
+  final String text;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 22, bottom: 10),
+    child: Row(
+      children: [
+        Expanded(child: Text(text, style: AstraTextStyles.display(19))),
+        ?trailing,
+      ],
+    ),
+  );
+}
+
+/// A number with a title and a sub-line. Tapping opens the people behind it.
 class MetricCard extends StatelessWidget {
   const MetricCard({
     super.key,
@@ -163,18 +178,18 @@ class MetricCard extends StatelessWidget {
     required this.title,
     required this.value,
     required this.sub,
-    required this.tint,
+    this.onTap,
   });
 
   final String emoji;
   final String title;
   final String value;
   final String sub;
-  final Color tint;
+  final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) => TintCard(
-    tint: tint,
+  Widget build(BuildContext context) => AdminCard(
+    onTap: onTap,
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -191,7 +206,7 @@ class MetricCard extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: AstraTextStyles.label.copyWith(
-                    color: tint,
+                    color: AdminColors.link,
                     height: 1.15,
                     fontSize: 13,
                   ),
@@ -227,9 +242,7 @@ class MetricCard extends StatelessWidget {
   );
 }
 
-/// Two cards to a row, whatever the screen width. Every [MetricCard] reserves
-/// the same height for its title and its sub-line, so the cards in a row match
-/// without measuring them against each other.
+/// Two cards to a row, whatever the screen width.
 class MetricGrid extends StatelessWidget {
   const MetricGrid({super.key, required this.children});
 
@@ -249,89 +262,119 @@ class MetricGrid extends StatelessWidget {
   );
 }
 
-/// The daily-active-users bars: fourteen days, today in yellow, the count above
-/// each bar.
-class DauChart extends StatelessWidget {
-  const DauChart({super.key, required this.days});
+/// A filter chip in the primary colour when chosen.
+class AdminChip extends StatelessWidget {
+  const AdminChip({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
-  final List<({DateTime day, int count})> days;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
-    final peak = days.fold<int>(1, (m, d) => d.count > m ? d.count : m);
-    const barArea = 110.0;
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    selected: selected,
+    label: label,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? AdminColors.primary : AdminColors.card,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected ? AdminColors.primary : AdminColors.cardEdge,
+          ),
+        ),
+        child: Text(
+          label,
+          style: AstraTextStyles.label.copyWith(color: AdminColors.text),
+        ),
+      ),
+    ),
+  );
+}
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
+/// A two-option switch for the top of a card.
+class AdminToggle extends StatelessWidget {
+  const AdminToggle({
+    super.key,
+    required this.options,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final List<String> options;
+  final int selected;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(3),
+    decoration: BoxDecoration(
+      color: Colors.black.withValues(alpha: 0.25),
+      borderRadius: BorderRadius.circular(999),
+    ),
+    child: Row(
       children: [
-        for (var i = 0; i < days.length; i++)
+        for (var i = 0; i < options.length; i++)
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  // Scaled down rather than wrapped, so a big system font on a
-                  // narrow phone shrinks the number instead of growing the bar
-                  // area past its box.
-                  FittedBox(
+            child: Semantics(
+              button: true,
+              selected: i == selected,
+              label: options[i],
+              child: InkWell(
+                onTap: () => onChanged(i),
+                borderRadius: BorderRadius.circular(999),
+                child: Container(
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(vertical: 9),
+                  decoration: BoxDecoration(
+                    color: i == selected ? AdminColors.primary : Colors.transparent,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
-                      '${days[i].count}',
-                      softWrap: false,
-                      style: AstraTextStyles.small.copyWith(fontSize: 10, height: 1),
+                      options[i],
+                      style: AstraTextStyles.label.copyWith(fontSize: 13),
                     ),
                   ),
-                  const SizedBox(height: 3),
-                  Container(
-                    height: (barArea * days[i].count / peak).clamp(3, barArea),
-                    decoration: BoxDecoration(
-                      color: i == days.length - 1
-                          ? AdminTints.yellow
-                          : AdminTints.lilac.withValues(alpha: 0.75),
-                      borderRadius: BorderRadius.circular(5),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      DateFormat('d').format(days[i].day),
-                      softWrap: false,
-                      style: AstraTextStyles.small.copyWith(
-                        fontSize: 10,
-                        height: 1,
-                        color: i == days.length - 1 ? AdminTints.yellow : null,
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
       ],
-    );
-  }
+    ),
+  );
 }
 
-/// One row of the funnel: label, count, share of those who joined, and a bar.
+/// One row of the funnel: label, count, share of the top, and a bar.
 class FunnelRow extends StatelessWidget {
   const FunnelRow({
     super.key,
     required this.step,
-    required this.joined,
-    required this.tint,
+    required this.top,
+    this.stopsHere = false,
   });
 
   final FunnelStep step;
-  final int joined;
-  final Color tint;
+  final int top;
+
+  /// The biggest drop in the funnel: where most people stop.
+  final bool stopsHere;
 
   @override
   Widget build(BuildContext context) {
-    final share = joined == 0 ? 0.0 : step.count / joined;
+    final share = top == 0 ? 0.0 : step.count / top;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 11),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -340,11 +383,12 @@ class FunnelRow extends StatelessWidget {
               Expanded(
                 child: Text(
                   step.label,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: AstraTextStyles.label,
                 ),
               ),
+              const SizedBox(width: 8),
               Text(
                 '${step.count} · ${(share * 100).round()}%',
                 style: AstraTextStyles.label,
@@ -359,11 +403,22 @@ class FunnelRow extends StatelessWidget {
                 Container(height: 10, color: Colors.white.withValues(alpha: 0.12)),
                 FractionallySizedBox(
                   widthFactor: share.clamp(0.0, 1.0),
-                  child: Container(height: 10, color: tint),
+                  child: Container(
+                    height: 10,
+                    color: stopsHere ? AdminColors.highlight : AdminColors.primary,
+                  ),
                 ),
               ],
             ),
           ),
+          if (stopsHere)
+            Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Text(
+                'Most people stop after this step',
+                style: AstraTextStyles.small.copyWith(color: AdminColors.highlight),
+              ),
+            ),
         ],
       ),
     );
@@ -384,17 +439,33 @@ class AdminAvatar extends StatelessWidget {
     alignment: Alignment.center,
     decoration: BoxDecoration(
       shape: BoxShape.circle,
-      color: AdminTints.lilac.withValues(alpha: 0.28),
-      border: Border.all(color: AdminTints.lilac.withValues(alpha: 0.7)),
+      color: AdminColors.primary.withValues(alpha: 0.3),
+      border: Border.all(color: AdminColors.primary.withValues(alpha: 0.8)),
     ),
-    child: Text(
-      initials,
-      style: AstraTextStyles.display(size * 0.38, color: AstraColors.text),
-    ),
+    child: Text(initials, style: AstraTextStyles.display(size * 0.38)),
   );
 }
 
-/// "Monthly", "Yearly", "Lifetime", "Free" or "Ended", coloured.
+/// A small outlined label.
+class TagPill extends StatelessWidget {
+  const TagPill(this.text, {super.key, this.color = AdminColors.dim});
+
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.18),
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: color.withValues(alpha: 0.7)),
+    ),
+    child: Text(text, style: AstraTextStyles.label.copyWith(color: color, fontSize: 12)),
+  );
+}
+
+/// "Monthly", "Yearly", "Ended" or "Free", coloured.
 class PlanPill extends StatelessWidget {
   const PlanPill({super.key, required this.user});
 
@@ -402,39 +473,99 @@ class PlanPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (label, tint) = switch (user.plan) {
-      AdminPlan.monthly => ('Monthly', AdminTints.mint),
-      AdminPlan.yearly => ('Yearly', AdminTints.sky),
-      AdminPlan.none when user.churned => ('Ended', AdminTints.peach),
-      AdminPlan.none => ('Free', AdminTints.lilac),
+    final (label, color) = switch (user.plan) {
+      AdminPlan.monthly => ('Monthly', AdminColors.good),
+      AdminPlan.yearly => ('Yearly', const Color(0xFF7FD1FF)),
+      AdminPlan.none when user.churned => ('Ended', const Color(0xFFFFB38A)),
+      AdminPlan.none => ('Free', AdminColors.dim),
     };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-      decoration: BoxDecoration(
-        color: tint.withValues(alpha: 0.22),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: tint.withValues(alpha: 0.7)),
+    return TagPill(label, color: color);
+  }
+}
+
+/// A person in a list: real name, real email, plan, joined, last seen, tags.
+class PersonRow extends StatelessWidget {
+  const PersonRow({super.key, required this.entry, required this.onTap, this.reason});
+
+  final PersonEntry entry;
+  final VoidCallback onTap;
+
+  /// Set on the "hidden accounts" list: why they are left out.
+  final String? reason;
+
+  @override
+  Widget build(BuildContext context) {
+    final user = entry.user;
+    final now = DateTime.now();
+    return AdminCard(
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AdminAvatar(initials: user.initials),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  user.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AstraTextStyles.body.copyWith(fontWeight: FontWeight.w800),
+                ),
+                if (user.displayName != user.email)
+                  Text(
+                    user.email.isEmpty ? 'No email' : user.email,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AstraTextStyles.small,
+                  ),
+                Text(
+                  entry.time != null
+                      ? '${entry.note ?? ''}${entry.note == null ? '' : ' · '}'
+                            '${shortDate(entry.time!)}, ${timeOfDay(entry.time!)}'
+                      : 'Joined ${shortDate(user.joinedAt)} · Seen ${ago(user.lastSeen, now)}',
+                  maxLines: 2,
+                  style: AstraTextStyles.small,
+                ),
+                if (reason != null || user.isGuest || user.testPurchase) ...[
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      if (reason != null)
+                        TagPill('Hidden: $reason', color: AdminColors.highlight),
+                      if (user.isGuest) const TagPill('Guest'),
+                      if (user.testPurchase)
+                        const TagPill('Test purchase', color: AdminColors.highlight),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          PlanPill(user: user),
+        ],
       ),
-      child: Text(label, style: AstraTextStyles.label.copyWith(color: tint, fontSize: 12)),
     );
   }
 }
 
-/// A section title.
-class AdminHeading extends StatelessWidget {
-  const AdminHeading(this.text, {super.key, this.trailing});
+/// What a list says when nobody is on it.
+class EmptyNote extends StatelessWidget {
+  const EmptyNote(this.text, {super.key});
 
   final String text;
-  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 22, bottom: 10),
-    child: Row(
-      children: [
-        Expanded(child: Text(text, style: AstraTextStyles.display(19))),
-        ?trailing,
-      ],
+    padding: const EdgeInsets.all(24),
+    child: Center(
+      child: Text(text, textAlign: TextAlign.center, style: AstraTextStyles.bodyDim),
     ),
   );
 }

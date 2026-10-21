@@ -1904,6 +1904,24 @@ exports.narrateStory = onCall(
  * last, because deleting it first would strip the credentials the rest of the
  * work is authorised by.
  */
+/**
+ * Removes what lives outside the user's own document: the phones they signed in
+ * on, the feedback they sent, and the queued trial notice. Called wherever an
+ * account is erased, so "deleted with your account" is true.
+ */
+async function eraseOutsideUserDoc(uid) {
+  const db = admin.firestore();
+  const [phones, notes] = await Promise.all([
+    db.collection("devices").where("ownerUid", "==", uid).get(),
+    db.collection("feedback").where("uid", "==", uid).get(),
+  ]);
+  await Promise.all([
+    ...phones.docs.map((doc) => doc.ref.delete()),
+    ...notes.docs.map((doc) => doc.ref.delete()),
+    db.collection("trialNotices").doc(uid).delete(),
+  ]);
+}
+
 exports.deleteAccount = onCall(
   { timeoutSeconds: 300, memory: "256MiB" },
   async (request) => {
@@ -1933,6 +1951,7 @@ exports.deleteAccount = onCall(
     const stories = await userDoc.collection("stories").count().get();
     deleted.documents = stories.data().count + 1;
     await db.recursiveDelete(userDoc);
+    await eraseOutsideUserDoc(uid);
 
     // Retried, and the retry matters more here than anywhere else in the app.
     // By this line the audio and every document are already gone, so a
@@ -2917,6 +2936,9 @@ exports.verifyPurchase = onCall(
         expiryTime: expiry,
         subscribedAt: startedIso,
         state: purchase.subscriptionState ?? "unknown",
+        // Play says so itself when the buyer is a licence tester. Kept so the
+        // admin dashboard can leave test purchases out of every number.
+        testPurchase: purchase.testPurchase != null,
         verifiedAt: new Date().toISOString(),
       },
       { merge: true },
@@ -3157,6 +3179,8 @@ function assertAdmin(request) {
  */
 const TRACKED_EVENTS = new Set([
   "app_open",
+  "onboarding_start",
+  "onboarding_page",
   "onboarding_done",
   "wish_typed",
   "paywall_view",
@@ -3169,6 +3193,18 @@ const TRACKED_EVENTS = new Set([
   "generate_start",
   "generate_ok",
   "generate_failed",
+]);
+
+/** Events whose first time is kept, for the journey on a person's page. */
+const STEP_EVENTS = new Set([
+  "app_open",
+  "onboarding_start",
+  "onboarding_page",
+  "onboarding_done",
+  "wish_typed",
+  "paywall_view",
+  "subscribe_tap",
+  "purchase_ok",
 ]);
 
 function trackDoc(uid) {
@@ -3219,6 +3255,61 @@ exports.trackEvent = onCall(
     const ref = trackDoc(uid);
     const existing = await ref.get();
     if (!existing.exists || !existing.data()?.since) update.since = now;
+    const before = existing.exists ? existing.data() : {};
+
+    // --- what the admin dashboard reads -----------------------------------
+    //
+    // The first time each step happened, so a person's journey has times on
+    // it. Stamped once and never moved: a step that repeats is still the day
+    // it first happened.
+    const page = name === "onboarding_page" ? /^[1-9]$/.exec(detail)?.[0] : null;
+    const stepKey = page ? `onboarding_page_${page}` : name;
+    if (STEP_EVENTS.has(name) && !(before.steps ?? {})[stepKey]) {
+      update[`steps.${stepKey}`] = now;
+    }
+    if (page) {
+      update[`counts.onboarding_page_${page}`] =
+        admin.firestore.FieldValue.increment(1);
+    }
+
+    // The days the app was opened, as UTC dates, newest last and capped. One
+    // short string a day is what makes "who was active on Tuesday" answerable
+    // without a document per open.
+    if (name === "app_open") {
+      const today = now.slice(0, 10);
+      const days = Array.isArray(before.openDays) ? before.openDays : [];
+      if (days[days.length - 1] !== today) {
+        update.openDays = [...days, today].slice(-90);
+      }
+    }
+
+    // Why paying did not happen, with the reason the app gave.
+    if (name === "purchase_cancelled" || name === "purchase_failed") {
+      const kind =
+        name === "purchase_cancelled"
+          ? "cancelled"
+          : /unavailable/i.test(detail)
+            ? "unavailable"
+            : "failed";
+      const list = Array.isArray(before.payFailures) ? before.payFailures : [];
+      update.payFailures = [...list, { at: now, kind, detail }].slice(-20);
+    }
+
+    // The last things this person did, newest last, for their activity list.
+    // Opens are folded into one per hour so a restless user does not push every
+    // other event out of a list this short.
+    const recent = Array.isArray(before.recent) ? before.recent : [];
+    const lastRecent = recent[recent.length - 1];
+    const sameHourOpen =
+      name === "app_open" &&
+      lastRecent?.e === "app_open" &&
+      String(lastRecent.at ?? "").slice(0, 13) === now.slice(0, 13);
+    if (!sameHourOpen) {
+      update.recent = [
+        ...recent,
+        { at: now, e: name, d: (wish || detail).slice(0, 140) },
+      ].slice(-60);
+    }
 
     // Every wish typed, not just the latest, so the admin panel can say which
     // of them ever produced anything. Pressing Continue twice on the same
@@ -3301,6 +3392,219 @@ exports.adminCleanOldFields = onCall(
 
     logger.info("Old profile fields removed", { cleaned });
     return { cleaned };
+  },
+);
+
+
+// ------------------------------------------------------- devices (install counts)
+
+/**
+ * One record per phone that has the app, and nothing else in the app may write
+ * it. The app reports once a day through this function; the function checks the
+ * caller, cleans what it sent, and writes the document with the Admin SDK. The
+ * `devices` collection is not in the Firestore rules, so a client cannot write
+ * or read it directly.
+ *
+ * The install id is random and made by the app the first time, so a phone
+ * counts once however many accounts sign in on it. The install time is the one
+ * Android itself reports for the package, so a phone that only updated the app
+ * keeps its real install day.
+ */
+exports.reportDevice = onCall(
+  { timeoutSeconds: 30, memory: "256MiB" },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) return { ok: false };
+
+    const installId = String(request.data?.installId ?? "");
+    if (!/^[A-Za-z0-9_-]{16,64}$/.test(installId)) return { ok: false };
+
+    const nowMs = Date.now();
+    let installedMs = Date.parse(String(request.data?.installedAt ?? ""));
+    // Believed only inside a sane window; anything else is "first seen now".
+    if (
+      !Number.isFinite(installedMs) ||
+      installedMs > nowMs + 24 * 3600 * 1000 ||
+      installedMs < Date.parse("2024-01-01T00:00:00Z")
+    ) {
+      installedMs = nowMs;
+    }
+
+    const token = String(request.data?.fcmToken ?? "");
+    const ref = admin.firestore().collection("devices").doc(installId);
+    const snap = await ref.get();
+    const now = new Date(nowMs).toISOString();
+
+    const update = {
+      ownerUid: uid,
+      platform: clean(String(request.data?.platform ?? "android"), 12),
+      appBuild: Number(request.data?.appBuild) || 0,
+      lastSeenAt: now,
+      // Reporting in means the app is there. Any earlier uninstall mark was
+      // wrong, or the person reinstalled: either way it is not gone now.
+      uninstalled: false,
+      uninstalledAt: admin.firestore.FieldValue.delete(),
+    };
+    if (token.length > 20 && token.length < 400) update.fcmToken = token;
+    if (!snap.exists) update.installedAt = new Date(installedMs).toISOString();
+
+    await ref.set(update, { merge: true });
+    return { ok: true };
+  },
+);
+
+/**
+ * Once a day, asks Google whether each phone's push address still works.
+ *
+ * A "dry run" validates the address without delivering anything, so nobody
+ * gets a message. When the app has been removed, Google answers that the
+ * address is not registered, and only that answer marks the phone as
+ * uninstalled. Anything else (Google busy, a timeout) leaves the phone alone:
+ * an uninstall is never a guess.
+ */
+exports.checkUninstalls = onSchedule(
+  {
+    schedule: "0 4 * * *",
+    timeZone: "Asia/Kolkata",
+    timeoutSeconds: 540,
+    memory: "256MiB",
+  },
+  async () => {
+    const db = admin.firestore();
+    const snap = await db.collection("devices").where("uninstalled", "==", false).get();
+    const live = snap.docs.filter(
+      (doc) => typeof doc.data().fcmToken === "string" && doc.data().fcmToken,
+    );
+
+    let gone = 0;
+    for (let i = 0; i < live.length; i += 500) {
+      const batch = live.slice(i, i + 500);
+      const result = await admin.messaging().sendEach(
+        batch.map((doc) => ({
+          token: doc.data().fcmToken,
+          data: { ping: "1" },
+        })),
+        true, // dry run: validate, deliver nothing
+      );
+
+      for (let k = 0; k < result.responses.length; k++) {
+        const response = result.responses[k];
+        if (response.success) continue;
+        const code = response.error?.code ?? "";
+        const notRegistered =
+          code === "messaging/registration-token-not-registered" ||
+          code === "messaging/invalid-registration-token" ||
+          (code === "messaging/invalid-argument" &&
+            /registration token/i.test(response.error?.message ?? ""));
+        if (!notRegistered) continue;
+
+        await batch[k].ref.set(
+          {
+            uninstalled: true,
+            uninstalledAt: new Date().toISOString(),
+            uninstallReason: code,
+          },
+          { merge: true },
+        );
+        gone++;
+      }
+    }
+    logger.info("Uninstall check", { checked: live.length, gone });
+  },
+);
+
+// ------------------------------------------------------------------- feedback
+
+/**
+ * Feedback and bug reports, typed by the person in the app. Read only by the
+ * admin, through `adminFeedback`; nothing here is shown to other users.
+ */
+exports.submitFeedback = onCall(
+  { timeoutSeconds: 30, memory: "256MiB" },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Sign in first.");
+
+    const text = clean(String(request.data?.text ?? ""), 1500);
+    if (text.length < 3) {
+      throw new HttpsError("invalid-argument", "Write a few words first.");
+    }
+    const kind = request.data?.kind === "bug" ? "bug" : "feedback";
+
+    const db = admin.firestore();
+    const dayAgo = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const mine = await db.collection("feedback").where("uid", "==", uid).limit(50).get();
+    const lastDay = mine.docs.filter((doc) => String(doc.data().createdAt ?? "") >= dayAgo);
+    if (lastDay.length >= 10) {
+      throw new HttpsError("resource-exhausted", "That is plenty for today. Thank you.");
+    }
+
+    await db.collection("feedback").add({
+      uid,
+      kind,
+      text,
+      appBuild: Number(request.data?.appBuild) || 0,
+      createdAt: new Date().toISOString(),
+      handled: false,
+    });
+    return { ok: true };
+  },
+);
+
+/** The admin's list of feedback, bug reports and content reports. */
+exports.adminFeedback = onCall(
+  { timeoutSeconds: 60, memory: "256MiB" },
+  async (request) => {
+    assertAdmin(request);
+    const db = admin.firestore();
+
+    const [feedback, reports] = await Promise.all([
+      db.collection("feedback").orderBy("createdAt", "desc").limit(200).get(),
+      db.collection("reports").limit(100).get(),
+    ]);
+
+    const rows = [
+      ...feedback.docs.map((doc) => ({
+        id: doc.id,
+        source: "feedback",
+        uid: doc.data().uid ?? null,
+        kind: doc.data().kind ?? "feedback",
+        text: String(doc.data().text ?? ""),
+        createdAt: doc.data().createdAt ?? null,
+        handled: doc.data().handled === true,
+      })),
+      ...reports.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          source: "reports",
+          uid: data.uid ?? null,
+          kind: "report",
+          text: String(data.reason ?? data.text ?? data.note ?? JSON.stringify(data).slice(0, 300)),
+          createdAt: asIsoOrNull(data.createdAt?.toDate?.() ?? data.createdAt),
+          handled: data.handled === true,
+        };
+      }),
+    ].sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")));
+
+    return { items: rows };
+  },
+);
+
+/** Ticks a feedback item as handled. The one thing the panel writes. */
+exports.adminSetFeedbackHandled = onCall(
+  { timeoutSeconds: 30, memory: "256MiB" },
+  async (request) => {
+    assertAdmin(request);
+    const source = request.data?.source === "reports" ? "reports" : "feedback";
+    const id = String(request.data?.id ?? "");
+    if (!id) throw new HttpsError("invalid-argument", "No item.");
+    await admin
+      .firestore()
+      .collection(source)
+      .doc(id)
+      .set({ handled: request.data?.handled !== false }, { merge: true });
+    return { ok: true };
   },
 );
 
@@ -3545,8 +3849,42 @@ exports.adminOverview = onCall(
             ? "yearly"
             : "monthly"
           : null,
+        // The plan of record, even after it ended, so past payments can be
+        // estimated for somebody who has since left.
+        planId: entitlement.productId
+          ? /yearly/i.test(String(entitlement.productId))
+            ? "yearly"
+            : "monthly"
+          : null,
         subscribedAt: asIso(entitlement.subscribedAt),
         onboardingDone: profile.onboardingV2Done === true,
+        isGuest: !account.email && account.providerData.length === 0,
+        testPurchase: entitlement.testPurchase === true,
+        expiryTime: asIsoOrNull(entitlement.expiryTime),
+        entitlementState: entitlement.state ?? null,
+        heardFrom: typeof profile.heardFrom === "string" ? profile.heardFrom : null,
+        answers: {
+          belief: profile.belief || null,
+          importance: profile.importance || null,
+          reminderPref: profile.reminderPref || null,
+          areas: Array.isArray(profile.intentions) ? profile.intentions : [],
+          heardFrom: typeof profile.heardFrom === "string" ? profile.heardFrom : null,
+        },
+        steps: track.steps ?? {},
+        openDays: Array.isArray(track.openDays) ? track.openDays : [],
+        recent: Array.isArray(track.recent) ? track.recent : [],
+        payFailures: Array.isArray(track.payFailures) ? track.payFailures : [],
+        onboardingSeconds:
+          track.steps?.onboarding_start && track.steps?.onboarding_done
+            ? Math.max(
+                0,
+                Math.round(
+                  (Date.parse(track.steps.onboarding_done) -
+                    Date.parse(track.steps.onboarding_start)) /
+                    1000,
+                ),
+              )
+            : null,
         timezone: typeof profile.timezone === "string" ? profile.timezone : null,
         appBuild: Number(profile.appBuild) || 0,
         signupBuild: Number(profile.signupBuild) || 0,
@@ -3577,7 +3915,23 @@ exports.adminOverview = onCall(
       .limit(100)
       .get();
 
+    // Every phone that has reported in, with who last signed in on it. Small
+    // at this size; past a few thousand it should become per-day counters.
+    const deviceSnap = await db.collection("devices").limit(5000).get();
+    const devices = deviceSnap.docs.map((doc) => {
+      const d = doc.data();
+      return {
+        id: doc.id,
+        ownerUid: d.ownerUid ?? null,
+        installedAt: d.installedAt ?? null,
+        uninstalledAt: d.uninstalledAt ?? null,
+        lastSeenAt: d.lastSeenAt ?? null,
+        platform: d.platform ?? "android",
+      };
+    });
+
     return {
+      devices,
       totalUsers: users.length,
       totalStories: users.reduce((sum, user) => sum + user.manifests, 0),
       totalAffirmations: users.reduce((sum, user) => sum + user.affirmations, 0),
@@ -4105,6 +4459,7 @@ exports.purgeDeletedAccounts = onSchedule(
         // the user document would orphan every manifestation under it, which
         // is the classic way a "deleted" account keeps its data.
         await db.recursiveDelete(db.collection("users").doc(uid));
+        await eraseOutsideUserDoc(uid);
 
         // Last, so a failure above leaves this account queued for tomorrow
         // rather than forgotten with half its data still here.

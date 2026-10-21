@@ -89,6 +89,13 @@ class _AstraAppState extends ConsumerState<AstraApp>
 
   String? _openedFor;
 
+  Future<void> _reportDevice() async {
+    final registration = await ref.read(notificationServiceProvider).register();
+    await ref
+        .read(deviceServiceProvider)
+        .reportToday(pushToken: registration.token);
+  }
+
   @override
   Widget build(BuildContext context) {
     final firebaseReady = ref.watch(firebaseReadyProvider);
@@ -124,6 +131,10 @@ class _AstraAppState extends ConsumerState<AstraApp>
                 if (_openedFor != user.uid) {
                   _openedFor = user.uid;
                   unawaited(ref.read(trackingProvider).log('app_open'));
+                  // And once a day, tell the server this phone still has the
+                  // app: that is what the install and uninstall chart is built
+                  // from.
+                  unawaited(_reportDevice());
                 }
 
                 // An address nobody has proved is not an account yet: it could

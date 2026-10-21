@@ -3,7 +3,7 @@
 ///
 /// It is written to the user's profile as `appBuild` so the admin panel can
 /// tell who has the new app and who is still on an old one.
-const int kAppBuild = 47;
+const int kAppBuild = 48;
 
 /// The first build that puts new accounts behind the paywall.
 ///

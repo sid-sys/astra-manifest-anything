@@ -35,6 +35,7 @@ class UserProfile {
     this.signupBuild = 0,
     this.appBuild = 0,
     this.trialPushToken,
+    this.heardFrom = '',
   });
 
   final String name;
@@ -175,6 +176,11 @@ class UserProfile {
   /// is the one that tells somebody how not to be charged.
   final String? trialPushToken;
 
+  /// Where the person says they heard about Mayow (`instagram`, `tiktok`,
+  /// `friend`, ...). Asked once in onboarding; empty for accounts made before the
+  /// question existed.
+  final String heardFrom;
+
   /// New accounts cannot use the app until they have a subscription.
   bool get isGated => signupBuild >= kGateFromBuild;
 
@@ -246,6 +252,7 @@ class UserProfile {
     int? signupBuild,
     int? appBuild,
     String? trialPushToken,
+    String? heardFrom,
     bool clearPush = false,
   }) => UserProfile(
     name: name ?? this.name,
@@ -281,6 +288,7 @@ class UserProfile {
     signupBuild: signupBuild ?? this.signupBuild,
     appBuild: appBuild ?? this.appBuild,
     trialPushToken: trialPushToken ?? this.trialPushToken,
+    heardFrom: heardFrom ?? this.heardFrom,
   );
 
   /// Only what the app uses today. The old onboarding answers (age, gender,
@@ -308,6 +316,7 @@ class UserProfile {
     'signupBuild': signupBuild,
     'appBuild': appBuild,
     'trialPushToken': trialPushToken,
+    'heardFrom': heardFrom,
   };
 
   factory UserProfile.fromMap(Map<String, dynamic> map) => UserProfile(
@@ -345,5 +354,6 @@ class UserProfile {
     signupBuild: (map['signupBuild'] as num?)?.toInt() ?? 0,
     appBuild: (map['appBuild'] as num?)?.toInt() ?? 0,
     trialPushToken: map['trialPushToken'] as String?,
+    heardFrom: map['heardFrom'] as String? ?? '',
   );
 }
