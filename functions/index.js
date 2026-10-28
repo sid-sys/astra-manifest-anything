@@ -4481,6 +4481,132 @@ exports.purgeDeletedAccounts = onSchedule(
 );
 
 /**
+ * Sign-ups made by Google's test robots look like `name.12345@gmail.com`: a
+ * word, a dot, exactly five digits. Kept in step with
+ * `AdminConfig.automatedEmailPatterns` in the app, which hides the same shape
+ * from the admin panel.
+ */
+const BOT_EMAIL = /^[a-zA-Z]+\.[0-9]{5}@gmail\.com$/;
+
+/** A new account is left alone this long, so a slow real person is never caught. */
+const BOT_MIN_AGE_DAYS = 3;
+
+/** Steps a robot takes just by opening the app. Any other step is a human act. */
+const BOT_HARMLESS_STEPS = new Set([
+  "app_open",
+  "onboarding_start",
+  "onboarding_page",
+]);
+
+/**
+ * True only when the account matches the robot address shape AND has done
+ * nothing a person does: no wish, no story, no onboarding finished, no
+ * purchase, no paywall. Every check must pass; a doubt keeps the account.
+ */
+async function isIdleBotAccount(account) {
+  if (!BOT_EMAIL.test(account.email ?? "")) return false;
+
+  const createdAt = Date.parse(account.metadata?.creationTime ?? "");
+  if (
+    Number.isNaN(createdAt) ||
+    Date.now() - createdAt < BOT_MIN_AGE_DAYS * 86400000
+  ) {
+    return false;
+  }
+
+  const db = admin.firestore();
+  const user = db.collection("users").doc(account.uid);
+  const [profile, entitlement, track, manifests, affirmations, stories] =
+    await Promise.all([
+      user.get(),
+      entitlementDoc(account.uid).get(),
+      trackDoc(account.uid).get(),
+      user.collection("manifestations").limit(1).get(),
+      user.collection("affirmationSets").limit(1).get(),
+      user.collection("stories").limit(1).get(),
+    ]);
+
+  if (!manifests.empty || !affirmations.empty || !stories.empty) return false;
+  if (profile.exists && profile.data().onboardingV2Done === true) return false;
+
+  if (entitlement.exists) {
+    const e = entitlement.data();
+    if (e.isSubscribed === true || e.subscribedAt || e.productId) return false;
+  }
+
+  const steps = Object.keys(track.exists ? (track.data().steps ?? {}) : {});
+  if (steps.some((step) => !BOT_HARMLESS_STEPS.has(step))) return false;
+
+  return true;
+}
+
+/**
+ * Weekly. Hard-deletes Google test-robot accounts (see [BOT_EMAIL]) that have
+ * done nothing real. Same erase path as a person deleting their own account:
+ * audio, every document under the user, the phones and feedback, then the
+ * sign-in itself last. Capped per run; the rest wait for next week.
+ */
+exports.cleanBotAccounts = onSchedule(
+  {
+    schedule: "0 5 * * 0",
+    timeZone: "Etc/UTC",
+    timeoutSeconds: 540,
+    memory: "512MiB",
+    region: "asia-south1",
+  },
+  async () => {
+    const db = admin.firestore();
+    const auth = admin.auth();
+    const MAX_PER_RUN = 200;
+
+    let pageToken;
+    let looked = 0;
+    let removed = 0;
+    let failed = 0;
+
+    do {
+      const page = await auth.listUsers(1000, pageToken);
+      pageToken = page.pageToken;
+
+      for (const account of page.users) {
+        if (removed + failed >= MAX_PER_RUN) {
+          pageToken = undefined;
+          break;
+        }
+        if (!BOT_EMAIL.test(account.email ?? "")) continue;
+        looked++;
+
+        try {
+          if (!(await isIdleBotAccount(account))) continue;
+
+          const [files] = await admin
+            .storage()
+            .bucket(AUDIO_BUCKET)
+            .getFiles({ prefix: `users/${account.uid}/` });
+          await Promise.all(
+            files.map((file) => file.delete({ ignoreNotFound: true })),
+          );
+          await db.recursiveDelete(db.collection("users").doc(account.uid));
+          await eraseOutsideUserDoc(account.uid);
+          await withRetry(() => auth.deleteUser(account.uid));
+
+          removed++;
+          logger.info("Bot account deleted", { uid: account.uid });
+        } catch (error) {
+          failed++;
+          logger.error("Bot cleanup failed, will retry next week", {
+            uid: account.uid,
+            reason: String(error?.message ?? error),
+          });
+        }
+      }
+    } while (pageToken);
+
+    logger.info("Bot cleanup run", { looked, removed, failed });
+  },
+);
+
+/**
  * Days a test grant runs for, matching the trial Play is configured to give.
  * Mirrors `PricingCatalog.trialDays` in `lib/models/plan.dart`; this one only
  * has to agree with it, since neither number is what Play actually honours.

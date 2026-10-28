@@ -44,6 +44,16 @@ void main() {
       expect(hiddenReason(makeUser(email: 'testuser12345@gmail.com')), 'Automated test');
     });
 
+    test('a Google robot address: name.12345@gmail.com', () {
+      expect(hiddenReason(makeUser(email: 'maria.48213@gmail.com')), 'Automated test');
+    });
+
+    test('real gmail addresses are not caught by the robot shape', () {
+      for (final email in ['maria.4821@gmail.com', 'maria.482133@gmail.com', 'maria.smith@gmail.com', 'maria1.48213@gmail.com', 'maria.48213@gmail.co']) {
+        expect(hiddenReason(makeUser(email: email)), isNull, reason: email);
+      }
+    });
+
     test('a licence tester purchase', () {
       expect(
         hiddenReason(makeUser(email: 'sana@gmail.com', testPurchase: true)),

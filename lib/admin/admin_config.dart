@@ -32,6 +32,9 @@ class AdminConfig {
   /// `testuser12345@example.com`. Hidden as "Automated test".
   static final automatedEmailPatterns = <RegExp>[
     RegExp(r'^testuser\d+@', caseSensitive: false),
+    // Google's robots: `name.12345@gmail.com`. The weekly `cleanBotAccounts`
+    // function deletes the idle ones; this hides any that are left.
+    RegExp(r'^[a-zA-Z]+\.[0-9]{5}@gmail\.com$'),
   ];
 
   /// Nobody can read and answer the onboarding questions faster than this.

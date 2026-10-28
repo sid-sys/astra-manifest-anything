@@ -28,6 +28,12 @@ people behind it. Names are the real name, else the real email, else
   4. a robot sign-up (name is the review email, or `testuser123@...`),
   5. a licence-tester purchase (Play says `testPurchase`),
   6. onboarding finished in under 25 seconds.
+
+  Rule 4 also hides Google robot addresses: `name.12345@gmail.com`.
+  The weekly function `cleanBotAccounts` (Sundays 05:00 UTC) hard-deletes those
+  that did nothing real: older than 3 days, no wish, no story, no finished
+  onboarding, no paywall, no purchase. Any doubt keeps the account. Max 200 per
+  run. Deleted the same way as "delete my account".
 - Prices (from `PricingCatalog`), the store cut, AI costs, fixed monthly bills.
   **The fixed bills are estimates: replace them with your real bills.**
 
