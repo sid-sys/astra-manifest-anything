@@ -1,6 +1,6 @@
 # Mayow: what has been done so far
 
-Written 18 October 2026, in plain words. The newest build is **1.0.7+48**.
+Written 18 October 2026, in plain words. The newest build is **1.0.7+49**.
 
 ## What the app is
 Mayow (store name: "Personal Manifestation: Mayow", package `com.astraapp.astra`)
