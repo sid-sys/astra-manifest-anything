@@ -306,9 +306,9 @@ class _Metrics extends StatelessWidget {
         ),
         MetricCard(
           emoji: '💰',
-          title: 'Revenue, estimate',
-          value: '~${money(s.revenue30)}',
-          sub: '30 days. Not from Play',
+          title: s.revenueIsReal ? 'Revenue' : 'Revenue, estimate',
+          value: '${s.revenueIsReal ? '' : '~'}${money(s.revenue30)}',
+          sub: s.revenueIsReal ? '30 days. From Play' : '30 days. Not from Play',
           onTap: () => _openPeople(
             context,
             'Paid in the last 30 days',
@@ -318,8 +318,8 @@ class _Metrics extends StatelessWidget {
         ),
         MetricCard(
           emoji: '📈',
-          title: 'Profit, estimate',
-          value: '~${money(s.profitBeforeCut)}',
+          title: s.revenueIsReal ? 'Profit' : 'Profit, estimate',
+          value: '${s.revenueIsReal ? '' : '~'}${money(s.profitBeforeCut)}',
           sub: 'Before cut. Costs ${money(s.costs30)}',
           onTap: () => _openPeople(
             context,
@@ -330,8 +330,8 @@ class _Metrics extends StatelessWidget {
         ),
         MetricCard(
           emoji: '🏦',
-          title: 'Profit after cut, est.',
-          value: '~${money(after)}',
+          title: s.revenueIsReal ? 'Profit after cut' : 'Profit after cut, est.',
+          value: '${s.revenueIsReal ? '' : '~'}${money(after)}',
           sub: 'After Google\'s ${(AdminConfig.storeCut * 100).round()}%',
           onTap: () => _openPeople(
             context,

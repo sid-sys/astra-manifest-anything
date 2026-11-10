@@ -99,9 +99,13 @@ class AdminUser {
     required this.affirmationSets,
     this.installedAt,
     this.uninstalledAt,
+    this.paymentsReal = false,
   });
 
   final String id;
+
+  /// [payments] came from Google Play's own notifications, not from a guess.
+  final bool paymentsReal;
 
   /// What they gave, or empty. Use [displayName] to show a person.
   final String name;
@@ -288,4 +292,10 @@ class AdminStats {
   int get totalUsers => users.length;
   int get paying => subscribedUsers.length;
   double get profitBeforeCut => revenue30 - costs30;
+
+  /// True when every paying person's money comes from Google's own
+  /// notifications. Otherwise some of the revenue is still a guess.
+  bool get revenueIsReal => users.every(
+    (u) => u.testPurchase || !u.everSubscribed || u.paymentsReal,
+  );
 }

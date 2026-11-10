@@ -319,6 +319,43 @@ void main() {
   });
 
   group('reading the server answer', () {
+    test('money from Google replaces the guess, and a pending charge is not money', () {
+      Map<String, dynamic> person(String id, Map<String, dynamic>? billing) => {
+        'uid': id,
+        'signedUpAt': '2026-10-26T07:00:00.000Z',
+        'subscribed': true,
+        'planId': 'monthly',
+        'subscribedAt': '2026-10-26T07:34:00.000Z',
+        'billing': billing,
+      };
+      final data = parseAdminData({
+        'users': [
+          // Google has reported, and no charge went through yet.
+          person('pending1', {'payments': [], 'failures': []}),
+          // Google has reported one real charge, and one failed collection.
+          person('paid0001', {
+            'payments': [
+              {'at': '2026-11-02T07:34:00.000Z', 'amount': 7.99, 'orderId': 'GPA.1..0'},
+            ],
+            'failures': [
+              {'at': '2026-11-03T07:34:00.000Z', 'kind': 'on_hold'},
+            ],
+          }),
+          // Google has not reported: the guess is used.
+          person('unknown1', null),
+        ],
+        'devices': [],
+      }, DateTime.utc(2026, 11, 10));
+
+      final byId = {for (final u in data.users) u.id: u};
+      expect(byId['pending1']!.paymentsReal, isTrue);
+      expect(byId['pending1']!.payments, isEmpty);
+      expect(byId['paid0001']!.paidTotal, 7.99);
+      expect(byId['paid0001']!.payFailures.single.detail, contains('on hold'));
+      expect(byId['unknown1']!.paymentsReal, isFalse);
+      expect(byId['unknown1']!.payments, isNotEmpty);
+    });
+
     test('turns the overview JSON into people and phones', () {
       final data = parseAdminData({
         'users': [

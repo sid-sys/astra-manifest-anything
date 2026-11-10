@@ -79,9 +79,29 @@ not protection.** The server checks it again:
 - Any new Firestore collection or function that serves this data must repeat the
   same check. Never rely on the app to hide a button.
 
+## Real money from Google Play (real-time notifications)
+
+The function `playNotifications` listens to the Pub/Sub topic `play-rtdn`. Play
+publishes every subscription change there. For each one it reads the order
+from the Play API and stores the real charge on the entitlement (`payments`),
+and failed collections (`billingFailures`). Once Play has reported on a
+person, the panel uses those numbers for them and says "From Google Play".
+Until then it falls back to the estimate below. A "Pending" order is not
+counted as money until it becomes "Processed".
+
+The same function, and `verifyPurchase`, push "New subscriber" to the admin's
+phone once per purchase (`notifyAdminSubscribed`). Needs the admin to have
+signed in on a phone with notifications allowed.
+
+Setup in Play Console (once): Monetize with Play, Monetization setup,
+Real-time developer notifications: topic name
+`projects/astra-manifest/topics/play-rtdn`, then "Send test notification".
+The topic must let `google-play-developer-notifications@system.gserviceaccount.com`
+publish (Pub/Sub, topic, Permissions, role Pub/Sub Publisher).
+
 ## What is estimated
 
-Google Play does not hand over receipts, so **payments are estimated** from each
+Without that, **payments are estimated** from each
 subscriber's plan, start and end, at the store prices, with the first charge
 after the 7-day free trial. A licence-tester purchase is never counted as money.
 Revenue is "paid in the last 30 days"; costs are the AI calls made in the last

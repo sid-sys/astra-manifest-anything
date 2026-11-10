@@ -94,6 +94,7 @@ AdminUser _user(Map<String, dynamic> u, List<AdminDevice> phones, DateTime now) 
   ]..sort((a, b) => b.time.compareTo(a.time));
 
   final timezone = u['timezone'] as String?;
+  final billing = u['billing'] is Map ? Map<String, dynamic>.from(u['billing'] as Map) : null;
 
   return AdminUser(
     id: id,
@@ -122,7 +123,17 @@ AdminUser _user(Map<String, dynamic> u, List<AdminDevice> phones, DateTime now) 
       for (final d in (u['openDays'] as List?) ?? const []) d.toString(),
     },
     events: events,
+    paymentsReal: billing != null,
     payFailures: [
+      for (final f in _maps(billing?['failures']))
+        if (_time(f['at']) != null)
+          PayFailure(
+            time: _time(f['at'])!,
+            kind: 'failed',
+            detail: f['kind'] == 'on_hold'
+                ? 'Google could not charge the card (on hold)'
+                : 'Google could not charge the card (grace period)',
+          ),
       for (final f in _maps(u['payFailures']))
         if (_time(f['at']) != null)
           PayFailure(
@@ -134,13 +145,24 @@ AdminUser _user(Map<String, dynamic> u, List<AdminDevice> phones, DateTime now) 
     paywallViews: (u['paywallViews'] as num?)?.toInt() ?? 0,
     paymentAttempts: (u['subscribeTaps'] as num?)?.toInt() ?? 0,
     typedWish: typedCount > 0 || wishes.isNotEmpty || steps.containsKey('wish_typed'),
-    payments: estimatePayments(
-      plan: planOfRecord,
-      start: subscribedAt,
-      expiry: expiry,
-      active: active,
-      now: now,
-    ),
+    // Google's own record when it has reported on this account; the guess
+    // only for people it has not.
+    payments: billing != null
+        ? [
+            for (final p in _maps(billing['payments']))
+              if (_time(p['at']) != null)
+                AdminPayment(
+                  time: _time(p['at'])!,
+                  amount: (p['amount'] as num?)?.toDouble() ?? 0,
+                ),
+          ]
+        : estimatePayments(
+            plan: planOfRecord,
+            start: subscribedAt,
+            expiry: expiry,
+            active: active,
+            now: now,
+          ),
     manifestations: [
       for (final w in wishes)
         if (_time(w['createdAt']) != null) _time(w['createdAt'])!,

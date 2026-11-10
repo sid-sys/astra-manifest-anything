@@ -9,6 +9,7 @@
 
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onMessagePublished } = require("firebase-functions/v2/pubsub");
 const { defineSecret } = require("firebase-functions/params");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const logger = require("firebase-functions/logger");
@@ -2968,8 +2969,259 @@ exports.verifyPurchase = onCall(
       });
     }
 
+    // Tell the admin about a brand-new subscriber. Only for a subscription that
+    // began in the last two days: this function also re-verifies old ones every
+    // time the app opens, and those are not news.
+    if (active && Date.now() - Date.parse(startedIso) < 2 * 86400000) {
+      await notifyAdminSubscribed({
+        uid,
+        productId,
+        purchaseToken,
+        test: purchase.testPurchase != null,
+        trial: Date.now() < Date.parse(startedIso) + TRIAL_WINDOW_DAYS * 86400000,
+      });
+    }
+
     logger.info("Purchase verified", { uid, productId, active });
     return { isSubscribed: active, expiryTime: expiry };
+  },
+);
+
+/** Google Play list prices in USD, used only if Play will not tell us the real charge. */
+const PLAY_LIST_PRICE_USD = {
+  astra_plus_monthly: 7.99,
+  astra_plus_yearly: 79.99,
+};
+
+/**
+ * Push to the admin's phone: "someone subscribed". Sent once per purchase, no
+ * matter which path sees it first (the app's verification or Google's own
+ * notification): the marker is written in a transaction, so two callers at the
+ * same moment still send one. Never throws; a missed push must not break a
+ * purchase.
+ */
+async function notifyAdminSubscribed({ uid, productId, purchaseToken, test, trial }) {
+  try {
+    const db = admin.firestore();
+    const ref = entitlementDoc(uid);
+    const first = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (snap.data()?.adminNotifiedToken === purchaseToken) return false;
+      tx.set(ref, { adminNotifiedToken: purchaseToken }, { merge: true });
+      return true;
+    });
+    if (!first) return;
+
+    const adminAccount = await admin.auth().getUserByEmail(ADMIN_EMAIL);
+    const [adminProfile, buyerProfile] = await Promise.all([
+      db.collection("users").doc(adminAccount.uid).get(),
+      db.collection("users").doc(uid).get(),
+    ]);
+    const token = adminProfile.data()?.fcmToken;
+    if (typeof token !== "string" || token.length < 20) {
+      logger.info("Admin has no push address, subscriber push skipped", { uid });
+      return;
+    }
+
+    const who = String(buyerProfile.data()?.name ?? "").trim() || "Someone";
+    const plan = /yearly/i.test(productId) ? "yearly" : "monthly";
+    await admin.messaging().send({
+      token,
+      notification: {
+        title: test ? "New subscriber (test)" : "New subscriber 💎",
+        body: `${who} started Mayow Plus ${plan}${trial ? ", free trial" : ""}.`,
+      },
+      android: {
+        priority: "high",
+        notification: { channelId: "daily_affirmation" },
+      },
+      data: { type: "admin_new_subscriber" },
+    });
+    logger.info("Admin told about a new subscriber", { uid, plan });
+  } catch (error) {
+    logger.warn("Subscriber push failed", {
+      uid,
+      reason: String(error?.message ?? error),
+    });
+  }
+}
+
+/**
+ * Google Play's real-time notifications.
+ *
+ * Play publishes one message to a Pub/Sub topic for every change to a
+ * subscription: bought, renewed, cancelled, payment failed, expired. This is
+ * the only place real money is recorded. The entitlement keeps:
+ *   - `payments`: one entry per charge Play really processed (order id, time,
+ *     amount), so the admin panel stops guessing;
+ *   - `billingFailures`: payments Google could not collect (grace, on hold);
+ *   - `billingTracked`: true once this has seen the account, so the panel knows
+ *     to trust these numbers over its estimate.
+ *
+ * Setup is in Play Console (Monetization setup, Real-time developer
+ * notifications): topic `projects/astra-manifest/topics/play-rtdn`, and the
+ * publisher role for google-play-developer-notifications@system.gserviceaccount.com.
+ */
+const RTDN = {
+  1: "RECOVERED",
+  2: "RENEWED",
+  3: "CANCELED",
+  4: "PURCHASED",
+  5: "ON_HOLD",
+  6: "IN_GRACE_PERIOD",
+  7: "RESTARTED",
+  12: "REVOKED",
+  13: "EXPIRED",
+};
+
+exports.playNotifications = onMessagePublished(
+  { topic: "play-rtdn", timeoutSeconds: 120, memory: "256MiB" },
+  async (event) => {
+    let note;
+    try {
+      note = event.data.message.json;
+    } catch (error) {
+      logger.warn("Unreadable Play notification");
+      return;
+    }
+    if (!note || note.packageName !== ANDROID_PACKAGE) {
+      logger.warn("Play notification for another app", {
+        packageName: note?.packageName ?? null,
+      });
+      return;
+    }
+    if (note.testNotification) {
+      logger.info("Play test notification received", {
+        version: note.testNotification.version ?? null,
+      });
+      return;
+    }
+    const sub = note.subscriptionNotification;
+    if (!sub?.purchaseToken) return; // one-time purchases, voided orders: not ours
+
+    const type = RTDN[sub.notificationType] ?? `TYPE_${sub.notificationType}`;
+    const db = admin.firestore();
+
+    const owner = await db
+      .collectionGroup("private")
+      .where("purchaseToken", "==", sub.purchaseToken)
+      .limit(1)
+      .get();
+    // A purchase Play reports before the app has verified it. The app's own
+    // verification will record it (and tell the admin) a moment later.
+    if (owner.empty) {
+      logger.info("Play event for a purchase not linked yet", { type });
+      return;
+    }
+    const uid = owner.docs[0].ref.parent.parent.id;
+    const ref = entitlementDoc(uid);
+
+    const { google } = require("googleapis");
+    const auth = new google.auth.GoogleAuth({
+      scopes: ["https://www.googleapis.com/auth/androidpublisher"],
+    });
+    const play = google.androidpublisher({ version: "v3", auth });
+
+    let purchase;
+    try {
+      purchase = (
+        await play.purchases.subscriptionsv2.get({
+          packageName: ANDROID_PACKAGE,
+          token: sub.purchaseToken,
+        })
+      ).data;
+    } catch (error) {
+      logger.error("Play event: could not read the subscription", {
+        uid,
+        type,
+        reason: String(error?.message ?? error),
+      });
+      throw error; // let Pub/Sub deliver it again
+    }
+
+    const state = purchase.subscriptionState ?? "unknown";
+    const active =
+      state === "SUBSCRIPTION_STATE_ACTIVE" ||
+      state === "SUBSCRIPTION_STATE_IN_GRACE_PERIOD" ||
+      state === "SUBSCRIPTION_STATE_CANCELED";
+    const update = {
+      isSubscribed: active,
+      state,
+      expiryTime: purchase.lineItems?.[0]?.expiryTime ?? purchase.expiryTime ?? null,
+      testPurchase: purchase.testPurchase != null,
+      billingTracked: true,
+      lastBillingEvent: {
+        type,
+        at: new Date(Number(note.eventTimeMillis) || Date.now()).toISOString(),
+      },
+    };
+
+    // A charge Play really processed: look the order up for the real amount.
+    // A free-trial start is an order of 0 and is skipped.
+    const orderId = purchase.latestSuccessfulOrderId;
+    const productId = purchase.lineItems?.[0]?.productId ?? sub.subscriptionId;
+    if (orderId && ["PURCHASED", "RENEWED", "RECOVERED", "RESTARTED"].includes(type)) {
+      let amount = null;
+      let currency = null;
+      let processed = true;
+      try {
+        const order = (
+          await play.orders.get({ packageName: ANDROID_PACKAGE, orderId })
+        ).data;
+        processed = order.state === "PROCESSED";
+        const total = order.total;
+        if (total) {
+          currency = total.currencyCode ?? null;
+          amount = Number(total.units ?? 0) + Number(total.nanos ?? 0) / 1e9;
+        }
+      } catch (error) {
+        logger.warn("Play event: order lookup failed, using the list price", {
+          uid,
+          orderId,
+          reason: String(error?.message ?? error),
+        });
+        // Only a renewal is surely a paid charge; a first order may be a trial.
+        if (type === "PURCHASED") processed = false;
+        amount = PLAY_LIST_PRICE_USD[productId] ?? null;
+        currency = "USD";
+      }
+
+      if (processed && amount && amount > 0) {
+        const usd = currency === "USD" ? amount : (PLAY_LIST_PRICE_USD[productId] ?? amount);
+        update.payments = {
+          [orderId.replace(/[.\/]/g, "_")]: {
+            orderId,
+            at: update.lastBillingEvent.at,
+            amountUsd: Math.round(usd * 100) / 100,
+            paidAmount: amount,
+            currency,
+          },
+        };
+      }
+    }
+
+    if (type === "ON_HOLD" || type === "IN_GRACE_PERIOD") {
+      update.billingFailures = {
+        [`${type}_${Number(note.eventTimeMillis) || Date.now()}`]: {
+          at: update.lastBillingEvent.at,
+          kind: type === "ON_HOLD" ? "on_hold" : "grace",
+        },
+      };
+    }
+
+    await ref.set(update, { merge: true });
+
+    if (type === "PURCHASED" && active) {
+      await notifyAdminSubscribed({
+        uid,
+        productId,
+        purchaseToken: sub.purchaseToken,
+        test: purchase.testPurchase != null,
+        trial: !update.payments,
+      });
+    }
+
+    logger.info("Play event recorded", { uid, type, state, paid: Boolean(update.payments) });
   },
 );
 
@@ -3862,6 +4114,21 @@ exports.adminOverview = onCall(
         testPurchase: entitlement.testPurchase === true,
         expiryTime: asIsoOrNull(entitlement.expiryTime),
         entitlementState: entitlement.state ?? null,
+        // Real charges and failed charges from Google's own notifications.
+        // Null until Play has reported on this account, and then the panel
+        // falls back to its estimate.
+        billing: entitlement.billingTracked
+          ? {
+              payments: Object.values(entitlement.payments ?? {}).map((p) => ({
+                at: p.at,
+                amount: p.amountUsd,
+                orderId: p.orderId,
+              })),
+              failures: Object.values(entitlement.billingFailures ?? {}).map(
+                (f) => ({ at: f.at, kind: f.kind }),
+              ),
+            }
+          : null,
         heardFrom: typeof profile.heardFrom === "string" ? profile.heardFrom : null,
         answers: {
           belief: profile.belief || null,
