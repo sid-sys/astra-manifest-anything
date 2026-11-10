@@ -444,6 +444,14 @@ class AdminService {
     return jsonDecode(jsonEncode(result.data)) as Map<String, dynamic>;
   }
 
+  /// Asks Google Play, live, what happened to each subscriber's money.
+  Future<Map<String, dynamic>> billingCheck() async {
+    final result = await _functions
+        .httpsCallable('adminBillingCheck')
+        .call<Map<Object?, Object?>>();
+    return jsonDecode(jsonEncode(result.data)) as Map<String, dynamic>;
+  }
+
   /// Feedback, bug reports and content reports, newest first.
   Future<List<Map<String, dynamic>>> feedback() async {
     final result = await _functions

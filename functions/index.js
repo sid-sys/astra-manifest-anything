@@ -3074,6 +3074,119 @@ const RTDN = {
   13: "EXPIRED",
 };
 
+/**
+ * Asks Google, right now, what really happened to every subscriber's money.
+ * Admin only; read-only. The panel's "Check payments with Google" button.
+ *
+ * For each purchase it reads the subscription and its latest successful order
+ * from the Play API, then states a plain verdict. It also proves the two links
+ * that must exist for money to be trusted: that this server can read Play at
+ * all, and whether Play's real-time notifications have arrived for the person.
+ */
+exports.adminBillingCheck = onCall(
+  { timeoutSeconds: 120, memory: "256MiB" },
+  async (request) => {
+    assertAdmin(request);
+
+    const { google } = require("googleapis");
+    const auth = new google.auth.GoogleAuth({
+      scopes: ["https://www.googleapis.com/auth/androidpublisher"],
+    });
+    const play = google.androidpublisher({ version: "v3", auth });
+
+    const snap = await admin
+      .firestore()
+      .collectionGroup("private")
+      .where("purchaseToken", ">", "")
+      .limit(100)
+      .get();
+
+    const day = 86400000;
+    const rows = [];
+    let readable = 0;
+    let failed = 0;
+
+    for (const doc of snap.docs) {
+      if (doc.id !== "entitlement") continue;
+      const e = doc.data();
+      const row = {
+        uid: doc.ref.parent.parent.id,
+        productId: e.productId ?? null,
+        notified: e.billingTracked === true,
+        lastEvent: e.lastBillingEvent ?? null,
+      };
+
+      try {
+        const p = (
+          await play.purchases.subscriptionsv2.get({
+            packageName: ANDROID_PACKAGE,
+            token: e.purchaseToken,
+          })
+        ).data;
+        readable++;
+        row.state = p.subscriptionState ?? null;
+        row.test = p.testPurchase != null;
+        row.startTime = asIsoOrNull(p.startTime);
+        row.expiryTime = asIsoOrNull(p.lineItems?.[0]?.expiryTime);
+        row.autoRenew = p.lineItems?.[0]?.autoRenewingPlan?.autoRenewEnabled ?? null;
+        row.orderId = p.latestSuccessfulOrderId ?? null;
+
+        if (row.orderId) {
+          try {
+            const order = (
+              await play.orders.get({ packageName: ANDROID_PACKAGE, orderId: row.orderId })
+            ).data;
+            row.orderState = order.state ?? null;
+            row.orderTime = asIsoOrNull(order.createTime);
+            if (order.total) {
+              row.orderAmount =
+                Number(order.total.units ?? 0) + Number(order.total.nanos ?? 0) / 1e9;
+              row.orderCurrency = order.total.currencyCode ?? null;
+            }
+          } catch (orderError) {
+            row.orderError = String(orderError?.message ?? orderError).slice(0, 160);
+          }
+        }
+
+        const sinceStart = row.startTime ? Date.now() - Date.parse(row.startTime) : 0;
+        const trialOver = sinceStart > TRIAL_WINDOW_DAYS * day;
+        const paid = row.orderAmount > 0 && row.orderState === "PROCESSED";
+        if (row.test) {
+          row.verdict = "test";
+        } else if (/ON_HOLD|GRACE/.test(row.state ?? "")) {
+          row.verdict = "card_failed";
+        } else if (/EXPIRED/.test(row.state ?? "")) {
+          row.verdict = "ended";
+        } else if (paid) {
+          row.verdict = /CANCELED/.test(row.state ?? "") ? "paid_then_cancelled" : "paid";
+        } else if (/CANCELED/.test(row.state ?? "")) {
+          row.verdict = "cancelled";
+        } else if (!trialOver) {
+          row.verdict = "trial";
+        } else {
+          // Trial is over and Google has no successful charge: the order is
+          // waiting at Google (pending) or being retried.
+          row.verdict = "no_charge_yet";
+          row.daysSinceTrialEnded = Math.floor(
+            (sinceStart - TRIAL_WINDOW_DAYS * day) / day,
+          );
+        }
+      } catch (error) {
+        failed++;
+        row.verdict = "unreadable";
+        row.error = String(error?.message ?? error).slice(0, 200);
+      }
+      rows.push(row);
+    }
+
+    return {
+      checkedAt: new Date().toISOString(),
+      googleAccess: failed === 0 || readable > 0 ? "ok" : "failed",
+      rows,
+    };
+  },
+);
+
 exports.playNotifications = onMessagePublished(
   { topic: "play-rtdn", timeoutSeconds: 120, memory: "256MiB" },
   async (event) => {

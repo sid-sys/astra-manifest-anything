@@ -7,6 +7,7 @@ import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
 import '../widgets/aura_background.dart';
 import 'admin_config.dart';
+import 'admin_billing_check_screen.dart';
 import 'admin_feedback_screen.dart';
 import 'admin_models.dart';
 import 'admin_repository.dart';
@@ -614,6 +615,13 @@ class _Buttons extends StatelessWidget {
           _everyone(view.stats.users),
           full: true,
           empty: 'No users yet.',
+        ),
+      ),
+      const SizedBox(height: 10),
+      AstraGhostButton(
+        label: 'Check payments with Google',
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const AdminBillingCheckScreen()),
         ),
       ),
       const SizedBox(height: 10),
