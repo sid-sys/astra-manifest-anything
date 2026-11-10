@@ -167,6 +167,13 @@ class _Journey extends StatelessWidget {
         user.paymentAttempts > 1 ? '${user.paymentAttempts} attempts' : null,
       ),
       (subscribedLine, user.everSubscribed, s['purchase_ok'] ?? user.subscribedAt, null),
+      if (user.cancelled)
+        (
+          'Cancelled the subscription',
+          true,
+          user.cancelledAt,
+          user.subscribed ? 'still has access until it runs out' : null,
+        ),
     ];
 
     return AdminCard(

@@ -96,6 +96,35 @@ AdminUser _user(Map<String, dynamic> u, List<AdminDevice> phones, DateTime now) 
   final timezone = u['timezone'] as String?;
   final billing = u['billing'] is Map ? Map<String, dynamic>.from(u['billing'] as Map) : null;
 
+  // What Google said happened to the subscription, newest first, on the same
+  // list as everything else the person did.
+  final billingEvents = [
+    for (final e in _maps(billing?['events']))
+      if (_time(e['at']) != null)
+        AdminEvent(
+          time: _time(e['at'])!,
+          type: 'sub_${(e['type'] as String? ?? '').toLowerCase()}',
+        ),
+  ];
+  events
+    ..addAll(billingEvents)
+    ..sort((a, b) => b.time.compareTo(a.time));
+
+  const endings = {'sub_canceled', 'sub_revoked', 'sub_expired'};
+  final endedEvents = billingEvents.where((e) => endings.contains(e.type)).toList();
+  // A person who came back (restarted, recovered) after cancelling is not
+  // cancelled any more: judged by the newest of Google's events.
+  final newestBilling = billingEvents.isEmpty
+      ? null
+      : (billingEvents.toList()..sort((a, b) => b.time.compareTo(a.time))).first;
+  final state = u['entitlementState'] as String? ?? '';
+  final cancelled = newestBilling != null
+      ? endings.contains(newestBilling.type)
+      : state == 'SUBSCRIPTION_STATE_CANCELED' || state == 'SUBSCRIPTION_STATE_EXPIRED';
+  final cancelledAt = endedEvents.isEmpty
+      ? null
+      : (endedEvents..sort((a, b) => b.time.compareTo(a.time))).first.time;
+
   return AdminUser(
     id: id,
     name: (u['name'] as String?)?.trim() ?? '',
@@ -124,6 +153,8 @@ AdminUser _user(Map<String, dynamic> u, List<AdminDevice> phones, DateTime now) 
     },
     events: events,
     paymentsReal: billing != null,
+    cancelled: cancelled,
+    cancelledAt: cancelled ? cancelledAt : null,
     payFailures: [
       for (final f in _maps(billing?['failures']))
         if (_time(f['at']) != null)

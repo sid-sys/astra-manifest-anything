@@ -356,6 +356,48 @@ void main() {
       expect(byId['unknown1']!.payments, isNotEmpty);
     });
 
+    test('a cancel shows in the events and the journey flag', () {
+      Map<String, dynamic> person(String id, {Map<String, dynamic>? billing, String? state}) => {
+        'uid': id,
+        'signedUpAt': '2026-10-26T07:00:00.000Z',
+        'subscribed': true,
+        'planId': 'monthly',
+        'subscribedAt': '2026-10-26T07:34:00.000Z',
+        'entitlementState': state,
+        'billing': billing,
+      };
+      final data = parseAdminData({
+        'users': [
+          person('said0001', billing: {
+            'payments': [],
+            'events': [
+              {'at': '2026-10-27T10:00:00.000Z', 'type': 'CANCELED'},
+            ],
+          }),
+          person('came0001', billing: {
+            'payments': [],
+            'events': [
+              {'at': '2026-10-27T10:00:00.000Z', 'type': 'CANCELED'},
+              {'at': '2026-10-28T10:00:00.000Z', 'type': 'RESTARTED'},
+            ],
+          }),
+          // Cancelled before the notifications existed: only Play's state tells.
+          person('old00001', state: 'SUBSCRIPTION_STATE_CANCELED'),
+          person('fine0001', state: 'SUBSCRIPTION_STATE_ACTIVE'),
+        ],
+        'devices': [],
+      }, DateTime.utc(2026, 11, 10));
+      final byId = {for (final u in data.users) u.id: u};
+
+      expect(byId['said0001']!.cancelled, isTrue);
+      expect(byId['said0001']!.cancelledAt, DateTime.utc(2026, 10, 27, 10));
+      expect(byId['said0001']!.events.any((e) => e.type == 'sub_canceled'), isTrue);
+      expect(byId['came0001']!.cancelled, isFalse);
+      expect(byId['old00001']!.cancelled, isTrue);
+      expect(byId['old00001']!.cancelledAt, isNull);
+      expect(byId['fine0001']!.cancelled, isFalse);
+    });
+
     test('turns the overview JSON into people and phones', () {
       final data = parseAdminData({
         'users': [

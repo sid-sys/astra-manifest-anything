@@ -18,6 +18,14 @@ enum AdminPlan { none, monthly, yearly }
   'generate_start' => (emoji: '⏳', title: 'Asked for a manifestation'),
   'generate_ok' => (emoji: '🌙', title: 'Got a manifestation'),
   'generate_failed' => (emoji: '⚠️', title: 'Generation failed'),
+  // From Google Play's own notifications.
+  'sub_canceled' => (emoji: '🚫', title: 'Cancelled the subscription'),
+  'sub_expired' => (emoji: '⌛', title: 'Subscription ended'),
+  'sub_renewed' => (emoji: '🔄', title: 'Subscription renewed'),
+  'sub_on_hold' => (emoji: '⚠️', title: 'Payment could not be collected'),
+  'sub_in_grace_period' => (emoji: '⚠️', title: 'Payment late, in grace period'),
+  'sub_recovered' => (emoji: '✅', title: 'Payment recovered'),
+  'sub_revoked' => (emoji: '🚫', title: 'Subscription revoked'),
   _ => (emoji: '•', title: type),
 };
 
@@ -100,9 +108,19 @@ class AdminUser {
     this.installedAt,
     this.uninstalledAt,
     this.paymentsReal = false,
+    this.cancelledAt,
+    this.cancelled = false,
   });
 
   final String id;
+
+  /// Play says the subscription was cancelled, revoked or has ended. They keep
+  /// access until the paid time runs out.
+  final bool cancelled;
+
+  /// When Play told us, if it did. Null for a cancel that happened before the
+  /// notifications were switched on; [cancelled] is still true then.
+  final DateTime? cancelledAt;
 
   /// [payments] came from Google Play's own notifications, not from a guess.
   final bool paymentsReal;

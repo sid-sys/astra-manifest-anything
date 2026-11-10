@@ -3200,6 +3200,15 @@ exports.playNotifications = onMessagePublished(
       }
     }
 
+    // Every change, with its time, for the person's page: cancelled, renewed,
+    // expired, on hold. One entry per Play event, so a repeat does not double.
+    update.billingEvents = {
+      [`${type}_${Number(note.eventTimeMillis) || Date.now()}`]: {
+        at: update.lastBillingEvent.at,
+        type,
+      },
+    };
+
     if (type === "ON_HOLD" || type === "IN_GRACE_PERIOD") {
       update.billingFailures = {
         [`${type}_${Number(note.eventTimeMillis) || Date.now()}`]: {
@@ -4126,6 +4135,9 @@ exports.adminOverview = onCall(
               })),
               failures: Object.values(entitlement.billingFailures ?? {}).map(
                 (f) => ({ at: f.at, kind: f.kind }),
+              ),
+              events: Object.values(entitlement.billingEvents ?? {}).map(
+                (e) => ({ at: e.at, type: e.type }),
               ),
             }
           : null,
