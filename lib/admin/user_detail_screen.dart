@@ -186,9 +186,10 @@ class _Journey extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                'Paid so far: ${money(user.testPurchase ? 0 : user.paidTotal)} in '
+                'Estimated paid: ~${money(user.testPurchase ? 0 : user.paidTotal)} in '
                 '${user.testPurchase ? 0 : user.payments.length} '
-                '${user.payments.length == 1 ? 'payment' : 'payments'} (estimated)',
+                '${user.payments.length == 1 ? 'payment' : 'payments'}. '
+                'Play Console has the real number.',
                 style: AstraTextStyles.body.copyWith(fontWeight: FontWeight.w800),
               ),
             ),
