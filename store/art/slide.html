@@ -1,0 +1,166 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Mayow store slide</title>
+<!--
+  One Play Store screenshot: a bold headline, a bright background, and the
+  real app screen inside a phone. 1080x1920.
+
+  Pick the slide with ?slide=home|questions|player|affirm|library|profile.
+  The app screens are in store/art/raw (taken by tool/shoot_screenshots.mjs).
+  Rendered by tool/shoot_store_art.mjs.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@900&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 1080px;
+    height: 1920px;
+    overflow: hidden;
+    font-family: 'Nunito', system-ui, sans-serif;
+  }
+
+  .slide {
+    position: relative;
+    width: 1080px;
+    height: 1920px;
+    overflow: hidden;
+    background: linear-gradient(170deg, var(--top), var(--bottom));
+  }
+
+  /* Soft light behind the phone, and a few round shapes, so the flat colour
+     does not feel empty. */
+  .glow {
+    position: absolute;
+    left: 50%;
+    top: 1180px;
+    width: 1300px;
+    height: 1300px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 65%);
+  }
+  .dot {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.45);
+  }
+
+  h1 {
+    position: absolute;
+    left: 60px;
+    right: 60px;
+    top: 96px;
+    text-align: center;
+    font-weight: 900;
+    font-size: 138px;
+    line-height: 0.98;
+    letter-spacing: -2px;
+    color: var(--ink);
+  }
+  h1 em {
+    font-style: normal;
+    color: var(--accent);
+  }
+
+  .phone {
+    position: absolute;
+    left: 50%;
+    top: 500px;
+    width: 804px;
+    height: 1395px;
+    transform: translateX(-50%);
+    padding: 22px;
+    border-radius: 104px;
+    background: #0B0A1E;
+    box-shadow:
+      0 0 0 4px rgba(255, 255, 255, 0.35),
+      0 60px 90px -20px rgba(20, 10, 70, 0.55);
+  }
+  .screen {
+    width: 100%;
+    height: 100%;
+    border-radius: 84px;
+    overflow: hidden;
+    background: #2A1B7A;
+  }
+  .screen img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top;
+  }
+</style>
+
+<div class="slide" id="slide">
+  <div class="glow"></div>
+  <div class="dot" style="left: 60px; top: 430px; width: 46px; height: 46px"></div>
+  <div class="dot" style="right: 70px; top: 560px; width: 30px; height: 30px"></div>
+  <div class="dot" style="right: 60px; top: 1500px; width: 64px; height: 64px"></div>
+  <div class="dot" style="left: 50px; top: 1380px; width: 34px; height: 34px"></div>
+
+  <h1 id="headline"></h1>
+
+  <div class="phone">
+    <div class="screen"><img id="shot" alt=""></div>
+  </div>
+</div>
+
+<script>
+  // Words in <em> take the accent colour. Every headline is short on purpose:
+  // it has to read at thumbnail size on a store page.
+  const SLIDES = {
+    home: {
+      shot: '2-home.png',
+      html: 'Say it like it’s <em>already done.</em>',
+      top: '#A9DDFF', bottom: '#6FB0FF', ink: '#15124D', accent: '#FFFFFF',
+    },
+    questions: {
+      shot: '3-questions.png',
+      html: 'Tell us how<br>it <em>feels.</em>',
+      top: '#B97FF7', bottom: '#7F45E5', ink: '#FFFFFF', accent: '#FFD84A',
+    },
+    player: {
+      shot: '1-player.png',
+      html: 'Your wish, <em>read to you.</em>',
+      top: '#FFB6D3', bottom: '#FF7FB1', ink: '#3A0F4D', accent: '#FFFFFF',
+    },
+    affirm: {
+      shot: '4-affirmations.png',
+      html: 'Five lines you can <em>believe.</em>',
+      top: '#B8F2D2', bottom: '#6FDDB1', ink: '#0E3B3A', accent: '#FFFFFF',
+    },
+    library: {
+      shot: '5-library.png',
+      html: 'Every wish, <em>saved.</em>',
+      top: '#FFE590', bottom: '#FFC24F', ink: '#4A2300', accent: '#FFFFFF',
+    },
+    profile: {
+      shot: '6-profile.png',
+      html: 'A nudge when you <em>need it.</em>',
+      top: '#EAE2FF', bottom: '#C9B8FF', ink: '#2A1A7A', accent: '#7F45E5',
+    },
+  };
+
+  const key = new URLSearchParams(location.search).get('slide') || 'home';
+  const s = SLIDES[key];
+  const slide = document.getElementById('slide');
+  slide.style.setProperty('--top', s.top);
+  slide.style.setProperty('--bottom', s.bottom);
+  slide.style.setProperty('--ink', s.ink);
+  slide.style.setProperty('--accent', s.accent);
+  document.getElementById('headline').innerHTML = s.html;
+  document.getElementById('shot').src = 'raw/' + s.shot;
+
+  // The shooter waits for this before it takes the picture.
+  Promise.all([
+    document.fonts.ready,
+    new Promise((ok) => {
+      const img = document.getElementById('shot');
+      img.complete ? ok() : img.addEventListener('load', ok, { once: true });
+    }),
+  ]).then(() => { document.title = 'ready'; });
+</script>
