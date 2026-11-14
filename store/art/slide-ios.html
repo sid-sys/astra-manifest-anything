@@ -1,0 +1,134 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Mayow iOS store slide</title>
+<!--
+  One App Store screenshot: a bold headline, a bright background, and the
+  real app screen inside an iPhone. 1206x2622 (iPhone 6.3").
+
+  Pick the slide with ?slide=home|questions|player|affirm|library|profile.
+  The app screens are in store/art/raw-ios (taken by tool/shoot_screenshots.mjs
+  at 393x798, scale 3). Rendered by tool/shoot_store_art_ios.mjs.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@900&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { width: 1206px; height: 2622px; overflow: hidden; font-family: 'Nunito', system-ui, sans-serif; }
+  .slide { position: relative; width: 1206px; height: 2622px; overflow: hidden;
+    background: linear-gradient(170deg, var(--top), var(--bottom)); }
+  .glow { position: absolute; left: 50%; top: 1700px; width: 1500px; height: 1500px;
+    transform: translate(-50%, -50%); border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,255,255,0.55), rgba(255,255,255,0) 65%); }
+  .dot { position: absolute; border-radius: 50%; background: rgba(255,255,255,0.45); }
+  h1 { position: absolute; left: 60px; right: 60px; top: 130px; text-align: center;
+    font-weight: 900; font-size: 158px; line-height: 0.98; letter-spacing: -2px; color: var(--ink); }
+  h1 em { font-style: normal; color: var(--accent); }
+
+  .phone { position: absolute; left: 50%; top: 700px; width: 900px; height: 1895px;
+    transform: translateX(-50%); padding: 24px; border-radius: 130px; background: #0B0A1E;
+    box-shadow: 0 0 0 4px rgba(255,255,255,0.35), 0 0 0 9px #2a2a3c, 0 60px 90px -20px rgba(20,10,70,0.55); }
+  .btn { position: absolute; background: #1b1b2c; border-radius: 6px; }
+  .screen { position: relative; width: 100%; height: 100%; border-radius: 106px; overflow: hidden; background: #2A1B7A; }
+  .top { position: absolute; left: 0; right: 0; top: 0; height: 117px;
+    background-size: 100% 4000%; background-position: top; }
+  .shot { position: absolute; left: 0; top: 117px; width: 100%; height: 1730px; display: block;
+    object-fit: cover; object-position: top; }
+  .island { position: absolute; left: 50%; top: 24px; width: 204px; height: 60px; margin-left: -102px;
+    border-radius: 30px; background: #000; }
+  .time { position: absolute; left: 82px; top: 30px; font: 800 34px/48px system-ui, sans-serif; color: var(--bar); }
+  .icons { position: absolute; right: 70px; top: 36px; display: flex; gap: 14px; align-items: center; color: var(--bar); }
+</style>
+
+<div class="slide" id="slide">
+  <div class="glow"></div>
+  <div class="dot" style="left: 70px; top: 560px; width: 50px; height: 50px"></div>
+  <div class="dot" style="right: 80px; top: 740px; width: 32px; height: 32px"></div>
+  <div class="dot" style="right: 60px; top: 2000px; width: 70px; height: 70px"></div>
+  <div class="dot" style="left: 50px; top: 1800px; width: 36px; height: 36px"></div>
+
+  <h1 id="headline"></h1>
+
+  <div class="phone">
+    <div class="btn" style="left:-13px; top:300px; width:5px; height:90px"></div>
+    <div class="btn" style="left:-13px; top:430px; width:5px; height:150px"></div>
+    <div class="btn" style="left:-13px; top:610px; width:5px; height:150px"></div>
+    <div class="btn" style="right:-13px; top:480px; width:5px; height:230px"></div>
+    <div class="screen">
+      <div class="top" id="top"></div>
+      <img class="shot" id="shot" alt="">
+      <div class="island"></div>
+      <div class="time">9:41</div>
+      <div class="icons">
+        <svg width="40" height="26" viewBox="0 0 40 26"><g fill="currentColor"><rect x="0" y="16" width="6" height="10" rx="2"/><rect x="11" y="11" width="6" height="15" rx="2"/><rect x="22" y="5" width="6" height="21" rx="2"/><rect x="33" y="0" width="6" height="26" rx="2"/></g></svg>
+        <svg width="38" height="27" viewBox="0 0 38 27"><g fill="currentColor"><path d="M19 4C12 4 6 7 2 11l3 3c3-3 8-6 14-6s11 3 14 6l3-3C32 7 26 4 19 4z"/><path d="M19 12c-4 0-7 2-9 4l3 3c1.5-1.5 4-3 6-3s4.5 1.5 6 3l3-3c-2-2-5-4-9-4z"/><circle cx="19" cy="23" r="3"/></g></svg>
+        <svg width="62" height="28" viewBox="0 0 62 28"><rect x="1.5" y="1.5" width="52" height="25" rx="8" fill="none" stroke="currentColor" opacity=".5" stroke-width="3"/><rect x="5" y="5" width="45" height="18" rx="5" fill="currentColor"/><rect x="56" y="9" width="4" height="10" rx="2" fill="currentColor" opacity=".5"/></svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SLIDES = {
+    home: {
+      shot: '2-home.png',
+      html: 'Say it like it’s <em>already done.</em>',
+      top: '#A9DDFF', bottom: '#6FB0FF', ink: '#15124D', accent: '#FFFFFF',
+    },
+    questions: {
+      shot: '3-questions.png',
+      html: 'Tell us how<br>it <em>feels.</em>',
+      top: '#B97FF7', bottom: '#7F45E5', ink: '#FFFFFF', accent: '#FFD84A',
+    },
+    player: {
+      shot: '1-player.png',
+      html: 'Your wish, <em>read to you.</em>',
+      top: '#FFB6D3', bottom: '#FF7FB1', ink: '#3A0F4D', accent: '#FFFFFF',
+    },
+    affirm: {
+      shot: '4-affirmations.png',
+      html: 'Five lines you can <em>believe.</em>',
+      top: '#B8F2D2', bottom: '#6FDDB1', ink: '#0E3B3A', accent: '#FFFFFF',
+    },
+    library: {
+      shot: '5-library.png',
+      html: 'Every wish, <em>saved.</em>',
+      top: '#FFE590', bottom: '#FFC24F', ink: '#4A2300', accent: '#FFFFFF',
+    },
+    profile: {
+      shot: '6-profile.png',
+      html: 'A nudge when you <em>need it.</em>',
+      top: '#EAE2FF', bottom: '#C9B8FF', ink: '#2A1A7A', accent: '#7F45E5',
+    },
+  };
+
+  const key = new URLSearchParams(location.search).get('slide') || 'home';
+  const s = SLIDES[key];
+  const slide = document.getElementById('slide');
+  slide.style.setProperty('--top', s.top);
+  slide.style.setProperty('--bottom', s.bottom);
+  slide.style.setProperty('--ink', s.ink);
+  slide.style.setProperty('--accent', s.accent);
+  document.getElementById('headline').innerHTML = s.html;
+  document.getElementById('shot').src = 'raw-ios/' + s.shot;
+  
+  // Light status bar text on dark screens, dark on light ones. Read the top
+  // pixel of the screen once it loads.
+  const img = document.getElementById('shot');
+  function ready() {
+    // Fill the status bar zone with the colour of the screen's top edge.
+    try {
+      const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = 4;
+      const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+      const mid = g.getImageData(Math.floor(c.width / 2), 1, 1, 1).data;
+      const l = g.getImageData(4, 1, 1, 1).data, r = g.getImageData(c.width - 5, 1, 1, 1).data;
+      document.getElementById('top').style.background =
+        'linear-gradient(90deg, rgb(' + l[0] + ',' + l[1] + ',' + l[2] + '), rgb(' + r[0] + ',' + r[1] + ',' + r[2] + '))';
+    } catch (e) {}
+    slide.style.setProperty('--bar', '#fff');
+  }
+  Promise.all([
+    document.fonts.ready,
+    new Promise((ok) => { img.complete ? ok() : img.addEventListener('load', ok, { once: true }); }),
+  ]).then(() => { ready(); document.title = 'ready'; });
+</script>
