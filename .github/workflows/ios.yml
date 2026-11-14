@@ -132,7 +132,7 @@ jobs:
             <key>signingStyle</key><string>manual</string>
             <key>provisioningProfiles</key>
             <dict>
-              <key>com.astraapp.astra</key><string>${PROFILE_NAME}</string>
+              <key>live.coreinteractive.mayow</key><string>${PROFILE_NAME}</string>
             </dict>
           </dict>
           </plist>

@@ -18,7 +18,7 @@ These are not done. The app compiles for iOS but would not work yet.
 
 1. **Firebase for iOS.** `lib/firebase_options.dart` has no iOS entry, so the
    app stops at start-up on an iPhone. In the Firebase console add an iOS app
-   with bundle id `com.astraapp.astra`, then run `flutterfire configure` and
+   with bundle id `live.coreinteractive.mayow`, then run `flutterfire configure` and
    commit the new `firebase_options.dart`. Keep `GoogleService-Info.plist` out
    of git; give it to the workflow as the secret below.
 2. **Buying on iOS.** The server (`verifyPurchase`, `playNotifications`) only
@@ -36,7 +36,7 @@ Repository, Settings, Secrets and variables, Actions:
 | --- | --- |
 | `IOS_CERT_P12_BASE64` | Your Apple Distribution certificate, exported as `.p12`, then base64 |
 | `IOS_CERT_PASSWORD` | The password you set when exporting the `.p12` |
-| `IOS_PROFILE_BASE64` | The App Store provisioning profile for `com.astraapp.astra`, base64 |
+| `IOS_PROFILE_BASE64` | The App Store provisioning profile for `live.coreinteractive.mayow`, base64 |
 | `IOS_TEAM_ID` | Your 10-character Apple team id |
 | `GOOGLE_SERVICE_INFO_PLIST_BASE64` | `GoogleService-Info.plist` from Firebase, base64 |
 
