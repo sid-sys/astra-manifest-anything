@@ -140,10 +140,7 @@ class AuthService {
   // -------------------------------------------------------- email + password
 
   Future<UserCredential> signInWithEmail(String email, String password) =>
-      _auth.signInWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      );
+      _auth.signInWithEmailAndPassword(email: email.trim(), password: password);
 
   /// Creates an account, upgrading the current guest in place when there is
   /// one so nothing they already made is stranded under an abandoned uid.
@@ -306,10 +303,17 @@ class AuthService {
     return _withCredential(GoogleAuthProvider.credential(idToken: idToken));
   }
 
-  // Sign in with Apple is not offered. If this app is ever submitted to the App
-  // Store while Google sign-in exists, Apple's guidelines require it — adding
-  // it back is `_federated(AppleAuthProvider())` plus the Service ID and key in
-  // the Apple developer portal.
+  /// Signs in with Apple. Shown on iPhone and iPad only (see AuthScreen).
+  ///
+  /// Apple requires this whenever an app offers Google sign-in. It needs the
+  /// Apple provider switched on in the Firebase console first; until then
+  /// Firebase answers operation-not-allowed, which the screen words kindly.
+  Future<UserCredential> signInWithApple() {
+    final provider = AppleAuthProvider()
+      ..addScope('email')
+      ..addScope('name');
+    return _federated(provider);
+  }
 
   /// One path for every OAuth provider, on every platform.
   ///
@@ -404,12 +408,12 @@ String authErrorMessage(Object error) {
       'There is already an account with that email. Try logging in.',
     'weak-password' => 'Use at least six characters.',
     'user-disabled' => 'That account has been disabled.',
-    'too-many-requests' =>
-      'Too many attempts. Wait a minute and try again.',
+    'too-many-requests' => 'Too many attempts. Wait a minute and try again.',
     'network-request-failed' =>
       'No connection. Check your network and try again.',
-    'popup-closed-by-user' || 'web-context-canceled' || 'canceled' =>
-      'Sign-in was cancelled.',
+    'popup-closed-by-user' ||
+    'web-context-canceled' ||
+    'canceled' => 'Sign-in was cancelled.',
     'operation-not-allowed' =>
       'That sign-in method is not enabled for this app yet.',
     'google-sign-in-failed' =>

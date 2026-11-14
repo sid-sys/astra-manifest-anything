@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -248,12 +249,11 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       onPressed: _busy
                           ? null
                           : () => Navigator.of(context).push(
-                                MaterialPageRoute<void>(
-                                  builder: (_) => ForgotPasswordScreen(
-                                    email: _email.text,
-                                  ),
-                                ),
+                              MaterialPageRoute<void>(
+                                builder: (_) =>
+                                    ForgotPasswordScreen(email: _email.text),
                               ),
+                            ),
                       child: Text(
                         'Forgot password?',
                         style: AstraTextStyles.small.copyWith(
@@ -291,6 +291,18 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   enabled: !_busy,
                   onTap: () => _federated(auth.signInWithGoogle),
                 ),
+
+                // Apple asks for this on any iPhone or iPad app that offers
+                // Google sign-in. Other platforms do not show it.
+                if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) ...[
+                  const SizedBox(height: AstraSpacing.sm),
+                  _ProviderButton(
+                    label: 'Continue with Apple',
+                    glyph: '',
+                    enabled: !_busy,
+                    onTap: () => _federated(auth.signInWithApple),
+                  ),
+                ],
 
                 // The guest door was here, twice, and is closed again.
                 //
@@ -332,9 +344,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                     onPressed: _busy
                         ? null
                         : () => setState(() {
-                              _creating = !_creating;
-                              _error = null;
-                            }),
+                            _creating = !_creating;
+                            _error = null;
+                          }),
                     child: Text.rich(
                       TextSpan(
                         children: [
