@@ -1,0 +1,150 @@
+name: iOS build
+
+# Two jobs.
+#
+# `unsigned` builds the app for iOS with no signing. It proves the iOS side
+# compiles, and costs nothing to set up. It runs on every push that touches the
+# app.
+#
+# `signed` builds an .ipa you can send to TestFlight / the App Store. It needs
+# your Apple Developer account's signing files as repository secrets (listed in
+# docs/ios.md) and is started by hand: Actions, "iOS build", Run workflow,
+# tick "Build a signed .ipa".
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'lib/**'
+      - 'ios/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'assets/**'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+    inputs:
+      signed:
+        description: 'Build a signed .ipa (needs the Apple secrets)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: '3.47.1'
+
+jobs:
+  unsigned:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Build for iOS without signing
+        run: flutter build ios --release --no-codesign
+
+      - name: Zip the app
+        run: |
+          cd build/ios/iphoneos
+          zip -qr "$GITHUB_WORKSPACE/Runner-unsigned.zip" Runner.app
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Runner-unsigned
+          path: Runner-unsigned.zip
+          retention-days: 7
+
+  signed:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.signed }}
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      CERT_P12: ${{ secrets.IOS_CERT_P12_BASE64 }}
+      CERT_PASSWORD: ${{ secrets.IOS_CERT_PASSWORD }}
+      PROFILE: ${{ secrets.IOS_PROFILE_BASE64 }}
+      TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+      PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}
+    steps:
+      - name: Check the Apple secrets are set
+        run: |
+          missing=0
+          for name in CERT_P12 CERT_PASSWORD PROFILE TEAM_ID; do
+            if [ -z "${!name}" ]; then echo "::error::Missing secret for $name (see docs/ios.md)"; missing=1; fi
+          done
+          exit $missing
+
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Add the Firebase iOS file
+        run: |
+          if [ -n "$PLIST" ]; then
+            echo "$PLIST" | base64 --decode > ios/Runner/GoogleService-Info.plist
+          else
+            echo "::warning::No GOOGLE_SERVICE_INFO_PLIST_BASE64 secret: Firebase will not start on this build."
+          fi
+
+      - name: Install the signing certificate and profile
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          echo "$PROFILE" | base64 --decode > "$RUNNER_TEMP/profile.mobileprovision"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+
+          security cms -D -i "$RUNNER_TEMP/profile.mobileprovision" > "$RUNNER_TEMP/profile.plist"
+          UUID=$(/usr/libexec/PlistBuddy -c 'Print UUID' "$RUNNER_TEMP/profile.plist")
+          NAME=$(/usr/libexec/PlistBuddy -c 'Print Name' "$RUNNER_TEMP/profile.plist")
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$RUNNER_TEMP/profile.mobileprovision" "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
+          echo "PROFILE_NAME=$NAME" >> "$GITHUB_ENV"
+
+      - name: Write the export options
+        run: |
+          cat > ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>teamID</key><string>${TEAM_ID}</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.astraapp.astra</key><string>${PROFILE_NAME}</string>
+            </dict>
+          </dict>
+          </plist>
+          EOF
+
+      - run: flutter pub get
+
+      - name: Build the signed .ipa
+        run: flutter build ipa --release --export-options-plist=ExportOptions.plist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mayow-ipa
+          path: build/ios/ipa/*.ipa
+          retention-days: 14

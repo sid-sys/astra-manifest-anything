@@ -74,3 +74,9 @@ store/play/*.aab
 store/play/*.apk
 store/play/mapping-*.txt
 .firebase/
+
+# iOS signing and Firebase files: never commit (the repository is public)
+ios/Runner/GoogleService-Info.plist
+*.p12
+*.mobileprovision
+*.p8
