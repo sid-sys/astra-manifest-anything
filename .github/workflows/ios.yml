@@ -143,6 +143,19 @@ jobs:
 
       - run: flutter pub get
 
+      # The project is set to "automatic" signing with a development
+      # certificate, which does not exist on a build machine. Switch it, for this
+      # run only, to the distribution certificate and profile installed above.
+      # The change is never committed.
+      - name: Point the project at the distribution signing files
+        run: |
+          sed -i '' \
+            -e 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/' \
+            -e 's/"iPhone Developer"/"iPhone Distribution"/' \
+            -e "s|PRODUCT_BUNDLE_IDENTIFIER = live.coreinteractive.mayow;|PRODUCT_BUNDLE_IDENTIFIER = live.coreinteractive.mayow; DEVELOPMENT_TEAM = ${TEAM_ID}; PROVISIONING_PROFILE_SPECIFIER = \"${PROFILE_NAME}\"; CODE_SIGN_IDENTITY = \"iPhone Distribution\";|" \
+            ios/Runner.xcodeproj/project.pbxproj
+          grep -c "CODE_SIGN_STYLE = Manual" ios/Runner.xcodeproj/project.pbxproj
+
       # Apple wants every upload to have a build number higher than the last.
       # 100 plus the run number only ever goes up.
       - name: Build the signed .ipa
