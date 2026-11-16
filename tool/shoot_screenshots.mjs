@@ -21,7 +21,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-const ORIGIN = 'http://localhost:8080';
+const ORIGIN = process.env.SHOT_ORIGIN ?? 'http://localhost:8080';
 const PORT = 9222;
 
 // A phone, described the way a phone actually describes itself: a small number
@@ -52,6 +52,9 @@ const FRAMES = [
   { file: '4-affirmations.png', screen: 'affirm', settle: 8000 },
   { file: '5-library.png', screen: 'library', settle: 8000 },
   { file: '6-profile.png', screen: 'profile', settle: 8000 },
+  // Not for the store listing: the plans screen, as the App Store review
+  // screenshot of each subscription. Shot with SHOT_OUT somewhere else.
+  { file: '7-paywall.png', screen: 'paywall', settle: 8000 },
 ];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -147,7 +150,7 @@ async function main() {
     await sleep(20000);
 
     for (const frame of FRAMES) {
-      const url = `${ORIGIN}/?screen=${frame.screen}`;
+      const url = `${ORIGIN}/?screen=${frame.screen}${process.env.SHOT_QUERY ?? ""}`;
       await client.send('Page.navigate', { url });
 
       // Flutter's debug build compiles modules as it loads them, so the first

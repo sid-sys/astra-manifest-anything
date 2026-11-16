@@ -9,6 +9,7 @@ import '../models/plan.dart';
 import '../providers.dart';
 import '../services/billing_service.dart';
 import '../services/legal_links.dart';
+import '../services/store_name.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
 import '../widgets/aura_background.dart';
@@ -232,7 +233,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
           // Says what is true instead: Play has it, we do not have it yet, and
           // the button that fixes it is directly below.
           PurchaseNotVerified() =>
-            'Google Play has your subscription, but we could not confirm it '
+            '$storeNameCap has your subscription, but we could not confirm it '
                 'yet. Do not buy again — tap "Restore a purchase" below in a '
                 'moment and it will come through.',
 
@@ -423,7 +424,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                           Text(
                             trial
                                 ? 'No payment due now'
-                                : 'Cancel any time in Google Play',
+                                : 'Cancel any time in $storeName',
                             style: AstraTextStyles.label,
                           ),
                         ],
@@ -451,7 +452,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                           title: 'In ${PricingCatalog.trialDays - 1} days',
                           body:
                               'We send you a reminder the day before your '
-                              'trial ends, so you can cancel in Google Play '
+                              'trial ends, so you can cancel in $storeName '
                               'if it is not for you.',
                         ),
                         _Step(
@@ -461,7 +462,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                           body:
                               'Your plan starts at $price a $per, with up to '
                               '${PricingCatalog.manifestMonthly} manifestations '
-                              'a month. Cancel before then in Google Play and '
+                              'a month. Cancel before then in $storeName and '
                               'you pay nothing.',
                           last: true,
                         ),
@@ -488,7 +489,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                           colour: AstraColors.cta,
                           title: 'Any time',
                           body:
-                              'Cancel in Google Play whenever you want. No '
+                              'Cancel in $storeName whenever you want. No '
                               'questions asked.',
                           last: true,
                         ),
@@ -528,9 +529,9 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                   trial
                       ? '${PricingCatalog.trialDays} days free, then $price '
                             'per $per. Renews automatically unless you cancel '
-                            'in Google Play before the trial ends.'
+                            'in $storeName before the trial ends.'
                       : '$price per $per. Renews automatically until you '
-                            'cancel in Google Play. Cancelling stops the next '
+                            'cancel in $storeName. Cancelling stops the next '
                             'payment and you keep Plus until the period you '
                             'have paid for ends.',
                   textAlign: TextAlign.center,

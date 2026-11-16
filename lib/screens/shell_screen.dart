@@ -12,6 +12,7 @@ import 'affirmations_screen.dart';
 import 'desire_flow_screen.dart';
 import 'home_screen.dart';
 import 'library_screen.dart';
+import 'paywall_screen.dart';
 import 'player_screen.dart';
 import 'profile_screen.dart';
 
@@ -93,6 +94,12 @@ class _ShellScreenState extends ConsumerState<ShellScreen> {
           MaterialPageRoute<void>(builder: (_) => const PlayerScreen()),
         );
 
+      case 'paywall':
+        // The plans screen, for the App Store review screenshot of each
+        // subscription. Apple wants to see where the purchase happens.
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const PaywallScreen()),
+        );
     }
   }
 

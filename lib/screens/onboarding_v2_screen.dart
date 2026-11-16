@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/intention.dart';
 import '../providers.dart';
+import '../services/store_name.dart';
 import '../theme/astra_theme.dart';
 import '../widgets/astra_widgets.dart';
 import '../widgets/aura_background.dart';
@@ -422,12 +423,12 @@ class _Source extends StatelessWidget {
   final String? value;
   final ValueChanged<String> onChanged;
 
-  static const _options = [
+  static final _options = [
     ('instagram', 'Instagram'),
     ('tiktok', 'TikTok'),
     ('youtube', 'YouTube'),
     ('friend', 'A friend or family'),
-    ('play-store', 'Searching Google Play'),
+    ('play-store', 'Searching $storeName'),
     ('other', 'Somewhere else'),
   ];
 
