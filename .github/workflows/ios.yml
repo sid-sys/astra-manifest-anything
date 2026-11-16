@@ -30,7 +30,7 @@ on:
 
 concurrency:
   group: ios-${{ github.ref }}-${{ github.event_name }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 env:
   FLUTTER_VERSION: '3.47.1'
