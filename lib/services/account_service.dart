@@ -49,6 +49,11 @@ class AccountService {
   /// their data is still there rather than showing a success screen over a
   /// failed delete.
   Future<void> deleteEverything() async {
+    // Apple's rule: deleting an account that signed in with Apple must also
+    // cancel Apple's sign-in token. It goes first, while the user still
+    // exists, and a failure stops the delete so nothing is half done.
+    await _revokeAppleIfNeeded();
+
     if (hasAccount) {
       await _functions
           .httpsCallable(
@@ -63,4 +68,29 @@ class AccountService {
     await signOut();
   }
 
+  /// Cancels the Apple sign-in token for an account that uses Apple.
+  ///
+  /// Firebase keeps no Apple token, so the user is asked to confirm with Apple
+  /// once more. That gives a fresh authorization code, which Firebase then
+  /// sends to Apple to revoke. Does nothing for any other kind of account.
+  Future<void> _revokeAppleIfNeeded() async {
+    if (kIsWeb) return;
+    final user = FirebaseAuth.instance.currentUser;
+    final usesApple =
+        user?.providerData.any((info) => info.providerId == 'apple.com') ??
+        false;
+    if (user == null || !usesApple) return;
+
+    final fresh = await user.reauthenticateWithProvider(
+      AppleAuthProvider()..addScope('email'),
+    );
+    final code = fresh.additionalUserInfo?.authorizationCode;
+    if (code == null || code.isEmpty) {
+      throw FirebaseAuthException(
+        code: 'apple-revoke-failed',
+        message: 'Apple gave no authorization code.',
+      );
+    }
+    await FirebaseAuth.instance.revokeTokenWithAuthorizationCode(code);
+  }
 }
