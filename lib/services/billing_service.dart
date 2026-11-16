@@ -374,15 +374,28 @@ class BillingService {
       throw StateError('Purchases cannot be verified on this build.');
     }
 
+    // The App Store and Google Play prove a purchase in different ways, so
+    // they go to different server functions. Apple gets the transaction id and
+    // the server asks Apple what state it is in.
+    final onApple = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
     final result = await functions
         .httpsCallable(
-          'verifyPurchase',
+          onApple ? 'verifyApplePurchase' : 'verifyPurchase',
           options: HttpsCallableOptions(timeout: const Duration(seconds: 60)),
         )
-        .call<Map<String, dynamic>>({
-          'productId': purchase.productID,
-          'purchaseToken': purchase.verificationData.serverVerificationData,
-        });
+        .call<Map<String, dynamic>>(
+          onApple
+              ? {
+                  'productId': purchase.productID,
+                  'transactionId': purchase.purchaseID ?? '',
+                }
+              : {
+                  'productId': purchase.productID,
+                  'purchaseToken':
+                      purchase.verificationData.serverVerificationData,
+                },
+        );
 
     return result.data['isSubscribed'] == true;
   }

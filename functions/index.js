@@ -3046,6 +3046,20 @@ async function notifyAdminSubscribed({ uid, productId, purchaseToken, test, tria
   }
 }
 
+// App Store purchases live in their own file; see appstore.js.
+Object.assign(
+  exports,
+  require("./appstore")({
+    admin,
+    entitlementDoc,
+    assertRateLimit,
+    VERIFY_LIMITS,
+    PLAY_SUBSCRIPTIONS,
+    TRIAL_WINDOW_DAYS,
+    notifyAdminSubscribed,
+  }),
+);
+
 /**
  * Google Play's real-time notifications.
  *
@@ -3109,6 +3123,8 @@ exports.adminBillingCheck = onCall(
     for (const doc of snap.docs) {
       if (doc.id !== "entitlement") continue;
       const e = doc.data();
+      // App Store subscriptions are not Google Play ones; Play cannot read them.
+      if (e.store === "apple") continue;
       const row = {
         uid: doc.ref.parent.parent.id,
         productId: e.productId ?? null,

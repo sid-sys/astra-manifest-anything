@@ -34,6 +34,9 @@ class LegalLinks {
   /// Cancelling has to happen at Play. The app cannot do it — Google owns the
   /// billing relationship — so the honest thing is to put them one tap from the
   /// button rather than pretend the app has one.
+  /// Where an iPhone user manages or cancels a subscription.
+  static const appleSubscriptions = 'https://apps.apple.com/account/subscriptions';
+
   static String playSubscription(String productId, String packageName) =>
       'https://play.google.com/store/account/subscriptions'
       '?sku=$productId&package=$packageName';

@@ -21,11 +21,24 @@ These are not done. The app compiles for iOS but would not work yet.
    with bundle id `live.coreinteractive.mayow`, then run `flutterfire configure` and
    commit the new `firebase_options.dart`. Keep `GoogleService-Info.plist` out
    of git; give it to the workflow as the secret below.
-2. **Buying on iOS.** The server (`verifyPurchase`, `playNotifications`) only
-   understands Google Play. An App Store purchase would never be verified, so
-   the paywall would never open for an iPhone user. Needs App Store Server
-   API verification and notifications, and App Store products for the plans.
-3. **Sign in with Apple.** Apple requires it when an app offers Google sign-in.
+2. **Buying on iOS.** Code is done; setup is yours. The app sends the App
+   Store transaction id to `verifyApplePurchase` (`functions/appstore.js`),
+   which asks Apple's App Store Server API what state it is in. Apple's
+   renewals and cancels arrive at `appStoreNotifications`. You need:
+   - Two subscriptions in App Store Connect with ids `astra_plus_monthly` and
+     `astra_plus_yearly`, a 7 day free trial as an introductory offer, and the
+     same prices as Play.
+   - An In-App Purchase key (App Store Connect, Users and Access, Integrations,
+     In-App Purchase). Give the server its three values:
+     `firebase functions:secrets:set APPSTORE_KEY_ID`,
+     `APPSTORE_ISSUER_ID`, `APPSTORE_PRIVATE_KEY` (paste the whole `.p8`).
+   - Then `firebase deploy --only functions:verifyApplePurchase,functions:appStoreNotifications`.
+   - In App Store Connect, App Information, App Store Server Notifications:
+     set the Production and Sandbox URL to the address of
+     `appStoreNotifications` (Version 2).
+3. **Sign in with Apple.** Done in the app. Needs the Apple provider switched on
+   in Firebase (Service ID, Team ID, key) and deleting an Apple account revokes
+   Apple's token.
 4. **Apple Developer account** (paid) and an app record in App Store Connect.
 
 ## Secrets for the signed build

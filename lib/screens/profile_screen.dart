@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -16,6 +18,9 @@ import 'confirm_screen.dart';
 import 'feedback_screen.dart';
 import 'paywall_screen.dart';
 import 'player_screen.dart';
+
+/// True on iPhone and iPad, where subscriptions are sold by the App Store.
+bool get _onApple => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
 /// Profile, settings, the monthly practice meter, and everything kept.
 class ProfileScreen extends ConsumerWidget {
@@ -526,13 +531,17 @@ class ProfileScreen extends ConsumerWidget {
       _AccountRow(
         icon: Icons.open_in_new_rounded,
         label: 'Cancel Mayow Plus',
-        detail: 'Opens Google Play · you keep Plus until the period ends',
+        detail:
+            '${_onApple ? 'Opens the App Store' : 'Opens Google Play'} · '
+            'you keep Plus until the period ends',
         onTap: () => LegalLinks.open(
           context,
-          LegalLinks.playSubscription(
-            BillingService.monthlyId,
-            'com.astraapp.astra',
-          ),
+          _onApple
+              ? LegalLinks.appleSubscriptions
+              : LegalLinks.playSubscription(
+                  BillingService.monthlyId,
+                  'com.astraapp.astra',
+                ),
         ),
       ),
     ];
