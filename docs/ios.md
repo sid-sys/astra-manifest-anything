@@ -59,4 +59,19 @@ To make base64 on Windows (PowerShell):
 [Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\path\to\file")) | Set-Clipboard
 ```
 
-Never commit these files. This repository is public.
+### Automatic TestFlight upload (optional)
+
+Set these three and the signed build sends itself to TestFlight. Without them
+the `.ipa` is kept for one day instead.
+
+| Secret | What it is |
+| --- | --- |
+| `ASC_KEY_ID` | Key ID of an App Store Connect API key (Team key, access "App Manager") |
+| `ASC_ISSUER_ID` | The Issuer ID on the same page |
+| `ASC_KEY_P8_BASE64` | That key's `.p8` file, base64 |
+
+Make the key at https://appstoreconnect.apple.com/access/integrations/api
+(Team Keys tab). It is a different key from the In-App Purchase key.
+
+Never commit these files. This repository is public. Keep them in `signing/`,
+which git ignores.
