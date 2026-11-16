@@ -2,6 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import '../firebase_options.dart';
+
 /// Every way into Mayow, and the rules about moving between them.
 ///
 /// Two doors now: an email and password, or Google. The anonymous "continue as
@@ -270,7 +272,13 @@ class AuthService {
       // Services Gradle plugin generates from `google-services.json` — so the
       // id follows that file instead of being copied into source, where it
       // would quietly go stale the next time the file is downloaded.
-      await google.initialize();
+      // iPhone has no google-services.json to read it from, so the iOS client
+      // id comes from the Firebase options. Android keeps its own lookup.
+      await google.initialize(
+        clientId: defaultTargetPlatform == TargetPlatform.iOS
+            ? DefaultFirebaseOptions.ios.iosClientId
+            : null,
+      );
       _googleReady = true;
     }
 

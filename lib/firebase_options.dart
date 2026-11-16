@@ -23,10 +23,7 @@ class DefaultFirebaseOptions {
       case TargetPlatform.android:
         return android;
       case TargetPlatform.iOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for ios - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return ios;
       case TargetPlatform.macOS:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for macos - '
@@ -56,6 +53,17 @@ class DefaultFirebaseOptions {
     projectId: 'astra-manifest',
     authDomain: 'astra-manifest.firebaseapp.com',
     storageBucket: 'astra-manifest.firebasestorage.app',
+  );
+
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyAOIf4w8iu8jIN8gQbb53O4FKDBkYVpGXQ',
+    appId: '1:78503123511:ios:10aff01eb023e57b137db2',
+    messagingSenderId: '78503123511',
+    projectId: 'astra-manifest',
+    storageBucket: 'astra-manifest.firebasestorage.app',
+    iosClientId:
+        '78503123511-0m23dtpe6bscl3ii5d5j1rm7msuk1prb.apps.googleusercontent.com',
+    iosBundleId: 'live.coreinteractive.mayow',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
