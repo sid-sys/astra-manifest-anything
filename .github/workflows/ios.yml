@@ -29,7 +29,7 @@ on:
         default: false
 
 concurrency:
-  group: ios-${{ github.ref }}
+  group: ios-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 env:
@@ -62,7 +62,7 @@ jobs:
         with:
           name: Runner-unsigned
           path: Runner-unsigned.zip
-          retention-days: 7
+          retention-days: 1
 
   signed:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.signed }}
