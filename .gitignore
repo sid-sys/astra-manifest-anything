@@ -80,3 +80,6 @@ ios/Runner/GoogleService-Info.plist
 *.p12
 *.mobileprovision
 *.p8
+
+# Everything in signing/ is private: Apple keys, certificates, profiles.
+signing/
