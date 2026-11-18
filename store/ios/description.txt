@@ -62,8 +62,7 @@ style, not a prediction. Mayow does not guarantee any outcome, and it is not
 financial, medical or psychological advice. If you are struggling, please talk
 to a professional.
 
-We also do not do the things that make these apps annoying. There is no
-listening limit: replay anything you own, forever. Prices show their period.
+There is no listening limit: replay anything you own, forever.
 
 
 MAYOW PLUS
@@ -86,7 +85,8 @@ Your profile photo never leaves your phone. We do not sell your data, we run no
 advertising trackers, and you can delete your account and everything in it from
 inside the app in about ten seconds.
 
-Privacy policy: https://sid-sys.github.io/policies/privacy.html
-Terms: https://sid-sys.github.io/policies/terms.html
+Privacy Policy: https://sid-sys.github.io/policies/privacy.html
+Terms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
+Terms of Service: https://sid-sys.github.io/policies/terms.html
 
 Questions: support@coreinteractive.live
